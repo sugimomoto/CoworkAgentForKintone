@@ -23,6 +23,9 @@ defaults:
   run:
     working-directory: packages/kintone-helper
 
+permissions:
+  contents: write  # tag push 時の Release 作成に必要
+
 jobs:
   test:
     name: Test (Python ${{ matrix.python }})

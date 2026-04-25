@@ -24,6 +24,9 @@ on:
       - 'plugin-v*'
   workflow_dispatch:
 
+permissions:
+  contents: write  # tag push 時の Release 作成に必要
+
 jobs:
   build:
     name: Pack plugin.zip
