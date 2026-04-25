@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+## [0.1.0a2] — 2026-04-25
+
+### Fixed
+- GET リクエストに `Content-Type: application/json` を付けていたため、kintone が一部
+  エンドポイント (例: `/k/v1/apps.json`) で `CB_IL02` を返していた問題を修正。
+  body を送る場合のみ `Content-Type` を付与するようにした。
+- 実 kintone 環境でのスモーク検証で動作確認済 (apps.list / apps.get / apps.get_schema /
+  records.get / records.iter_all すべて正常応答)。
+
 ## [0.1.0a1] — 2026-04-25
 
 ### Added

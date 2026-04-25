@@ -104,13 +104,24 @@ def test_connection_error_raises_NetworkError() -> None:
             _http.request("GET", URL, auth_header=AUTH)
 
 
-def test_request_includes_required_headers(mocked_responses: responses.RequestsMock) -> None:
+def test_get_does_not_send_content_type(mocked_responses: responses.RequestsMock) -> None:
+    """kintone は GET に Content-Type が付くと CB_IL02 で拒否することがあるため、
+    body 無しのリクエストには Content-Type を付けない。"""
     mocked_responses.add(responses.GET, URL, json={}, status=200)
 
     _http.request("GET", URL, auth_header=AUTH)
 
     sent = mocked_responses.calls[0].request.headers
     assert sent["X-Cybozu-Authorization"] == AUTH
+    assert sent.get("Content-Type") != "application/json"
+
+
+def test_post_with_body_sends_content_type(mocked_responses: responses.RequestsMock) -> None:
+    mocked_responses.add(responses.POST, URL, json={}, status=200)
+
+    _http.request("POST", URL, auth_header=AUTH, body={"app": 1})
+
+    sent = mocked_responses.calls[0].request.headers
     assert sent["Content-Type"] == "application/json"
 
 

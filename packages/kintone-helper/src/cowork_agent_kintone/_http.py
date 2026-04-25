@@ -54,10 +54,11 @@ def request(
         KintoneApiError: 4xx を受け取ったとき。
         NetworkError: 5xx 連続失敗 / タイムアウト / 接続失敗。
     """
-    headers = {
-        "Content-Type": "application/json",
-        "X-Cybozu-Authorization": auth_header,
-    }
+    # kintone は GET 時に Content-Type ヘッダがあると CB_IL02 で拒否することがあるため、
+    # body を送るときだけ Content-Type を付ける。
+    headers: dict[str, str] = {"X-Cybozu-Authorization": auth_header}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
 
     last_5xx: requests.Response | None = None
     for attempt in range(MAX_RETRIES_5XX + 1):
