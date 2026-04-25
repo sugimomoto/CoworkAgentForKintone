@@ -1,0 +1,20 @@
+# Changelog
+
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 形式で記録します。
+
+## [Unreleased]
+
+## [0.1.0a1] — 2026-04-25
+
+### Added
+- 初版 (Phase 1b-1)
+- `Client` クラス (環境変数 / 引数からの認証情報取得)
+- 例外階層: `KintoneError` / `ConfigurationError` / `KintoneApiError` / `NetworkError` / `CursorError`
+- HTTP 共通層 (`_http`): タイムアウト 30s、5xx 指数バックオフ最大 3 回、4xx の `KintoneApiError` 変換
+- `client.apps.list` / `apps.get` / `apps.get_schema`
+- `client.records.get` / `records.iter_all` (cursor 自動利用、10,000 件超対応)
+- Python 3.11 / 3.12 / 3.13 サポート
+
+### スコープ外 (今後の Phase で対応)
+- `add_records` / `update_records` / `delete_records` / `bulk_request` (Phase 1c)
+- フォームレイアウト取得 / ファイル / コメント / プロセス管理 (将来 Phase)
