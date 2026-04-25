@@ -133,6 +133,18 @@ export function retrieveVault(id: string): Promise<Vault> {
   return get<Vault>(`/v1/vaults/${id}`);
 }
 
+/**
+ * Vault の secrets (キー/値) を upsert する。
+ * 同じ key を再度送ると値が上書きされる (Vault の API 仕様)。
+ * パスワード等の値はレスポンスに echo されない。
+ */
+export function setVaultKeys(
+  id: string,
+  keys: Record<string, string>,
+): Promise<Vault> {
+  return post<Vault>(`/v1/vaults/${id}/keys`, { keys });
+}
+
 // ----- Sessions -------------------------------------------------------------
 
 export interface SessionsListParams {

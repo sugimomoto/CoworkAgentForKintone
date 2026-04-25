@@ -250,19 +250,15 @@ export async function createUserSession(ctx: SessionContext): Promise<Session> {
 ### 4.1 `core/constants.ts` 追加
 
 ```ts
-/** kintone ヘルパーライブラリ — TestPyPI 経由で取得 */
+/** kintone ヘルパーライブラリ — GitHub Release の wheel を直接 pip install */
 export const HELPER_PACKAGE_NAME = 'cowork-agent-kintone' as const;
 export const HELPER_VERSION = '0.1.0a3' as const;
 
-/** Managed Agents Environment の packages.pip に渡す指定。
- *  TestPyPI を補助インデックスとして使い、依存 (requests など) は PyPI から取得する。
- *  形式は pip の requirement specifier 文字列。 */
-export const HELPER_PIP_SPEC =
-  `${HELPER_PACKAGE_NAME}==${HELPER_VERSION}` as const;
-
-/** TestPyPI の simple index URL。Environment の packages.pip_extra_index_url に渡す。
- *  alpha 配布期間中のみ使用、stable 後は PyPI 本番に切替予定。 */
-export const HELPER_PIP_EXTRA_INDEX = 'https://test.pypi.org/simple/' as const;
+/** Managed Agents Environment の packages.pip に渡す URL。
+ *  pip は wheel URL を package specifier として直接受け付けるので、補助 index 不要。
+ *  リポジトリが Public なため認証なしで取得可能。 */
+export const HELPER_WHEEL_URL =
+  `https://github.com/sugimomoto/CoworkAgentForKintone/releases/download/helper-v${HELPER_VERSION}/cowork_agent_kintone-${HELPER_VERSION}-py3-none-any.whl` as const;
 ```
 
 `ensureUserEnvironment` 内では:
@@ -273,17 +269,17 @@ config: {
   networking: {
     type: 'limited',
     allow_package_managers: true,
-    allowed_hosts: [ctx.kintoneDomain],
+    allowed_hosts: [ctx.kintoneDomain, 'github.com', 'objects.githubusercontent.com'],
   },
   packages: {
-    pip: [HELPER_PIP_SPEC],
-    pip_extra_index_url: HELPER_PIP_EXTRA_INDEX,
+    pip: [HELPER_WHEEL_URL],
   },
 }
 ```
 
-> Managed Agents Environment の `packages.pip_extra_index_url` フィールド名は
-> 実装時に skill / API ドキュメントで再確認 (案: `pip_index_url` / `pip_extra_index_urls` 配列の可能性あり)。
+> `allowed_hosts` には kintone ドメインに加えて、wheel をダウンロードする
+> `github.com` (302 リダイレクト元) と `objects.githubusercontent.com` (実体配信先)
+> を入れる必要がある (`pip` が両ホストにアクセスする)。
 
 将来 helper を更新するときは `HELPER_VERSION` を上げる。`ensureUserEnvironment` の
 metadata `helperVersion` と突合してバージョン違いを検出 → 再作成、は **Phase 1c に持ち越し**。

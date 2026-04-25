@@ -2,7 +2,7 @@
 // Agent / Environment / Session / jsonResponse を集約して
 // 各 *.test.ts の重複を排除する。
 
-import type { Agent, Environment, Session } from '../core/managed-agents/types';
+import type { Agent, Environment, Session, Vault } from '../core/managed-agents/types';
 
 export function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -34,6 +34,22 @@ export function makeEnv(overrides: Partial<Environment> = {}): Environment {
     created_at: '2026-04-25T00:00:00Z',
     updated_at: '2026-04-25T00:00:00Z',
     type: 'environment',
+    ...overrides,
+  };
+}
+
+export function makeVault(overrides: Partial<Vault> = {}): Vault {
+  return {
+    id: 'vault_1',
+    display_name: 'Cowork Agent - sato@example.cybozu.com',
+    metadata: {
+      source: 'cowork-agent-for-kintone',
+      kintoneDomain: 'example.cybozu.com',
+      kintoneUserCode: 'sato',
+    },
+    created_at: '2026-04-25T00:00:00Z',
+    updated_at: '2026-04-25T00:00:00Z',
+    type: 'vault',
     ...overrides,
   };
 }
