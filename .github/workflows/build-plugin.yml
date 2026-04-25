@@ -5,9 +5,9 @@ name: Build Plugin
 # 本リポジトリは OSS のため、GitHub Actions では **zip 生成までを責務とする**。
 # kintone 環境へのアップロードは各メンテナがローカル (`pnpm plugin:upload`) で行う。
 #
-# - PR / push: zip 生成 + サイズ検証 + Artifact として 7 日間保管 (PR レビュー時の動作確認用)
-# - tag push (v*): 同上 + GitHub Release に zip を添付 (一般ユーザー向け配布)
-#   - `v*` がプラグインのリリースタグ (`v1.0.1` など)
+# - PR / push: ビルド + zip 生成 + サイズ検証 + Artifact として 7 日間保管 (PR レビュー時の動作確認用)
+# - tag push (plugin-v*): 同上 + GitHub Release に zip を添付 (一般ユーザー向け配布)
+#   - `plugin-v*` がプラグインのリリースタグ (`plugin-v0.1.0-alpha.1` など)
 #   - helper-v* など別名前空間のタグはここではトリガしない
 
 on:
@@ -21,7 +21,7 @@ on:
       - 'packages/plugin/**'
       - '.github/workflows/build-plugin.yml'
     tags:
-      - 'v*'
+      - 'plugin-v*'
   workflow_dispatch:
 
 jobs:
@@ -32,10 +32,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin assets (esbuild + Tailwind)
+        # plugin/js/ と plugin/css/ は .gitignore 対象なので checkout 直後には存在しない。
+        # esbuild + Tailwind で生成してから pack に渡す。
+        run: pnpm --filter @cowork-agent/plugin run build
 
       - name: Install cli-kintone
         run: npm install -g @kintone/cli
@@ -82,8 +96,8 @@ jobs:
           path: packages/plugin/dist/plugin.zip
           retention-days: 7
 
-      - name: Attach to GitHub Release (only on v* tag)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Attach to GitHub Release (only on plugin-v* tag)
+        if: startsWith(github.ref, 'refs/tags/plugin-v')
         uses: softprops/action-gh-release@v2
         with:
           files: packages/plugin/dist/plugin.zip
