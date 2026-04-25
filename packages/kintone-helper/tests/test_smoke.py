@@ -19,4 +19,4 @@ def test_top_level_imports() -> None:
     assert issubclass(CursorError, KintoneError)
     assert issubclass(KintoneApiError, KintoneError)
     assert issubclass(NetworkError, KintoneError)
-    assert __version__ == "0.1.0a2"
+    assert __version__ == "0.1.0a3"

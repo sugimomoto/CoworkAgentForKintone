@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+## [0.1.0a3] — 2026-04-26
+
+### Changed
+- 配布チャネルを **TestPyPI** に追加。Managed Agents Environment は
+  ``--extra-index-url https://test.pypi.org/simple/`` 経由で取得できるようになった。
+- GitHub Release への wheel/sdist 添付は引き続き行う。
+
+### Internal
+- `build-helper.yml` に `publish-testpypi` job を追加 (tag push 時のみ実行)。
+
 ## [0.1.0a2] — 2026-04-25
 
 ### Fixed
