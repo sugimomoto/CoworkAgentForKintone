@@ -241,6 +241,33 @@ graph TD
 - 設計変更時は対応する図表も同時に更新
 - 図表とコードの乖離を防ぐ
 
+## 自動デプロイルール (ローカル開発)
+
+**プロジェクトルール**: 実装が完了するごとに、`packages/plugin/` 配下に変更があれば **自動的にプラグインをパッケージング + kintone へアップロード** する。
+
+### 仕組み
+- Claude Code の **Stop フック** で `scripts/auto-deploy-plugin.sh` を実行
+- スクリプトが `packages/plugin/dist/plugin.zip` と `packages/plugin/plugin/` 内ファイルのタイムスタンプを比較
+  - ソースが新しい (= 変更あり) → `pnpm plugin:deploy` を実行
+  - 変更なし → 何もしない (silent)
+- 結果は systemMessage として UI に表示 (`🚀 ...` / `❌ ...`)
+- アップロード先: `.env` の `KINTONE_BASE_URL` (各開発者のローカル環境)
+
+### 設定ファイル
+- フック定義: `.claude/settings.local.json` (個人ローカル、Git 管理外)
+- 実行スクリプト: `scripts/auto-deploy-plugin.sh` (Git 管理対象、共有)
+- 認証情報: `.env` (Git 管理外、`.env.example` を参照して各自作成)
+
+### 前提
+- 開発者はローカルに `.env` を準備済み
+- Node.js (nvm 経由で OK) / `pnpm` / `cli-kintone` がインストール済み
+- `packages/plugin/.keys/plugin.ppk` が生成済み
+
+### 一時的に止めたいとき
+`.claude/settings.local.json` の `hooks.Stop` を一時的に削除するか、Claude Code の `/hooks` メニューから無効化する。
+
+---
+
 ## 注意事項
 
 - ドキュメントの作成・更新は段階的に行い、各段階で承認を得る

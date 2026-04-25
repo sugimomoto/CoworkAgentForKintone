@@ -1,0 +1,49 @@
+{
+  "name": "@cowork-agent/plugin",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Cowork Agent for kintone — kintone プラグイン本体",
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "keygen": "node scripts/keygen.mjs",
+    "pack": "mkdir -p dist && cli-kintone plugin pack --input plugin/manifest.json --private-key .keys/plugin.ppk --output dist/plugin.zip",
+    "upload": "node --env-file=../../.env scripts/upload.mjs",
+    "deploy": "pnpm run build && pnpm run pack && pnpm run upload",
+    "app-deploy": "node --env-file=../../.env scripts/deploy-app.mjs",
+    "release": "node scripts/release.mjs",
+    "release:minor": "node scripts/release.mjs minor",
+    "release:major": "node scripts/release.mjs major",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "e2e": "node --env-file=../../.env scripts/e2e.mjs",
+    "e2e:ui": "COWORK_E2E_UI=1 node --env-file=../../.env scripts/e2e.mjs",
+    "e2e:install": "playwright install --with-deps chromium"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.4",
+    "zustand": "^5.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.2",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.0.1",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.20",
+    "esbuild": "^0.24.0",
+    "jsdom": "^25.0.1",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.4"
+  }
+}

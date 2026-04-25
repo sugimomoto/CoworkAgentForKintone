@@ -1,0 +1,163 @@
+// Cowork Agent for kintone — Header (チャットパネル上部)
+//
+// デザイン仕様: docs/functional-design.md §5.3.2
+
+export interface HeaderProps {
+  /** Agent 表示名 (例: "Aoi") */
+  agentName: string;
+  /** Status 行のテキスト (例: "作業中 · kintone接続") */
+  status: string;
+  /** 履歴アイコン押下時。未指定ならボタン非表示 */
+  onHistoryClick?: () => void;
+  /** 新規会話アイコン押下時。未指定ならボタン非表示 */
+  onNewConversationClick?: () => void;
+  /** 設定アイコン押下時。未指定ならボタン非表示 */
+  onSettingsClick?: () => void;
+  /** 閉じるアイコン押下時。未指定ならボタン非表示 */
+  onClose?: () => void;
+}
+
+export function Header({
+  agentName,
+  status,
+  onHistoryClick,
+  onNewConversationClick,
+  onSettingsClick,
+  onClose,
+}: HeaderProps): JSX.Element {
+  return (
+    <header className="flex items-center gap-[10px] border-b border-border bg-panel px-[14px] py-[10px] backdrop-blur-[12px]">
+      {/* Avatar + status dot */}
+      <div className="relative shrink-0">
+        <div
+          className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] shadow-[0_4px_14px_rgba(13,148,136,0.25)]"
+          style={{ background: 'linear-gradient(135deg, var(--cw-accent), rgba(13,148,136,0.55))' }}
+          aria-hidden="true"
+        >
+          <StarIcon />
+        </div>
+        <span
+          className="absolute bottom-[-2px] right-[-2px] h-[11px] w-[11px] rounded-full bg-[#22c55e] ring-2 ring-[color:var(--cw-panel)]"
+          aria-hidden="true"
+        />
+      </div>
+
+      {/* name / status */}
+      <div className="flex flex-1 flex-col">
+        <div className="flex items-center gap-[6px]">
+          <span className="text-[14px] font-semibold text-text">{agentName}</span>
+          <span className="rounded-[4px] bg-accent-soft px-[6px] py-[1px] text-[10px] font-medium text-accent">
+            AGENT
+          </span>
+        </div>
+        <div className="flex items-center gap-[4px] text-[11px] text-muted">
+          <ClockIcon />
+          <span>{status}</span>
+        </div>
+      </div>
+
+      {/* buttons */}
+      <div className="flex items-center gap-[2px]">
+        {onHistoryClick && (
+          <IconButton aria-label="履歴" onClick={onHistoryClick}>
+            <HistoryIcon />
+          </IconButton>
+        )}
+        {onNewConversationClick && (
+          <IconButton aria-label="新規会話" onClick={onNewConversationClick}>
+            <NewChatIcon />
+          </IconButton>
+        )}
+        {onSettingsClick && (
+          <IconButton aria-label="設定" onClick={onSettingsClick}>
+            <SettingsIcon />
+          </IconButton>
+        )}
+        {onClose && (
+          <IconButton aria-label="閉じる" onClick={onClose}>
+            <CloseIcon />
+          </IconButton>
+        )}
+      </div>
+    </header>
+  );
+}
+
+function IconButton({
+  children,
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement>): JSX.Element {
+  return (
+    <button
+      type="button"
+      className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px] text-muted hover:bg-accent-soft hover:text-accent"
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ----- icons ---------------------------------------------------------------
+
+const strokeAttrs = {
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+};
+
+function StarIcon(): JSX.Element {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" strokeWidth="1.8" color="white" {...strokeAttrs}>
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  );
+}
+
+function ClockIcon(): JSX.Element {
+  return (
+    <svg width="9" height="9" viewBox="0 0 24 24" strokeWidth="2" {...strokeAttrs} aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+function SettingsIcon(): JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" strokeWidth="1.6" {...strokeAttrs} aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function HistoryIcon(): JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" strokeWidth="1.6" {...strokeAttrs} aria-hidden="true">
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <polyline points="3 4 3 10 9 10" />
+      <polyline points="12 7 12 12 15 14" />
+    </svg>
+  );
+}
+
+function NewChatIcon(): JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" strokeWidth="1.6" {...strokeAttrs} aria-hidden="true">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+      <line x1="12" y1="9" x2="12" y2="14" />
+      <line x1="9.5" y1="11.5" x2="14.5" y2="11.5" />
+    </svg>
+  );
+}
+
+function CloseIcon(): JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" strokeWidth="1.6" {...strokeAttrs} aria-hidden="true">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}

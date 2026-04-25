@@ -1,0 +1,53 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.idea/
+.vscode/
+
+# Claude
+.claude/
+
+# Node
+node_modules/
+*.log
+.npm
+.pnpm-debug.log*
+.pnpm-store/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.python-version
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+*.egg-info/
+
+# Vite / TypeScript
+*.tsbuildinfo
+
+# Plugin build outputs (manifest.json と html/image は git 管理、js/css は生成物)
+packages/plugin/dist/
+packages/plugin/dist-plugin/
+packages/plugin/plugin/js/
+packages/plugin/plugin/css/
+
+# Playwright
+packages/plugin/.auth/
+packages/plugin/playwright-report/
+packages/plugin/test-results/
+
+# Plugin signing keys — NEVER commit
+packages/plugin/.keys/
+*.ppk
+
+# Local env files — NEVER commit
+.env
+.env.local
+.env.*.local

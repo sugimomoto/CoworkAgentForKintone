@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-plugin/
+build/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.ppk
+.keys/
+pnpm-lock.yaml
+docs/design_handoff_cowork_agent/reference/

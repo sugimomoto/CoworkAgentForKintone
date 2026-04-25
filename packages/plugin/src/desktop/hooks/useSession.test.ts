@@ -1,0 +1,191 @@
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { _resetResolveDefaultAgentCache } from '../../core/bootstrap/resolveAgent';
+import { useChatStore } from '../../store/chatStore';
+import { makeAgent, makeEnv, makeSession } from '../../test/fixtures';
+
+import { useSession } from './useSession';
+
+vi.mock('../../core/bootstrap/resolveAgent', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../core/bootstrap/resolveAgent')>();
+  return { ...actual, resolveDefaultAgent: vi.fn() };
+});
+vi.mock('../../core/bootstrap/resolveEnvironment', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../core/bootstrap/resolveEnvironment')>();
+  return { ...actual, resolveBootstrapEnvironment: vi.fn() };
+});
+vi.mock('../../core/bootstrap/resolveSession', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../core/bootstrap/resolveSession')>();
+  return { ...actual, createUserSession: vi.fn() };
+});
+vi.mock('../../core/kintone/user', () => ({
+  getCurrentSessionContext: vi.fn(() => ({
+    kintoneUserCode: 'sato',
+    kintoneDomain: 'example.cybozu.com',
+  })),
+}));
+
+import { resolveDefaultAgent } from '../../core/bootstrap/resolveAgent';
+import { resolveBootstrapEnvironment } from '../../core/bootstrap/resolveEnvironment';
+import { createUserSession } from '../../core/bootstrap/resolveSession';
+
+const mockResolveAgent = vi.mocked(resolveDefaultAgent);
+const mockResolveEnv = vi.mocked(resolveBootstrapEnvironment);
+const mockCreateSession = vi.mocked(createUserSession);
+
+const agentForTest = () => makeAgent({ id: 'agent_1' });
+const envForTest = () => makeEnv();
+const sessionForTest = (id = 'sess_new') => makeSession({ id });
+
+beforeEach(() => {
+  useChatStore.getState().reset();
+  _resetResolveDefaultAgentCache();
+  mockResolveAgent.mockReset();
+  mockResolveEnv.mockReset();
+  mockCreateSession.mockReset();
+});
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('useSession (起動時の bootstrap)', () => {
+  it('マウント時に bootstrapping 状態になり、Agent と Environment を解決する', () => {
+    mockResolveAgent.mockResolvedValue(agentForTest());
+    mockResolveEnv.mockResolvedValue(envForTest());
+
+    renderHook(() => useSession());
+
+    expect(useChatStore.getState().status).toBe('bootstrapping');
+  });
+
+  it('Agent/Env 解決後は status が ready になり、Session API は呼ばれない', async () => {
+    mockResolveAgent.mockResolvedValue(agentForTest());
+    mockResolveEnv.mockResolvedValue(envForTest());
+
+    renderHook(() => useSession());
+
+    await waitFor(() => {
+      expect(useChatStore.getState().status).toBe('ready');
+    });
+    expect(useChatStore.getState().sessionId).toBeNull();
+    expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+
+  it('Agent 解決失敗時は status が error になる', async () => {
+    mockResolveAgent.mockRejectedValue(new Error('network down'));
+
+    renderHook(() => useSession());
+
+    await waitFor(() => {
+      expect(useChatStore.getState().status).toBe('error');
+    });
+    expect(useChatStore.getState().error).toContain('network down');
+  });
+});
+
+describe('useSession.ensureSession', () => {
+  it('既存 sessionId が無いとき、createUserSession で新規作成し store に保存する', async () => {
+    mockResolveAgent.mockResolvedValue(agentForTest());
+    mockResolveEnv.mockResolvedValue(envForTest());
+    mockCreateSession.mockResolvedValue(sessionForTest('sess_new'));
+
+    const { result } = renderHook(() => useSession());
+    await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+    let id = '';
+    await act(async () => {
+      id = await result.current.ensureSession();
+    });
+
+    expect(id).toBe('sess_new');
+    expect(useChatStore.getState().sessionId).toBe('sess_new');
+    expect(mockCreateSession).toHaveBeenCalledTimes(1);
+    expect(mockCreateSession).toHaveBeenCalledWith({
+      agentId: 'agent_1',
+      environmentId: 'env_1',
+      kintoneDomain: 'example.cybozu.com',
+      kintoneUserCode: 'sato',
+    });
+  });
+
+  it('連続で 2 回呼んでも createUserSession は 1 回しか走らない (in-flight 保護)', async () => {
+    mockResolveAgent.mockResolvedValue(agentForTest());
+    mockResolveEnv.mockResolvedValue(envForTest());
+    mockCreateSession.mockImplementation(
+      () => new Promise((r) => setTimeout(() => r(sessionForTest('sess_x')), 10)),
+    );
+
+    const { result } = renderHook(() => useSession());
+    await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+    let a = '';
+    let b = '';
+    await act(async () => {
+      const pa = result.current.ensureSession();
+      const pb = result.current.ensureSession();
+      [a, b] = await Promise.all([pa, pb]);
+    });
+
+    expect(a).toBe('sess_x');
+    expect(b).toBe('sess_x');
+    expect(mockCreateSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('既存 sessionId があれば API を呼ばずそのまま返す', async () => {
+    mockResolveAgent.mockResolvedValue(agentForTest());
+    mockResolveEnv.mockResolvedValue(envForTest());
+
+    const { result } = renderHook(() => useSession());
+    await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+    useChatStore.getState().setSessionId('sess_existing');
+
+    let id = '';
+    await act(async () => {
+      id = await result.current.ensureSession();
+    });
+
+    expect(id).toBe('sess_existing');
+    expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('useSession.selectSession / startNewConversation', () => {
+  it('selectSession は messages をクリアして sessionId を切替える', async () => {
+    mockResolveAgent.mockResolvedValue(agentForTest());
+    mockResolveEnv.mockResolvedValue(envForTest());
+
+    const { result } = renderHook(() => useSession());
+    await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+    useChatStore.getState().setSessionId('sess_a');
+    useChatStore.getState().addMessage({ id: 'm1', kind: 'user', text: 'x' });
+
+    act(() => {
+      result.current.selectSession('sess_b');
+    });
+
+    expect(useChatStore.getState().sessionId).toBe('sess_b');
+    expect(useChatStore.getState().messages).toEqual([]);
+  });
+
+  it('startNewConversation で sessionId が null、messages が空になる', async () => {
+    mockResolveAgent.mockResolvedValue(agentForTest());
+    mockResolveEnv.mockResolvedValue(envForTest());
+
+    const { result } = renderHook(() => useSession());
+    await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+    useChatStore.getState().setSessionId('sess_a');
+    useChatStore.getState().addMessage({ id: 'm1', kind: 'user', text: 'x' });
+
+    act(() => {
+      result.current.startNewConversation();
+    });
+
+    expect(useChatStore.getState().sessionId).toBeNull();
+    expect(useChatStore.getState().messages).toEqual([]);
+  });
+});

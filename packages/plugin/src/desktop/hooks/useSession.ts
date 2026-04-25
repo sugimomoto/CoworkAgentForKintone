@@ -1,0 +1,116 @@
+// Cowork Agent for kintone — Agent / Environment ブートストラップフック
+//
+// 起動時に Default Agent と Bootstrap Environment を解決し、status を ready にする。
+// Session は **作成しない** (設計変更: 20260425-session-redesign)。
+//
+// Session のライフサイクル:
+//   - ensureSession(): まだ無ければ新規作成 (初送信時)。in-flight 保護で連投にも 1 本だけ作る
+//   - selectSession(id): 履歴復元時に sessionId を切替えて messages をクリア
+//   - startNewConversation(): messages を空に、sessionId を null に戻す
+
+import { useCallback, useEffect, useRef } from 'react';
+
+import { resolveDefaultAgent } from '../../core/bootstrap/resolveAgent';
+import { resolveBootstrapEnvironment } from '../../core/bootstrap/resolveEnvironment';
+import { createUserSession } from '../../core/bootstrap/resolveSession';
+import { getCurrentSessionContext } from '../../core/kintone/user';
+import { useChatStore } from '../../store/chatStore';
+
+export interface UseSessionResult {
+  /** 既存 sessionId があれば返す。無ければ新規作成して store に保存し、その id を返す。 */
+  ensureSession: () => Promise<string>;
+  /** 履歴から特定 Session を復元する。messages をクリアして sessionId を切替える。 */
+  selectSession: (sessionId: string) => void;
+  /** 新規会話を開始する (messages クリア + sessionId を null に戻す)。 */
+  startNewConversation: () => void;
+}
+
+interface ResolvedContext {
+  agentId: string;
+  environmentId: string;
+  kintoneDomain: string;
+  kintoneUserCode: string;
+}
+
+export function useSession(): UseSessionResult {
+  const setSessionId = useChatStore((s) => s.setSessionId);
+  const setAgentId = useChatStore((s) => s.setAgentId);
+  const setStatus = useChatStore((s) => s.setStatus);
+  const resetConversation = useChatStore((s) => s.resetConversation);
+  const startNewConversationStore = useChatStore((s) => s.startNewConversation);
+
+  const ctxRef = useRef<ResolvedContext | null>(null);
+  const inFlightRef = useRef<Promise<string> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus('bootstrapping');
+    (async () => {
+      try {
+        const [agent, env] = await Promise.all([
+          resolveDefaultAgent(),
+          resolveBootstrapEnvironment(),
+        ]);
+        if (cancelled) return;
+        const kctx = getCurrentSessionContext();
+        ctxRef.current = {
+          agentId: agent.id,
+          environmentId: env.id,
+          kintoneDomain: kctx.kintoneDomain,
+          kintoneUserCode: kctx.kintoneUserCode,
+        };
+        setAgentId(agent.id);
+        setStatus('ready');
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : String(err);
+        const lower = message.toLowerCase();
+        const hint =
+          lower.includes('failed to fetch') || lower.includes('network')
+            ? ' — kintone のプロキシ設定で https://api.anthropic.com/ への許可 (GET / POST) が登録されているか確認してください。'
+            : lower.includes('authentication')
+              ? ' — kintone プラグイン設定の Anthropic API Key が正しいか確認してください。'
+              : '';
+        setStatus('error', `${message}${hint}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [setStatus, setAgentId]);
+
+  const ensureSession = useCallback(async (): Promise<string> => {
+    const existing = useChatStore.getState().sessionId;
+    if (existing) return existing;
+    if (inFlightRef.current) return inFlightRef.current;
+
+    const ctx = ctxRef.current;
+    if (!ctx) throw new Error('bootstrap が完了していません');
+
+    const p = (async (): Promise<string> => {
+      try {
+        const session = await createUserSession(ctx);
+        setSessionId(session.id);
+        return session.id;
+      } finally {
+        inFlightRef.current = null;
+      }
+    })();
+    inFlightRef.current = p;
+    return p;
+  }, [setSessionId]);
+
+  const selectSession = useCallback(
+    (sessionId: string) => {
+      resetConversation();
+      setSessionId(sessionId);
+    },
+    [resetConversation, setSessionId],
+  );
+
+  const startNewConversation = useCallback(() => {
+    startNewConversationStore();
+  }, [startNewConversationStore]);
+
+  return { ensureSession, selectSession, startNewConversation };
+}

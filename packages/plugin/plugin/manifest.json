@@ -1,0 +1,36 @@
+{
+  "manifest_version": 1,
+  "version": 23,
+  "type": "APP",
+  "name": {
+    "ja": "Cowork Agent for kintone",
+    "en": "Cowork Agent for kintone"
+  },
+  "description": {
+    "ja": "Claude Managed Agents を活用した kintone 業務支援エージェント",
+    "en": "kintone business assistant powered by Claude Managed Agents"
+  },
+  "icon": "image/icon.png",
+  "homepage_url": {
+    "ja": "https://github.com/sugimomoto/CoworkAgentForKintone",
+    "en": "https://github.com/sugimomoto/CoworkAgentForKintone"
+  },
+  "desktop": {
+    "js": [
+      "js/desktop.js"
+    ],
+    "css": [
+      "css/desktop.css"
+    ]
+  },
+  "config": {
+    "html": "html/config.html",
+    "js": [
+      "js/config.js"
+    ],
+    "css": [
+      "css/config.css"
+    ],
+    "required_params": []
+  }
+}

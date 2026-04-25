@@ -1,0 +1,44 @@
+# Cowork Agent for kintone — GitHub Issues ラベル定義
+#
+# 同期方法:
+#   bash scripts/setup-labels.sh
+#
+# Issue には status ラベル 1 つ + area ラベル 1 つ以上 を必ず付与する。
+
+# --- status ラベル (進捗) -------------------------------------------------
+- name: "status: planned"
+  color: "FBCA04"
+  description: "対応予定（未着手）"
+
+- name: "status: completed"
+  color: "0E8A16"
+  description: "実装完了"
+
+# --- area ラベル (領域) ---------------------------------------------------
+- name: "area: ai"
+  color: "1D76DB"
+  description: "AI / Claude API / Managed Agents 関連"
+
+- name: "area: kintone"
+  color: "5319E7"
+  description: "kintone 操作・REST API 連携"
+
+- name: "area: ux"
+  color: "D93F0B"
+  description: "UI・UX・デザイン関連"
+
+- name: "area: helper"
+  color: "C5DEF5"
+  description: "Python ヘルパーライブラリ (cowork-agent-kintone)"
+
+- name: "area: ci"
+  color: "000000"
+  description: "CI/CD・ビルド・リリース"
+
+- name: "area: docs"
+  color: "BFD4F2"
+  description: "ドキュメント"
+
+- name: "area: integration"
+  color: "6F42C1"
+  description: "外部サービス連携 (Slack / Salesforce / Gmail 等)"

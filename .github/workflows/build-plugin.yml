@@ -1,0 +1,90 @@
+name: Build Plugin
+
+# OSS 配布用プラグイン zip ビルド
+#
+# 本リポジトリは OSS のため、GitHub Actions では **zip 生成までを責務とする**。
+# kintone 環境へのアップロードは各メンテナがローカル (`pnpm plugin:upload`) で行う。
+#
+# - PR / push: zip 生成 + サイズ検証 + Artifact として 7 日間保管 (PR レビュー時の動作確認用)
+# - tag push (v*): 同上 + GitHub Release に zip を添付 (一般ユーザー向け配布)
+#   - `v*` がプラグインのリリースタグ (`v1.0.1` など)
+#   - helper-v* など別名前空間のタグはここではトリガしない
+
+on:
+  pull_request:
+    paths:
+      - 'packages/plugin/**'
+      - '.github/workflows/build-plugin.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/plugin/**'
+      - '.github/workflows/build-plugin.yml'
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Pack plugin.zip
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install cli-kintone
+        run: npm install -g @kintone/cli
+
+      - name: Restore signing key (.ppk) from secret
+        env:
+          KINTONE_PLUGIN_PPK_BASE64: ${{ secrets.KINTONE_PLUGIN_PPK_BASE64 }}
+        run: |
+          if [ -z "$KINTONE_PLUGIN_PPK_BASE64" ]; then
+            echo "::warning::KINTONE_PLUGIN_PPK_BASE64 が未設定。新しい .ppk を生成します (プラグインIDが変わる点に注意)。"
+            mkdir -p packages/plugin/.keys
+            cli-kintone plugin keygen --output packages/plugin/.keys/plugin.ppk
+          else
+            mkdir -p packages/plugin/.keys
+            echo "$KINTONE_PLUGIN_PPK_BASE64" | base64 -d > packages/plugin/.keys/plugin.ppk
+            echo "Restored .ppk from secret"
+          fi
+
+      - name: Pack plugin.zip
+        working-directory: packages/plugin
+        run: |
+          mkdir -p dist
+          cli-kintone plugin pack \
+            --input plugin/manifest.json \
+            --private-key .keys/plugin.ppk \
+            --output dist/plugin.zip
+          ls -la dist/
+
+      - name: Validate zip size (<= 30MB)
+        working-directory: packages/plugin
+        run: |
+          SIZE=$(stat -c '%s' dist/plugin.zip 2>/dev/null || stat -f '%z' dist/plugin.zip)
+          MAX=$((30 * 1024 * 1024))
+          echo "plugin.zip size: $SIZE bytes"
+          if [ "$SIZE" -gt "$MAX" ]; then
+            echo "::error::plugin.zip exceeds 30MB ($SIZE > $MAX)"
+            exit 1
+          fi
+
+      - name: Upload zip as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-zip
+          path: packages/plugin/dist/plugin.zip
+          retention-days: 7
+
+      - name: Attach to GitHub Release (only on v* tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: packages/plugin/dist/plugin.zip
+          generate_release_notes: true
