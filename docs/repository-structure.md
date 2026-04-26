@@ -1,8 +1,8 @@
 # リポジトリ構造定義書 (Repository Structure)
 
 **プロダクト名**: Cowork Agent for kintone
-**バージョン**: 0.1 (MVP ドラフト)
-**最終更新日**: 2026-04-23
+**バージョン**: 0.2 (Phase 1b-3)
+**最終更新日**: 2026-04-26
 
 ---
 
@@ -10,10 +10,12 @@
 
 本リポジトリは **pnpm workspace** を利用したモノレポ構成で、以下 2 パッケージを管理する。
 
-| パッケージ | 言語 | 成果物 |
-|-----------|------|--------|
-| `packages/plugin` | TypeScript (React + Vite + Tailwind) | kintone プラグイン `.zip` |
-| `packages/kintone-helper` | Python 3.11+ | pip パッケージ (PyPI 公開) |
+| パッケージ | 言語 / ランタイム | 成果物 |
+|-----------|------------------|--------|
+| `packages/plugin` | TypeScript + React + esbuild + Tailwind | kintone プラグイン `.zip` |
+| `packages/kintone-mcp` | TypeScript + Cloudflare Workers Runtime | Cloudflare Workers script |
+
+> Phase 1b-1 の `packages/kintone-helper` (Python) は Phase 1b-3 で廃止された。
 
 ---
 
@@ -24,15 +26,12 @@ CoworkAgentForKintone/
 ├── .claude/                         # Claude Code 設定・スキル (開発支援)
 ├── .github/
 │   └── workflows/                   # GitHub Actions 定義
-│       ├── ci.yml                   # Lint / 型 / テスト
-│       ├── build-plugin.yml         # プラグイン zip ビルド
-│       └── publish-pypi.yml         # Python パッケージ公開
-├── .steering/                       # 作業単位ドキュメント
+├── .steering/                       # 作業単位ドキュメント (時系列の意思決定記録)
 │   └── [YYYYMMDD]-[title]/
 │       ├── requirements.md
 │       ├── design.md
 │       └── tasklist.md
-├── docs/                            # 永続ドキュメント
+├── docs/                            # 永続ドキュメント (恒久的な仕様)
 │   ├── product-requirements.md
 │   ├── functional-design.md
 │   ├── architecture.md
@@ -40,36 +39,25 @@ CoworkAgentForKintone/
 │   ├── development-guidelines.md
 │   └── glossary.md
 ├── packages/
-│   ├── plugin/                      # kintone プラグイン
-│   │   ├── src/
-│   │   ├── public/
-│   │   ├── manifest.json
-│   │   ├── package.json
-│   │   ├── tsconfig.json
-│   │   ├── vite.config.ts
-│   │   ├── tailwind.config.ts
-│   │   ├── postcss.config.js
-│   │   └── README.md
-│   └── kintone-helper/              # Python ヘルパーライブラリ
-│       ├── src/cowork_agent_kintone/
-│       ├── tests/
-│       ├── pyproject.toml
-│       ├── README.md
-│       └── CHANGELOG.md
-├── scripts/                         # 開発補助スクリプト
-│   ├── package-plugin.mjs
-│   └── release.mjs
+│   ├── plugin/                      # kintone プラグイン (TypeScript)
+│   └── kintone-mcp/                 # Cloudflare Worker (TypeScript)
+├── scripts/
+│   ├── auto-deploy-plugin.sh        # Claude Code Stop フック用 auto-deploy
+│   ├── verify-mcp-oauth.mjs         # OAuth flow 単発検証スクリプト
+│   ├── test-proxy-nested-body.js    # kintone proxy 仕様確認 (ブラウザコンソール用)
+│   └── setup-labels.sh              # GitHub label 初期化
 ├── .editorconfig
+├── .env.example
 ├── .gitignore
-├── .prettierrc
-├── .prettierignore
+├── .prettierrc / .prettierignore
 ├── .eslintrc.cjs
 ├── CLAUDE.md                        # プロジェクトメモリ (開発規約)
 ├── LICENSE                          # MIT
-├── README.md
-├── package.json                     # workspace root
+├── README.md                        # 公開リポジトリのトップ
+├── package.json                     # workspace root + 共通スクリプト
 ├── pnpm-workspace.yaml
-└── pnpm-lock.yaml
+├── pnpm-lock.yaml
+└── tsconfig.base.json
 ```
 
 ---
@@ -80,211 +68,182 @@ CoworkAgentForKintone/
 
 ```
 packages/plugin/
+├── plugin/                          # kintone Plugin format (zip 化される)
+│   ├── manifest.json                # version は build 時自動 +1
+│   ├── html/config.html
+│   ├── js/{desktop,config}.js       # esbuild 出力 (gitignore)
+│   └── css/{desktop,config}.css     # Tailwind 出力 (gitignore)
 ├── src/
-│   ├── desktop/
-│   │   ├── index.tsx                # レコード一覧画面エントリ (app.record.index.show)
-│   │   ├── ChatPanel.tsx            # サイドパネルのチャット UI ルート
-│   │   ├── components/              # プレゼンテーション層 React コンポーネント
+│   ├── desktop/                     # レコード一覧画面 (Chat UI)
+│   │   ├── index.tsx                # app.record.index.show エントリ
+│   │   ├── ChatPanel.tsx            # ルート (Header + MessageList + Composer | History)
+│   │   ├── HistoryView.tsx
+│   │   ├── components/
+│   │   │   ├── ConnectKintoneButton.tsx  # OAuth 連携トリガー
+│   │   │   ├── Composer.tsx              # メッセージ入力欄
+│   │   │   ├── Header.tsx
 │   │   │   ├── MessageList.tsx
-│   │   │   ├── MessageInput.tsx
-│   │   │   ├── ApprovalCard.tsx
-│   │   │   ├── TaskIndicator.tsx
-│   │   │   └── CredentialDialog.tsx
-│   │   └── hooks/                   # React フック
-│   │       ├── useSession.ts
-│   │       ├── useEventPoller.ts
-│   │       └── useUserBinding.ts
-│   ├── config/
-│   │   ├── index.tsx                # プラグイン設定画面エントリ
+│   │   │   ├── MessageItem/              # AgentMessage / UserMessage / ThinkingDots
+│   │   │   └── WelcomeMessage.tsx
+│   │   └── hooks/
+│   │       ├── useSession.ts             # Agent + Environment bootstrap
+│   │       ├── useUserBinding.ts         # OAuth flow + Vault Credential 解決
+│   │       ├── useEventPoller.ts         # Session events ポーリング
+│   │       └── usePanelOpenState.ts
+│   ├── config/                      # プラグイン設定画面 (4 ステップウィザード)
+│   │   ├── index.tsx
 │   │   └── ConfigScreen.tsx
-│   ├── core/                        # UI に依存しないロジック層
-│   │   ├── managed-agents/
-│   │   │   ├── client.ts            # Managed Agents HTTP クライアント (kintone.proxy 経由)
-│   │   │   ├── resources.ts         # Agent/Environment/Vault/Session の CRUD + metadata フィルタ
-│   │   │   ├── events.ts            # イベント送受信 (ポーリング含む)
-│   │   │   └── types.ts
-│   │   ├── kintone/
-│   │   │   ├── api.ts               # @kintone/rest-api-client ラッパ
-│   │   │   └── user.ts              # getLoginUser() 等
-│   │   ├── bootstrap/
-│   │   │   ├── resolveAgent.ts      # Default Agent 解決・作成
-│   │   │   ├── resolveEnvironment.ts
-│   │   │   └── resolveVault.ts
-│   │   └── constants.ts             # metadata キー名、ポーリング間隔等
-│   ├── store/                       # Zustand ストア
-│   │   ├── chatStore.ts
-│   │   └── configStore.ts
-│   ├── utils/
-│   │   ├── markdown.ts              # DOMPurify + markdown レンダラ
-│   │   └── logger.ts
-│   ├── locales/
-│   │   └── ja.json
+│   ├── core/                        # UI 非依存のロジック層
+│   │   ├── managed-agents/          # Anthropic API (client / resources / events / types / eventInterpreter)
+│   │   ├── kintone/                 # kintone JS API ラッパ (proxyTransport / pluginConfig / user / setProxyConfigAsync)
+│   │   ├── oauth/                   # PKCE / popup / tokenExchange / credentialsUpsertClient
+│   │   ├── cloudflare/              # Worker デプロイ client + multipart 構築
+│   │   ├── bootstrap/               # resolveAgent / resolveEnvironment / resolveSession / resolveVault
+│   │   ├── constants.ts             # METADATA / DEFAULT_KINTONE_OAUTH_SCOPE / CLOUDFLARE_WORKER_SCRIPT_NAME 等
+│   │   ├── format.ts                # 日付フォーマット
+│   │   └── utils.ts                 # sleep / toErrorMessage / joinUrl / buildMcpServerUrl
+│   ├── store/
+│   │   └── chatStore.ts             # Zustand
 │   ├── styles/
-│   │   └── global.css               # Tailwind エントリ
-│   └── types/
-│       └── kintone-plugin.d.ts
-├── public/
-│   └── image/
-│       └── icon.png                 # プラグインアイコン
-├── manifest.json                    # プラグイン定義ファイル
+│   │   └── global.css               # Tailwind directive
+│   ├── types/
+│   │   └── kintone-plugin.d.ts      # kintone JS API の型定義
+│   ├── test/
+│   │   └── fixtures.ts              # 共通テストフィクスチャ
+│   └── generated/                   # build 時自動生成 (gitignore)
+│       └── worker-bundle.ts         # Worker JS の文字列定数 + version
+├── e2e/                             # Playwright spec
+│   ├── auth.setup.ts                # kintone ログイン (storageState 保存)
+│   ├── credential-bind.setup.ts     # OAuth flow を popup 自動化で完走
+│   ├── config.spec.ts               # 設定画面 + Cloudflare deploy
+│   ├── live-with-mcp.spec.ts        # MCP 経由で kintone データ取得
+│   ├── live.spec.ts                 # Anthropic API 連携 (応答テキスト)
+│   ├── panel-toggle.spec.ts         # パネル開閉
+│   ├── session-history.spec.ts      # 履歴
+│   └── smoke.spec.ts                # マウント確認
+├── scripts/
+│   ├── build.mjs                    # Worker bundle + Plugin JS + CSS 生成
+│   ├── deploy.mjs                   # cli-kintone でアップロード
+│   ├── e2e.mjs                      # Playwright runner ラッパ
+│   └── lib/kintone-deploy.mjs       # REST API deploy + poll
 ├── package.json
 ├── tsconfig.json
-├── vite.config.ts
-├── tailwind.config.ts
+├── playwright.config.ts
 ├── postcss.config.js
-└── README.md
+├── tailwind.config.ts
+└── vitest.config.ts
 ```
 
-### 3.2 manifest.json の要点
+### 3.2 ビルド成果物 (gitignore)
 
-```json
-{
-  "manifest_version": 1,
-  "version": "0.1.0",
-  "type": "APP",
-  "name": { "ja": "Cowork Agent for kintone" },
-  "description": { "ja": "Claude Managed Agents を活用した業務エージェント" },
-  "icon": "image/icon.png",
-  "homepage_url": { "ja": "https://github.com/.../CoworkAgentForKintone" },
-  "desktop": {
-    "js": ["js/desktop.js"],
-    "css": ["css/desktop.css"]
-  },
-  "config": {
-    "html": "html/config.html",
-    "js": ["js/config.js"],
-    "required_params": ["proxyConfigured"]
-  }
-}
 ```
-
-### 3.3 ビルド成果物
-
-- `dist/` に Vite 出力
-- `dist-plugin/` に `cli-kintone plugin pack` で zip 化した `plugin.zip`
+plugin/js/{desktop,config}.js
+plugin/css/{desktop,config}.css
+src/generated/
+dist/, dist-plugin/
+```
 
 ---
 
-## 4. packages/kintone-helper (Python ヘルパーライブラリ)
+## 4. packages/kintone-mcp (Cloudflare Worker)
 
 ### 4.1 ディレクトリ構造
 
 ```
-packages/kintone-helper/
-├── src/cowork_agent_kintone/
-│   ├── __init__.py                  # エクスポート定義
-│   ├── client.py                    # Client クラス
-│   ├── auth.py                      # Basic 認証ヘッダ構築
-│   ├── apps.py                      # get_apps / get_app_schema / get_form_layout
-│   ├── records.py                   # get_records / add_records / update_records / delete_records
-│   ├── bulk.py                      # bulk_request
-│   ├── cursor.py                    # カーソル API ラッパ (10,000 件超の自動継続)
-│   ├── errors.py                    # KintoneApiError 等
-│   └── _http.py                     # 共通 HTTP 呼出
-├── tests/
-│   ├── test_client.py
-│   ├── test_records.py
-│   ├── test_cursor.py
-│   └── fixtures/
-│       └── responses.json
-├── pyproject.toml
-├── README.md
-├── CHANGELOG.md
-└── LICENSE
+packages/kintone-mcp/
+├── src/
+│   ├── index.ts                     # ルータ (/mcp/<domain>, /credentials/upsert, /oauth/callback, /version, /healthz, /debug/echo)
+│   ├── mcp.ts                       # POST /mcp/<domain> ハンドラ (JSON-RPC 2.0)
+│   ├── credentials-upsert.ts        # POST /credentials/upsert (Anthropic Vault Credential 中継)
+│   ├── oauth-callback.ts            # GET /oauth/callback (postMessage 中継)
+│   ├── kintone.ts                   # kintone REST API クライアント (Bearer 専用)
+│   ├── version.ts                   # __BUILD_VERSION__ / __BUILD_TIME__
+│   ├── _http.ts                     # jsonResponse / isString / maskToken
+│   └── tools/
+│       ├── factory.ts               # createTool / createToolCallback
+│       ├── index.ts                 # 4 ツール集約
+│       ├── get-app.ts
+│       ├── get-apps.ts
+│       ├── get-form-fields.ts
+│       ├── get-records.ts
+│       ├── types/                   # Tool / ToolConfig / ToolCallback
+│       └── utils/build-query.ts     # filters → kintone query 変換
+├── tests/                           # vitest (60 件)
+├── package.json
+├── tsconfig.json
+├── vitest.config.ts
+└── wrangler.toml                    # 環境変数なし (compatibility_date のみ)
 ```
 
-### 4.2 pyproject.toml の要点
+### 4.2 デプロイ
 
-```toml
-[project]
-name = "cowork-agent-kintone"
-version = "0.1.0"
-requires-python = ">=3.11"
-dependencies = ["requests>=2.31"]
-
-[project.optional-dependencies]
-dev = ["pytest", "responses", "ruff", "mypy"]
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-```
-
-### 4.3 公開先
-
-- PyPI: `pip install cowork-agent-kintone`
-- GitHub Releases にも成果物添付
+通常は **Plugin 設定画面 Step 0** からブラウザ経由で API デプロイ。
+開発中は `pnpm exec wrangler deploy` で直接デプロイ可 (この場合 `__BUILD_VERSION__` 未注入で `/version` は `dev`)。
 
 ---
 
-## 5. 命名規則 (概要)
+## 5. ファイル配置ルール
 
-### 5.1 ファイル名
+### 5.1 docs/ vs .steering/
 
-| 種別 | 規則 | 例 |
-|------|-----|----|
-| TypeScript コンポーネント | PascalCase | `ChatPanel.tsx` |
-| TypeScript モジュール | camelCase | `chatStore.ts` |
-| React フック | camelCase、`use` 接頭辞 | `useSession.ts` |
-| Python モジュール | snake_case | `records.py` |
-| ドキュメント | kebab-case | `functional-design.md` |
+| 配置先 | 内容 | 更新頻度 |
+|--------|------|---------|
+| `docs/` | 永続的な仕様 (アーキテクチャ・要件・規約) | 大きな設計変更時のみ |
+| `.steering/[YYYYMMDD]-[title]/` | 作業単位の意思決定記録 (要件・設計・タスク) | 作業ごとに新規作成、完了後は履歴として保持 |
 
-### 5.2 ディレクトリ
+**新しい作業を始める際は必ず `.steering/` に新ディレクトリを作る** (CLAUDE.md 参照)。
 
-- TypeScript: camelCase または単数形の名詞 (`components/`, `hooks/`, `store/`)
-- Python: snake_case
-- 機能分類は層別 (`core/`, `components/`) か機能別 (`managed-agents/`, `kintone/`)
+### 5.2 src/ 配下の責務
 
-### 5.3 コード規約の詳細
+- **`src/desktop/`**: レコード一覧画面で動く UI (React コンポーネント + フック)
+- **`src/config/`**: プラグイン設定画面で動く UI
+- **`src/core/`**: UI 非依存のロジック (HTTP / OAuth / kintone API / Anthropic API / 状態解決)
+- **`src/store/`**: Zustand
+- **`src/types/`**: アンビエント型定義 (グローバル `kintone` 等)
+- **`src/test/`**: vitest 用フィクスチャ (本体コードからの参照禁止)
+- **`src/generated/`**: ビルド時自動生成 (手動編集禁止、gitignore)
 
-詳細は [docs/development-guidelines.md](docs/development-guidelines.md) にて定義。
+### 5.3 命名規則
 
----
-
-## 6. ファイル配置ルール
-
-### 6.1 プラグイン側 (TypeScript)
-
-- **UI 層** (`src/desktop/components/`, `src/config/`): React コンポーネントのみ。ビジネスロジックは禁止
-- **ロジック層** (`src/core/`): ブラウザ DOM や React 非依存。ユニットテスト可能にする
-- **状態管理** (`src/store/`): Zustand ストア。複数コンポーネント間で共有する状態のみ
-- **型定義** (`src/types/`): グローバルな型拡張 (`kintone-plugin.d.ts` 等)
-- **定数・設定** (`src/core/constants.ts`): metadata キー、ポーリング設定等
-
-### 6.2 ヘルパーライブラリ側 (Python)
-
-- **`client.py`**: ユーザーが最初に import する `Client` を定義。他モジュールに委譲
-- **機能別モジュール**: `apps.py` / `records.py` / `bulk.py` に API 操作を分離
-- **内部ユーティリティ**: 先頭 `_` を付けて公開 API と区別 (`_http.py` 等)
-- **テスト**: `tests/` 配下、ファイル名 `test_<module>.py`
-
-### 6.3 禁止事項
-
-- `packages/plugin/` から `packages/kintone-helper/` を import しない (言語が違うため物理的に不可だが、概念的にも独立したプロジェクトとして扱う)
-- ドキュメントをコード配下に置かない (README 以外は `docs/` か `.steering/` に集約)
-- 生成物 (`dist/`, `dist-plugin/`, `__pycache__/`, `.venv/` 等) はコミット禁止
+- **コンポーネント**: PascalCase (例: `ChatPanel.tsx`)
+- **フック**: `use*` プレフィックス + camelCase (例: `useUserBinding.ts`)
+- **テスト**: 対象ファイル + `.test.ts` / `.test.tsx`
+- **定数**: SCREAMING_SNAKE_CASE (例: `DEFAULT_KINTONE_OAUTH_SCOPE`)
+- **シングルトン関数**: camelCase (例: `resolveDefaultAgent`)
 
 ---
 
-## 7. ブランチ戦略
+## 6. 環境変数
 
-- **main**: リリース版。常にデプロイ可能な状態を維持
-- **feature/[YYYYMMDD]-[topic]**: 機能追加ブランチ。`.steering/` のディレクトリ名に対応
-- **fix/[issue-number]-[topic]**: バグ修正ブランチ
-- **chore/[topic]**: 依存更新など軽微な作業
+### 6.1 ローカル開発用 `.env`
 
-### PR フロー
-1. feature ブランチで開発
-2. PR 作成 → CI で Lint / 型 / テストを実行
-3. レビュー承認後に main へ squash merge
+`.env.example` を `.env` にコピーして必要な値を埋める。詳細は [`.env.example`](../.env.example)。
+
+主要な値:
+
+| キー | 用途 |
+|---|---|
+| `KINTONE_BASE_URL` / `KINTONE_USERNAME` / `KINTONE_PASSWORD` | kintone プラグインアップロード用 |
+| `ANTHROPIC_API_KEY` | E2E (live spec) / `scripts/verify-mcp-oauth.mjs` 用 |
+| `KINTONE_TEST_APP_ID` / `KINTONE_TEST_PLUGIN_ID` | E2E 用 |
+| `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` | Worker デプロイ E2E 用 |
+| `KINTONE_OAUTH_*` | `verify-mcp-oauth.mjs` 用 |
+
+### 6.2 本番
+
+Plugin Config 画面で設定 (admin のみ実行可)。詳細は [README](../README.md)。
 
 ---
 
-## 8. リリース成果物
+## 7. CI / CD
 
-| 成果物 | 配布先 | タグ |
-|-------|--------|------|
-| `plugin.zip` | GitHub Releases | `plugin-v<semver>` |
-| Python wheel / sdist | PyPI + GitHub Releases | `helper-v<semver>` |
+### 7.1 GitHub Actions
 
-2 パッケージは独立したバージョニングで、タグプレフィックスで区別する。
+| ワークフロー | トリガー | 内容 |
+|---|---|---|
+| `ci.yml` (想定) | PR / push | `pnpm -r typecheck` + `pnpm -r test` + `pnpm lint` |
+| `release.yml` (想定) | tag push (`vX.Y.Z`) | Plugin zip ビルド + GitHub Release アップロード |
+
+### 7.2 ローカル auto-deploy
+
+Claude Code の Stop フック (`scripts/auto-deploy-plugin.sh`) が、Plugin の変更を検出したら自動的に kintone へアップロードする (`.claude/settings.local.json` で有効化)。

@@ -1,12 +1,143 @@
 # 機能設計書 (Functional Design Document)
 
 **プロダクト名**: Cowork Agent for kintone
-**バージョン**: 0.1 (MVP ドラフト)
-**最終更新日**: 2026-04-22
+**バージョン**: 0.2 (Phase 1b-3 / OAuth pivot)
+**最終更新日**: 2026-04-26
 
 ---
 
-## 1. システムアーキテクチャ
+> **2026-04-26 注**: Phase 1b-3 で大きな設計変更がありました。
+>
+> - kintone 認証を **Basic 認証 + Python ヘルパーライブラリ** から **OAuth (Authorization Code + PKCE) + MCP Server (Cloudflare Workers)** に変更
+> - Vault には ID/PW ではなく **`mcp_oauth` 型 Vault Credential** で access/refresh token を保管
+> - Environment は **`networking.allow_mcp_servers: true`** が必須
+> - 詳細シーケンスは下記「§0. Phase 1b-3 シーケンス図」と [`.steering/20260426-phase-1b-3-oauth-pivot/`](../.steering/20260426-phase-1b-3-oauth-pivot/) を参照
+>
+> 以下 §1 以降の旧設計記述は **Phase 1a/1b-1/1b-2 の歴史記録**として保持しています。最新動作は §0 + [`architecture.md`](architecture.md) が正です。
+
+---
+
+## 0. Phase 1b-3 シーケンス図 (OAuth + MCP)
+
+### 0.1 管理者セットアップ (ConfigScreen 4 ステップ + 保存)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Admin as 管理者 (ブラウザ)
+    participant Config as Plugin Config
+    participant CF as Cloudflare API
+    participant Cybozu as cybozu OAuth 管理画面 (別タブ)
+    participant Kintone as kintone (proxy 設定保管)
+
+    Admin->>Config: Step 0: Cloudflare Account ID + API Token
+    Config->>CF: kintone.proxy 経由で /workers/scripts PUT (multipart) + /subdomain
+    CF-->>Config: Worker URL
+    Config->>Config: Worker URL を Step 1 に自動入力 + /version 照合
+
+    Admin->>Config: Step 1: Anthropic API Key 入力
+    Config->>Admin: Step 2: callbackUrl + 推奨スコープ + admin 画面リンク
+    Admin->>Cybozu: OAuth クライアント追加 → client_id / client_secret
+    Admin->>Config: Step 3: client_id / client_secret 入力 + 保存
+
+    Note over Config,Kintone: setProxyConfig × 4 経路を 700ms 間隔で逐次登録
+    Config->>Kintone: /oauth2/token (Basic auth fixed header)
+    Config->>Kintone: <worker>/credentials/upsert (X-Anthropic-Api-Key + OAuth client headers)
+    Config->>Kintone: api.anthropic.com (POST: X-Api-Key)
+    Config->>Kintone: api.anthropic.com (GET: X-Api-Key)
+    Config->>Kintone: setConfig({workerUrl, oauthClientId, oauthScope, saved:true})
+```
+
+### 0.2 End-user OAuth バインディング
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User (kintone ブラウザ)
+    participant P as Plugin (chat panel)
+    participant Pop as popup
+    participant CY as cybozu OAuth
+    participant W as Worker
+    participant KP as kintone proxy
+    participant A as Anthropic API
+
+    U->>P: 「kintone と連携」ボタン
+    P->>P: PKCE 生成 (code_verifier / challenge / state)
+    P->>Pop: window.open(/oauth2/authorization?...)
+    Pop->>CY: GET /oauth2/authorization
+    CY-->>U: 同意画面
+    U->>CY: 許可
+    CY-->>Pop: 302 → <worker>/oauth/callback?code&state
+    Pop->>W: GET /oauth/callback
+    W-->>Pop: HTML + script
+    Pop->>P: window.opener.postMessage({code, state})
+    Pop->>Pop: window.close()
+
+    P->>P: state 検証
+
+    P->>KP: kintone.plugin.app.proxy(/oauth2/token, POST, body)
+    KP->>CY: POST /oauth2/token + Authorization: Basic
+    CY-->>KP: {access_token, refresh_token, expires_in}
+    KP-->>P: tokens
+
+    P->>P: chatStore.vaultId 取得 (なければ POST /v1/vaults)
+    P->>KP: kintone.plugin.app.proxy(<worker>/credentials/upsert, POST)
+    KP->>W: POST + X-Anthropic-Api-Key + X-Kintone-OAuth-*
+    W->>A: POST /v1/vaults/{id}/credentials (mcp_oauth + refresh ブロック)
+    A-->>W: {credential_id, vault_id}
+    W-->>KP: 同上
+    KP-->>P: 同上
+    P-->>U: status='bound' → ConnectKintoneButton 消えて Composer 表示
+```
+
+### 0.3 通常チャット時 (kintone データ取得)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant P as Plugin
+    participant KP as kintone proxy
+    participant A as Anthropic
+    participant V as Vault (内部)
+    participant CY as cybozu /oauth2/token
+    participant W as Worker /mcp/<domain>
+    participant K as kintone REST API
+
+    U->>P: 「アプリ一覧を見せて」
+    P->>KP: POST /v1/sessions/{id}/events
+    KP->>A: 同上 + X-Api-Key
+
+    A->>V: vault_ids から credential 解決<br/>(mcp_server_url URL 一致)
+    V-->>A: access_token
+
+    alt access_token 期限切れ
+        A->>CY: POST /oauth2/token (refresh)<br/>Authorization: Basic <client_id:client_secret>
+        CY-->>A: 新 access_token + refresh_token
+        A->>V: tokens 更新
+    end
+
+    A->>W: POST /mcp/<domain> + Authorization: Bearer <access_token>
+    W->>K: GET /k/v1/apps.json + Authorization: Bearer <token>
+    K-->>W: {apps: [...]}
+    W-->>A: MCP tool_result
+    A-->>KP: SSE: agent.mcp_tool_result + agent.message
+    KP-->>P: 同上
+    P-->>U: チャット応答描画
+```
+
+### 0.4 重要な不変条件
+
+- **Worker は何の secret も静的保持しない**。すべての secret は kintone proxy 由来の固定ヘッダで都度運ばれる
+- **client_secret が Plugin JS / setConfig / HTML に露出することは無い** (一般 plugin user の `getConfig` から見えない)
+- access_token / refresh_token は Anthropic Vault に暗号化保管され、API レスポンスでも返らない
+- 期限切れ refresh は Anthropic 内蔵で完結 (Plugin / Worker は介在しない)
+
+---
+
+## 1. システムアーキテクチャ (Phase 1a/1b-1/1b-2 の歴史記録)
+
+> 以下は旧設計の記述。現行は §0 を参照。
 
 ### 1.1 全体構成図
 

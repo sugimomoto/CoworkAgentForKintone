@@ -1,333 +1,352 @@
 # 技術仕様書 (Architecture Document)
 
 **プロダクト名**: Cowork Agent for kintone
-**バージョン**: 0.1 (MVP ドラフト)
-**最終更新日**: 2026-04-22
+**バージョン**: 0.2 (Phase 1b-3 / OAuth pivot)
+**最終更新日**: 2026-04-26
 
 ---
 
 ## 1. 技術スタック概要
 
-本プロダクトは **2 つの独立したコードベース** で構成される。
+本プロダクトは **2 つの独立したコードベース** で構成される pnpm monorepo。
 
-| コンポーネント | 言語 | 配布形態 |
-|---------------|------|---------|
-| **kintone プラグイン本体** (ブラウザ側) | TypeScript + HTML/CSS | `.zip` (kintone プラグイン形式) |
-| **kintone ヘルパーライブラリ** (Environment 側) | Python | pip パッケージ (PyPI) |
+| パッケージ | 言語 | 配布形態 | 役割 |
+|---------------|------|---------|------|
+| **`packages/plugin`** (kintone プラグイン本体) | TypeScript + React + Tailwind | `.zip` (kintone Plugin format) | レコード一覧画面に Chat UI、設定画面 (4 ステップウィザード)、kintone OAuth flow |
+| **`packages/kintone-mcp`** (Cloudflare Worker) | TypeScript + Cloudflare Workers Runtime | Cloudflare Workers script | MCP HTTP transport / OAuth callback 中継 / Anthropic Vault Credential 中継 |
+
+> **Phase 1b-1 (Python ヘルパーライブラリ) は Phase 1b-2 で MCP に置き換え、Phase 1b-3 でさらに Worker をマルチテナント化した。Python パッケージ `cowork-agent-kintone` は廃止。**
 
 ---
 
-## 2. kintone プラグイン (ブラウザ側)
+## 2. kintone プラグイン (`packages/plugin`)
 
 ### 2.1 言語・フレームワーク
 
 | 項目 | 採用技術 | 理由 |
 |------|---------|------|
-| 言語 | **TypeScript 5.x** | 型安全、エディタ補完、OSS コントリビューション時の可読性 |
-| UI フレームワーク | **React 18** | チャット UI の状態管理に適する、エコシステム豊富 |
-| 状態管理 | **Zustand** | 軽量で学習コスト低。Redux/Recoil は過剰 |
-| スタイリング | **Tailwind CSS 3.x** | kintone デザインと衝突しないユーティリティクラス方式 |
-| バンドラ | **Vite 5.x** | ビルド速度、kintone 向け成果物作成との相性 |
-| テスト | **Vitest** + **Testing Library** | Vite エコシステム連携 |
-| Lint/Format | **ESLint** + **Prettier** | kintone JS SDK の推奨設定を採用 |
+| 言語 | **TypeScript 5.x** (strict + exactOptionalPropertyTypes) | 型安全性 |
+| UI | **React 18** | チャット UI の状態管理 |
+| 状態管理 | **Zustand** | 軽量、メモリ内 store |
+| スタイリング | **Tailwind CSS 3.x** | kintone デザインと衝突しないユーティリティ |
+| バンドラ | **esbuild** (IIFE 出力) | 高速、シングルファイル化に最適 |
+| テスト | **Vitest** + **Testing Library** | unit / component |
+| E2E | **Playwright** | 実 kintone + 実 Anthropic API + 実 Worker での verification |
+| Lint/Format | **ESLint** + **Prettier** | — |
 
 ### 2.2 kintone 関連ライブラリ
 
 | ライブラリ | 用途 |
 |-----------|------|
-| `@kintone/rest-api-client` | 初期設定・接続テスト時の kintone API 呼出 (ブラウザ側) |
-| `@kintone/plugin-packer` | プラグイン zip 化 |
-| `@kintone/create-plugin` | プラグイン雛形生成 (開発環境初期化時のみ) |
-| `@kintone/dts-gen` | (任意) フィールド型生成 |
-| `cli-kintone` | プラグインアップロード・鍵管理 |
+| `kintone-ui-component` (任意) | 設定画面の UI コンポーネント |
+| `cli-kintone` | プラグイン zip 化 + アップロード |
 
-### 2.3 Managed Agents 連携ライブラリ
-
-- **自作の薄いクライアントを同梱**: 公式 `@anthropic-ai/sdk` は Node.js 前提のため、ブラウザから `kintone.plugin.app.proxy` 経由で呼ぶ軽量 HTTP クライアントを TypeScript で実装
-- **主要ヘルパー**:
-  - Agent / Environment / Vault の metadata 検索
-  - Session 作成、イベント POST (`user.message`, `user.custom_tool_result`)
-  - イベント **ポーリング** (`GET /v1/sessions/{id}/events?since=<cursor>`)
-
-### 2.4 プラグイン構造
+### 2.3 ディレクトリ構造 (主要)
 
 ```
-plugin/
-├── manifest.json          # プラグイン定義 (CSP / Proxy 設定含む)
-├── html/
-│   └── config.html        # プラグイン設定画面
-├── js/
-│   ├── desktop.js         # レコード一覧画面にチャット UI を描画
-│   ├── config.js          # 設定画面ロジック
-│   └── mobile.js          # (Phase2) モバイル対応
-├── css/
-│   └── desktop.css
-└── image/
-    └── icon.png
+packages/plugin/
+├── plugin/                  # kintone Plugin format の zip 内容
+│   ├── manifest.json
+│   ├── html/config.html
+│   ├── js/{desktop,config}.js  (esbuild 出力)
+│   └── css/{desktop,config}.css (Tailwind 出力)
+├── src/
+│   ├── config/             # 設定画面 (4 ステップウィザード)
+│   ├── desktop/            # レコード一覧画面の Chat UI
+│   │   ├── ChatPanel.tsx
+│   │   ├── components/     # MessageList / Composer / Header / ConnectKintoneButton 等
+│   │   └── hooks/          # useSession / useUserBinding / useEventPoller / usePanelOpenState
+│   ├── core/
+│   │   ├── bootstrap/      # resolveAgent / resolveEnvironment / resolveSession / resolveVault
+│   │   ├── managed-agents/ # Anthropic API client + types + event interpreter
+│   │   ├── kintone/        # kintone JS API ラッパ (proxy transport, plugin config, login user)
+│   │   ├── oauth/          # PKCE / popup / token exchange / credentials upsert client
+│   │   ├── cloudflare/     # Worker デプロイ client + multipart 構築
+│   │   ├── constants.ts
+│   │   └── utils.ts        # sleep / toErrorMessage / joinUrl / buildMcpServerUrl
+│   ├── store/chatStore.ts  # Zustand
+│   └── generated/          # build 時に自動生成 (worker-bundle.ts)
+├── scripts/build.mjs       # 1 回の pnpm plugin:build で Worker bundle + Plugin JS + CSS を生成
+└── e2e/                    # Playwright spec 群
 ```
-
-### 2.5 kintone プラグイン特有の制約
-
-| 制約 | 影響 | 対応 |
-|------|------|------|
-| `manifest.json` の `external` で外部通信先を宣言 | Anthropic API は Proxy 設定経由なので **ブラウザ側 CSP 登録は不要** | — |
-| プラグイン zip 合計 30 MB 以内 | バンドルサイズ制限 | Vite で最適化、動的 import を活用 |
-| 設定画面は別 HTML ファイル | SPA ではなく独立画面 | React を設定画面でも利用 |
-| プラグイン間通信なし | 他プラグインとの連携は想定外 | — |
 
 ---
 
-## 3. kintone ヘルパーライブラリ (Environment 側)
+## 3. Cloudflare Worker (`packages/kintone-mcp`)
 
-### 3.1 言語・配布
+### 3.1 設計思想
 
-| 項目 | 採用技術 |
-|------|---------|
-| 言語 | **Python 3.11+** |
-| ライブラリ名 | `cowork-agent-kintone` (pip) |
-| HTTP クライアント | **`requests`** (標準的で Environment にプリインストール可能) |
-| 配布 | PyPI + GitHub Releases |
-| パッケージング | **`hatchling`** (シンプル、PEP 517 対応) |
-| Lint | **Ruff** |
-| 型チェック | **mypy** |
-| テスト | **pytest** + `responses` (HTTP モック) |
+- **完全ステートレス**: 永続ストア / 環境変数 / secret を一切持たない
+- **マルチテナント**: 1 つの Worker が任意の cybozu.com / kintone.com ドメインに対応
+- **小さく安全**: gzip 後 ~7 KB、外部依存ライブラリなし (Web Crypto + fetch のみ)
 
-### 3.2 ライブラリ依存関係
+### 3.2 エンドポイント
 
-- 最小依存: `requests` のみ (Environment のプリインストール負荷を最小化)
-- 将来的に非同期版を追加検討時は `httpx` / `aiohttp`
+| Path | Method | 認証 | 役割 |
+|---|---|---|---|
+| `/mcp/<domain>` | POST | `Authorization: Bearer <kintone_oauth_access_token>` | Anthropic Managed Agents から MCP HTTP transport で呼ばれる |
+| `/oauth/callback` | GET | (なし) | cybozu OAuth リダイレクト中継 (postMessage で opener へ転送) |
+| `/credentials/upsert` | POST | `X-Anthropic-Api-Key` + `X-Kintone-OAuth-Client-{Id,Secret}` | Anthropic Vault Credential 作成・更新の中継 |
+| `/version` | GET | (なし) | build version 確認用 |
+| `/healthz` | GET | (なし) | health check |
+| `/debug/echo` | GET/POST | (なし) | リクエストヘッダ / body の echo (検証用、本番では削除予定) |
 
-### 3.3 Python バージョン
+### 3.3 マルチテナント化の仕組み
 
-- Managed Agents Environment の Python デフォルトランタイム (3.11+) に合わせる
-- `pyproject.toml` で `requires-python = ">=3.11"`
+- `/mcp/<sub>.cybozu.com` のように URL パスでドメイン指定
+- Worker は domain を URL から抽出し、kintone REST API の host に使う
+- Anthropic Vault Credential 作成時の `mcp_server_url` も同じ URL なので、Anthropic 側の自動マッチングが機能する
+
+### 3.4 ビルド
+
+- esbuild で ES module 形式のバンドルを生成 (Plugin の `scripts/build.mjs` 内)
+- `--define` で `__BUILD_VERSION__` / `__BUILD_TIME__` を注入 (`/version` で返却)
+- 出力された JS は `packages/plugin/src/generated/worker-bundle.ts` にテンプレートリテラル文字列として埋め込まれる
 
 ---
 
-## 4. Managed Agents 連携アーキテクチャ
+## 4. 認証アーキテクチャ
 
-### 4.1 通信経路
+### 4.1 kintone OAuth (Authorization Code + PKCE)
 
 ```
-ブラウザプラグイン
-   │
-   │ kintone.plugin.app.proxy (API Key を Proxy 設定で保護)
-   ▼
-kintone Proxy Server
-   │
-   │ HTTPS
-   ▼
-Claude Managed Agents API (api.anthropic.com)
-   │
-   │ 実行コマンド
-   ▼
-Managed Agents Environment
-   │
-   │ Basic 認証 (環境変数からヘルパーライブラリが構築)
-   ▼
-kintone REST API (*.cybozu.com / *.kintone.com / カスタムドメイン)
+1. Plugin: PKCE code_verifier / challenge / state を生成、popup で /oauth2/authorization へ
+2. cybozu OAuth: ユーザー同意 → Worker /oauth/callback へリダイレクト
+3. Worker /oauth/callback: postMessage で opener (Plugin) に code/state を渡す
+4. Plugin: kintone proxy 経由で /oauth2/token へ POST (PKCE code_verifier 付き)
+   - Authorization: Basic <client_id:client_secret> は kintone setProxyConfig 由来 (固定ヘッダ)
+5. Plugin: Anthropic Vault Credential を作成 (mcp_oauth type)
+   - access_token / refresh_token / refresh ブロック (token_endpoint, client_id, client_secret_basic)
+6. 以降 Anthropic は MCP 呼出時に Vault から自動で access_token を取り出して Worker に Bearer で送る
+   - access_token 期限切れ時は Anthropic が refresh エンドポイントを叩いて自動更新
 ```
 
-### 4.2 API バージョン
+詳細シーケンス: [`functional-design.md`](functional-design.md) §シーケンス図
+
+### 4.2 認証情報の格納場所
+
+| 値 | 格納場所 | Plugin JS から読める? | Worker に保管? |
+|---|---|---|---|
+| `kintone OAuth client_id` | (a) `setConfig` (公開可能) <br>(b) `setProxyConfig` 固定ヘッダ (Worker `/credentials/upsert` 用) | (a) ○ (b) × | × |
+| `kintone OAuth client_secret` | `setProxyConfig` 固定ヘッダ × 2 (oauth2/token Basic auth + credentials/upsert ヘッダ) | × | × |
+| `Anthropic API Key` | `setProxyConfig` 固定ヘッダ × 複数 | × | × |
+| `Anthropic Vault に保管された tokens` | Anthropic Vault (暗号化、API レスポンスでも返らない) | × | × |
+| `Cloudflare API Token` (デプロイ時のみ) | ConfigScreen の input ステート (保存しない) | (一時的のみ) | × |
+
+**Worker は何の secret も静的に持たない**。すべての secret は kintone proxy 由来の固定ヘッダで都度運ばれ、リクエスト処理後にメモリから消える。
+
+---
+
+## 5. Anthropic Managed Agents 連携
+
+### 5.1 リソース構成
+
+| リソース | metadata | 数 | 識別 |
+|---|---|---|---|
+| Agent | `source` + `type` + `workerUrl` + `kintoneDomain` | プラグイン全体で 1 (worker URL × kintoneDomain 単位) | Default Agent |
+| Environment | `source` + `purpose: 'bootstrap'` + `mcpEnabled: 'true'` | プラグイン全体で 1 | Bootstrap Env (allow_mcp_servers: true) |
+| Vault | `source` + `kintoneDomain` + `kintoneUserCode` | ユーザーあたり 1 | ユーザー専用 Vault |
+| Vault Credential | (Vault 内) | ユーザーあたり 1 (kintone MCP) | mcp_oauth type |
+| Session | `source` + `agentId` + `kintoneDomain` + `kintoneUserCode` | ユーザーあたり 0..N | 会話単位 |
+
+すべて metadata ベースで動的検索 (Plugin 側にリソース ID を永続化しない)。
+
+### 5.2 API バージョン
 
 | API | ヘッダ |
 |-----|-------|
 | Anthropic 基本 | `anthropic-version: 2023-06-01` |
 | Managed Agents Beta | `anthropic-beta: managed-agents-2026-04-01` |
 
-### 4.3 リソース識別
+### 5.3 Agent 構成
 
-前述の通り **metadata ベース動的参照**。プラグイン側にリソース ID を永続化しない。
+- `mcp_servers: [{ type: 'url', name: 'kintone', url: '<worker>/mcp/<domain>' }]`
+- `tools: [{ type: 'agent_toolset_20260401', ... }, { type: 'mcp_toolset', mcp_server_name: 'kintone', ... }]`
 
----
+### 5.4 Environment 構成
 
-## 5. 開発ツール・プロセス
+- `networking.allow_mcp_servers: true` (MCP server エンドポイントへのアクセス許可)
+- `allowed_hosts: []` (Plugin 経由のチャット応答には他 host 不要)
 
-### 5.1 開発環境
+### 5.5 Vault Credential (`mcp_oauth`) 構成
 
-| 項目 | ツール |
-|------|-------|
-| Node.js | **20.x LTS** |
-| Python | **3.11+** |
-| パッケージマネージャ (JS) | **pnpm** (高速、モノレポ向き) |
-| パッケージマネージャ (Python) | **uv** (高速なインストール) |
-| Git ホスティング | **GitHub** |
-| エディタ | Visual Studio Code (推奨) |
-
-### 5.2 リポジトリ構成
-
-モノレポで 2 つのパッケージを管理:
-
-```
-CoworkAgentForKintone/
-├── packages/
-│   ├── plugin/               # kintone プラグイン (TypeScript)
-│   │   ├── src/
-│   │   ├── manifest.json
-│   │   └── package.json
-│   └── kintone-helper/       # Python ライブラリ
-│       ├── src/cowork_agent_kintone/
-│       ├── tests/
-│       └── pyproject.toml
-├── docs/
-├── .steering/
-├── .github/workflows/
-├── CLAUDE.md
-├── pnpm-workspace.yaml
-└── README.md
+```json
+{
+  "auth": {
+    "type": "mcp_oauth",
+    "mcp_server_url": "https://<worker>.workers.dev/mcp/<sub>.cybozu.com",
+    "access_token": "<kintone access_token>",
+    "expires_at": "<ISO 8601>",
+    "refresh": {
+      "refresh_token": "<kintone refresh_token>",
+      "token_endpoint": "https://<sub>.cybozu.com/oauth2/token",
+      "client_id": "<kintone OAuth client_id>",
+      "scope": "k:app_record:read k:app_record:write ...",
+      "token_endpoint_auth": {
+        "type": "client_secret_basic",
+        "client_secret": "<kintone OAuth client_secret>"
+      }
+    }
+  }
+}
 ```
 
-### 5.3 CI / CD
-
-| フェーズ | ツール | 内容 |
-|---------|-------|------|
-| Lint / Format | GitHub Actions | PR ごとに ESLint + Prettier + Ruff |
-| 型チェック | GitHub Actions | `tsc --noEmit` + `mypy` |
-| ユニットテスト | GitHub Actions | Vitest + pytest |
-| プラグインビルド | GitHub Actions | `cli-kintone plugin pack` で `.zip` 生成、Release にアップロード |
-| Python 配布 | GitHub Actions | タグ push で PyPI に自動公開 |
-
-### 5.4 バージョニング戦略
-
-- **セマンティックバージョニング** (MAJOR.MINOR.PATCH)
-- 2 つのパッケージは **独立してバージョン管理**
-  - プラグイン: kintone Plugin Manifest の `version`
-  - Python ライブラリ: `pyproject.toml` の `version`
-- **互換性マトリクス** を README に記載
+期限切れ時は Anthropic が refresh エンドポイントを自動で叩く (Plugin / Worker は介在しない)。
 
 ---
 
-## 6. セキュリティ技術仕様
+## 6. 通信経路
 
-### 6.1 Anthropic API Key 保護
+### 6.1 Plugin → Anthropic API (通常チャット)
 
-- kintone プラグインの **Proxy 設定** 機能で HTTP ヘッダ `x-api-key` として固定保存
-- ブラウザ JS から API Key は取得不可
-- Proxy 設定の管理は kintone スペース管理者権限が必要
+```
+Plugin → kintone proxy → api.anthropic.com (X-Api-Key 固定ヘッダ注入)
+```
 
-### 6.2 kintone 認証情報保護
+### 6.2 Anthropic → Worker (MCP)
 
-- ユーザーが入力した ID/PW は **Managed Agents Vault** に直接 push (プラグイン側に保存しない)
-- Vault は Anthropic インフラの暗号化ストレージで管理
-- Environment コンテナへは環境変数として注入 (シェル経由や外部 API 送出は不可)
+```
+Anthropic Managed Agents (環境) → Worker /mcp/<domain> (Authorization: Bearer 自動付与)
+```
 
-### 6.3 通信路
+### 6.3 Worker → kintone REST API
 
-- すべて HTTPS (TLS 1.2 以上)
-- kintone ↔ Anthropic 間は kintone Proxy が中継
-- Anthropic ↔ kintone 間は Environment の許可リスト制限 (`allowed_hosts`)
+```
+Worker /mcp handler → https://<sub>.cybozu.com/k/v1/* (Authorization: Bearer をそのまま転送)
+```
 
-### 6.4 XSS / インジェクション対策
+### 6.4 Plugin → cybozu OAuth (token 交換時)
 
-- チャット表示の Markdown レンダリングは **`DOMPurify`** でサニタイズ
-- ユーザー入力は React の JSX 経由でエスケープ済み
-- Agent 生成スクリプトはサンドボックス化された Environment 内でのみ実行 (ユーザー環境への影響なし)
+```
+Plugin → kintone proxy → https://<sub>.cybozu.com/oauth2/token
+  (Authorization: Basic <client_id:client_secret> は setProxyConfig で kintone 側に固定保管)
+```
+
+### 6.5 Plugin → Worker /credentials/upsert (Vault Credential 作成・更新)
+
+```
+Plugin → kintone proxy → Worker /credentials/upsert
+  (X-Anthropic-Api-Key / X-Kintone-OAuth-Client-{Id,Secret} は setProxyConfig 由来)
+Worker → api.anthropic.com (受信したヘッダから body を組立てて転送)
+```
+
+### 6.6 Plugin → Cloudflare API (デプロイ時のみ、設定画面)
+
+```
+ConfigScreen → kintone.proxy() (admin が入力した API Token を直接 Authorization: Bearer に乗せる)
+  → api.cloudflare.com/client/v4/accounts/{id}/workers/{...}
+```
 
 ---
 
-## 7. 技術的制約
+## 7. 制約
 
-### 7.1 kintone 側制約
+### 7.1 kintone 制約
 
 | 項目 | 制約 |
 |------|------|
-| REST API レート制限 | アプリあたり **100 req/sec**、1 分あたり **10,000 req** (kintone スタンダード) |
+| REST API レート | アプリあたり 100 req/sec、1 分あたり 10,000 req |
 | レコード取得上限 | 1 回 500 件、カーソルで最大 30 万件 |
-| 一括更新/追加/削除 | **100 件/リクエスト** |
-| bulkRequest | **20 操作/リクエスト** |
-| kintone.proxy タイムアウト | 約 **30 秒** |
-| kintone.proxy レスポンスサイズ | 約 **10 MB** |
+| `kintone.proxy` タイムアウト | 約 30 秒 |
+| `kintone.proxy` レスポンスサイズ | 約 10 MB |
+| `setProxyConfig` data 引数 | **フラット key-value のみ** (ネストオブジェクト不可) — `/credentials/upsert` を Worker に置く動機 |
+| `setProxyConfig` 連続呼出 | 並行で叩くと DB ロック競合 (update.json 400) — 700 ms 間隔で逐次 await が必要 |
 
-### 7.2 Managed Agents 側制約 (API 仕様書確認済)
+### 7.2 Anthropic Managed Agents 制約
 
 | 項目 | 制約 |
 |------|------|
-| Beta API | 仕様変更の可能性 (`anthropic-beta: managed-agents-2026-04-01` ヘッダ必須) |
+| Beta API | 仕様変更の可能性 (`anthropic-beta` ヘッダ必須) |
 | metadata | 最大 16 ペア / key 64 文字以下 / value 512 文字以下 |
-| List API のサーバ側 metadata フィルタ | **未サポート**。全件リスト取得 → クライアント側フィルタが必要 |
-| Sessions List のフィルタ | `agent_id` / `created_at[...]` / `order` はサーバ側サポートあり |
-| イベント差分取得 (`since` カーソル) | **未サポート**。`page` (opaque cursor) + `order` + 既知 ID 突合で実装 |
-| List API ページング | Default 20 件、最大 100 件/ページ、`next_page` トークンで継続 |
+| List API のサーバ側 metadata フィルタ | 未サポート → 全件取得 + クライアント側フィルタ |
+| イベント差分取得の `since` カーソル | 未サポート → `page` トークン + 既知 ID 突合 |
 | Agent の tools | 最大 128 |
-| Agent の MCP servers / skills | 各 20 |
-| Agent の system prompt | 100,000 文字以内 |
-| Environment / Vault / Session の総数 | API 仕様書に明示上限なし (運用で監視) |
-| Session 状態 | `rescheduling` / `running` / `idle` / `terminated` |
+| Vault Credential の immutable フィールド | `mcp_server_url` / `refresh.client_id` / `refresh.token_endpoint` |
 
-### 7.3 ブラウザ側制約
+### 7.3 Cloudflare Workers 制約
 
-- モダンブラウザ (Chrome / Edge / Safari / Firefox) 最新版のみ対応
-- モバイル対応は Phase2
-
----
-
-## 8. パフォーマンス要件
-
-### 8.1 MVP 時点
-
-定量目標は設定しない。以下の **ベースライン計測** を運用開始時に実施する。
-
-| 計測項目 | 想定範囲 |
-|---------|---------|
-| チャット UI 初回表示 | < 1 秒 |
-| ユーザーメッセージ → 最初の Agent レスポンス | < 30 秒 (複雑タスクは除く) |
-| kintone ヘルパーライブラリ 1 操作 | < 5 秒 (通常レコード数) |
-| イベントポーリング間隔 | 2〜10 秒 (指数バックオフ) |
-
-### 8.2 スケーリング方針
-
-- プラグイン自体は静的ファイルのみで、スケール要件は kintone / Anthropic 側に委譲
-- ヘルパーライブラリは 100 件単位の自動分割でスループット確保
-- 10,000 件超はカーソル API 活用
+| 項目 | 制約 |
+|------|------|
+| CPU 時間 | 30s (有料) / 10ms (無料 — フリープランでは長時間 fetch がタイムアウト) |
+| 同時接続 | 6 / IP (Worker → Anthropic / kintone) |
+| 環境変数 / secret | 必要なし (本プロダクトでは使用しない) |
 
 ---
 
-## 9. 運用・監視
+## 8. ビルド・デプロイ
 
-### 9.1 MVP 時点
+### 8.1 Plugin ビルドパイプライン (`packages/plugin/scripts/build.mjs`)
 
-- エンドユーザーのブラウザコンソールログ以外に集中監視機構は持たない
-- Anthropic / kintone のダッシュボードに依存
-- Issue は GitHub Issues で受付
+1. `manifest.json` の build 番号を +1
+2. **Worker JS を esbuild でバンドル** (`__BUILD_VERSION__` / `__BUILD_TIME__` 注入) → `src/generated/worker-bundle.ts` に文字列として書き出し
+3. `desktop.js` / `config.js` を esbuild で IIFE 化 (Promise.all で並列)
+4. Tailwind CSS をビルド
 
-### 9.2 Phase 2 以降で検討
+### 8.2 Plugin デプロイ
 
-- Sentry 等のエラートラッキング連携 (オプトイン)
-- kintone アプリへの監査ログ出力
+- ローカル: `pnpm plugin:deploy` (auto-deploy フックでも自動実行)
+- 配布: GitHub Releases に zip をアップロード
 
----
+### 8.3 Worker デプロイ
 
-## 10. アクセシビリティ
-
-- **キーボード操作対応**: チャット UI の全操作をキーボードで完結可能にする
-- **スクリーンリーダー**: WAI-ARIA 属性を適切に付与
-- **カラーコントラスト**: WCAG AA 準拠を目標
+- 通常: **Plugin 設定画面 Step 0** からブラウザ経由で API デプロイ
+- 開発: `cd packages/kintone-mcp && pnpm exec wrangler deploy`
 
 ---
 
-## 11. 国際化 (i18n)
+## 9. テスト戦略
 
-### 11.1 MVP
-- **日本語のみ対応**
-- UI 文言はすべて `locales/ja.json` に集約
+### 9.1 Unit Tests (vitest)
 
-### 11.2 将来
-- 英語対応を視野に、文言埋込せず `i18n` ライブラリ (`i18next` 等) 経由で参照する実装方針
+| 範囲 | 件数 | 内容 |
+|---|---|---|
+| Worker (`packages/kintone-mcp`) | 60 | `_http` / `kintone` (Bearer 構築) / `mcp` (URL マッチ + JSON-RPC) / `credentials-upsert` / `oauth-callback` (XSS escape) / `tools/*` |
+| Plugin (`packages/plugin`) | 267 | `core/*` (utils / oauth / cloudflare / kintone / managed-agents / bootstrap) / `desktop/*` / `config/*` / `store/*` |
+
+### 9.2 E2E Tests (Playwright, 21 件)
+
+| spec | 内容 |
+|---|---|
+| `auth.setup` | kintone ログイン |
+| `credential-bind.setup` | OAuth flow を popup 自動化で完走 (idempotent / FORCE_REBIND 対応) |
+| `config.spec` | 設定画面 4 ステップウィザード + Cloudflare 削除 → 再デプロイ → /version 照合 |
+| `live-with-mcp.spec` | MCP 経由で kintone データ取得 |
+| `live.spec` | 実 Anthropic API での応答 (3 件) |
+| `panel-toggle.spec` | パネル開閉 (3 件) |
+| `session-history.spec` | Session 履歴 (3 件) |
+| `smoke.spec` | プラグインマウント (3 件) |
+
+---
+
+## 10. セキュリティ
+
+### 10.1 secret の最小権限
+
+- Worker: 何も保持しない (リクエスト時にヘッダで都度受領)
+- Plugin: client_secret / Anthropic API Key は `setProxyConfig` 経由で kintone proxy 内部に保管 (JS から `getConfig` で読めない)
+- Vault Credential: client_secret は Anthropic に 1 回だけ送り、以降は Anthropic 内で暗号化保管
+
+### 10.2 OAuth フローの安全策
+
+- **PKCE (S256)**: Authorization Code 横取りに対する標準的防御
+- **state**: CSRF 防御 (sessionStorage に保管 + postMessage payload と照合)
+- **postMessage origin 検証**: Worker URL の origin 一致を必須に
+- **redirect_uri 固定**: cybozu OAuth クライアント登録時に Worker URL に固定
+
+### 10.3 XSS / インジェクション
+
+- チャット表示は React の JSX でエスケープ
+- Worker `/oauth/callback` の HTML は escape + JSON inline は `</script>` クロス防御 (`<` 化)
+
+---
+
+## 11. 国際化・モバイル
+
+- 現状: 日本語 + Desktop のみ
+- モバイル対応: Phase 1c 以降で `manifest.mobile` + ChatPanel レイアウト調整
 
 ---
 
 ## 12. ライセンス
 
-- **OSS**: MIT ライセンス (候補)
-  - 依存ライブラリに GPL 系がなく配布制約が最小
-  - 企業環境での採用障壁が低い
-  - 最終決定は README 整備時に確定
-
----
-
-## 13. 未確定事項
-
-- kintone.proxy のレスポンスサイズ制約 (約 10MB) が Session イベント一括取得時にボトルネックとなる可能性 (ページング必須)
-- Python ヘルパーライブラリの初版公開前の名前確定 (`cowork-agent-kintone` が PyPI で利用可能か要確認)
-- OSS ライセンス最終決定 (MIT / Apache-2.0)
-- Environment / Vault / Session のレート制限 (API 仕様書に明記なし、運用開始時に監視して規模拡大時の対処方針を策定)
+- **MIT License**
