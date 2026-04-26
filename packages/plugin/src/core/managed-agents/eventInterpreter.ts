@@ -48,10 +48,13 @@ export function interpretEvent(event: SessionEvent): InterpretedEvent {
         SessionEvent,
         { type: 'agent.tool_result' | 'agent.mcp_tool_result' }
       >;
+      // 組み込みツールは tool_use_id、MCP ツールは mcp_tool_use_id にリンク id が入る
+      const toolUseId =
+        e.type === 'agent.mcp_tool_result' ? e.mcp_tool_use_id : e.tool_use_id;
       const isError = e.is_error === true;
       return {
         kind: 'update-tool',
-        toolUseId: e.tool_use_id,
+        toolUseId,
         patch: {
           status: isError ? 'error' : 'success',
           result: e.content,

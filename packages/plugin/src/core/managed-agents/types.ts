@@ -156,7 +156,8 @@ export type SessionEvent =
   | {
       type: 'agent.mcp_tool_result';
       id: string;
-      tool_use_id: string;
+      /** MCP ツール結果は tool_use_id ではなく mcp_tool_use_id で参照する (Anthropic 仕様) */
+      mcp_tool_use_id: string;
       content?: unknown;
       is_error?: boolean;
       processed_at: string;

@@ -59,11 +59,12 @@ describe('interpretEvent', () => {
     });
   });
 
-  it('agent.mcp_tool_result (success) を update-tool に変換', () => {
+  it('agent.mcp_tool_result (success) を update-tool に変換 — mcp_tool_use_id でリンク', () => {
     const evt = {
       id: 'evt_mr1',
       type: 'agent.mcp_tool_result',
-      tool_use_id: 'mtu_1',
+      // MCP ツール結果は tool_use_id ではなく mcp_tool_use_id を持つ (Anthropic 仕様)
+      mcp_tool_use_id: 'mtu_1',
       content: [{ type: 'text', text: '{"apps":[]}' }],
       processed_at: '...',
     } as unknown as SessionEvent;
@@ -81,7 +82,7 @@ describe('interpretEvent', () => {
     const evt = {
       id: 'evt_mr2',
       type: 'agent.mcp_tool_result',
-      tool_use_id: 'mtu_2',
+      mcp_tool_use_id: 'mtu_2',
       is_error: true,
       content: [{ type: 'text', text: 'kintone API: app not found' }],
       processed_at: '...',
