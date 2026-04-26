@@ -3,9 +3,13 @@
 # Claude Code の Stop フックから呼ばれる自動デプロイスクリプト
 #
 # 動作:
-#   1. packages/plugin/plugin/** に dist/plugin.zip より新しいファイルがあるかチェック
-#   2. 変更ありなら `pnpm plugin:deploy` を実行
+#   1. ソース (packages/plugin/src + packages/plugin/plugin) に dist/plugin.zip より
+#      新しいファイルがあるかチェック
+#   2. 変更ありなら `pnpm plugin:deploy` を実行 (build → pack → upload)
 #   3. 結果を JSON で stdout に出力 ({"systemMessage": "..."})
+#
+# 旧版は packages/plugin/plugin (= ビルド成果物の置き場) のみを見ていたため、
+# src/ 編集 → ターン終了の通常フローで「変更なし」と誤判定されていた。
 #
 # 出力フォーマット:
 #   - 変更なし: 出力なし (silent)
@@ -19,14 +23,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
-PLUGIN_SRC="packages/plugin/plugin"
 PLUGIN_ZIP="packages/plugin/dist/plugin.zip"
+
+# 監視対象 (zip より新しいファイルが 1 つでもあれば deploy 必要):
+#   - packages/plugin/src       … TS/TSX (build で plugin/js/* に変換される)
+#   - packages/plugin/plugin    … manifest / icon / 静的 CSS / build 成果物
+PLUGIN_SOURCES=(
+  "packages/plugin/src"
+  "packages/plugin/plugin"
+)
 
 # --- 1. 変更検知 ---
 NEED_DEPLOY=0
 if [ ! -f "$PLUGIN_ZIP" ]; then
   NEED_DEPLOY=1
-elif find "$PLUGIN_SRC" -type f -newer "$PLUGIN_ZIP" 2>/dev/null | grep -q .; then
+elif find "${PLUGIN_SOURCES[@]}" -type f -newer "$PLUGIN_ZIP" 2>/dev/null | grep -q .; then
   NEED_DEPLOY=1
 fi
 
