@@ -2,7 +2,13 @@
 //
 // デザイン仕様: docs/functional-design.md §5.3.3
 
-import { useState, useRef, type KeyboardEvent, type FormEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react';
 
 export interface ComposerProps {
   /** ユーザーがメッセージを送信したときのハンドラ */
@@ -28,6 +34,18 @@ export function Composer({
 }: ComposerProps): JSX.Element {
   const [value, setValue] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // 入力に応じて textarea を auto-grow する (1〜MAX_ROWS 行)。
+  // scrollHeight ベースで height を都度書き換える。値が空に戻ったら 1 行へ縮める。
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 20;
+    const maxRows = 8;
+    const maxHeight = lineHeight * maxRows;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+  }, [value]);
   // IME 変換中フラグ。
   // macOS の日本語入力では Enter で「変換確定」を行うが、`keydown` のタイミングでは
   // `nativeEvent.isComposing` が一瞬 false に見えることがあり、誤送信を引き起こす。

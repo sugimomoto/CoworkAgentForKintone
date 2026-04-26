@@ -75,4 +75,43 @@ describe('App', () => {
     fireEvent.keyDown(window, { key: 'k' });
     expect(screen.getByTestId('cowork-agent-panel').dataset['open']).toBe('1');
   });
+
+  describe('パネル幅リサイズ', () => {
+    it('既定幅は 380px', () => {
+      render(<App />);
+      const panel = screen.getByTestId('cowork-agent-panel');
+      expect(panel.style.width).toBe('380px');
+    });
+
+    it('リサイズハンドルが存在する', () => {
+      render(<App />);
+      expect(screen.getByTestId('cowork-agent-resize-handle')).toBeInTheDocument();
+    });
+
+    it('左にドラッグするとパネル幅が拡大、右にドラッグすると縮小する', () => {
+      render(<App />);
+      const handle = screen.getByTestId('cowork-agent-resize-handle');
+
+      // mousedown @ x=1000、mousemove @ x=900 で 100px 左にドラッグ → 幅 +100
+      fireEvent.mouseDown(handle, { clientX: 1000 });
+      fireEvent.mouseMove(window, { clientX: 900 });
+      fireEvent.mouseUp(window);
+
+      const panel = screen.getByTestId('cowork-agent-panel');
+      expect(panel.style.width).toBe('480px'); // 380 + 100
+    });
+
+    it('幅は MIN/MAX に clamp される', () => {
+      render(<App />);
+      const handle = screen.getByTestId('cowork-agent-resize-handle');
+
+      // 大きく左にドラッグ → MAX(800) で止まる
+      fireEvent.mouseDown(handle, { clientX: 1000 });
+      fireEvent.mouseMove(window, { clientX: 0 });
+      fireEvent.mouseUp(window);
+
+      const panel = screen.getByTestId('cowork-agent-panel');
+      expect(panel.style.width).toBe('800px');
+    });
+  });
 });
