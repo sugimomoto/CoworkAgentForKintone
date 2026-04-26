@@ -6,7 +6,7 @@
 
 import { useCallback, useState } from 'react';
 
-import { postUserMessage } from '../core/managed-agents/events';
+import { postToolConfirmation, postUserMessage } from '../core/managed-agents/events';
 import { useChatStore } from '../store/chatStore';
 
 import { Composer } from './components/Composer';
@@ -35,6 +35,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   const view = useChatStore((s) => s.view);
   const setView = useChatStore((s) => s.setView);
   const addMessage = useChatStore((s) => s.addMessage);
+  const updateTool = useChatStore((s) => s.updateTool);
   const { ensureSession, selectSession, startNewConversation } = useSession();
   const { status: bindingStatus, error: bindingError, connect } = useUserBinding();
 
@@ -94,6 +95,35 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
     setView('chat');
   }, [startNewConversation, setView]);
 
+  const handleApproveTool = useCallback(
+    async (toolUseId: string) => {
+      const sid = sessionId;
+      if (!sid) return;
+      updateTool(toolUseId, { status: 'running' });
+      try {
+        await postToolConfirmation(sid, toolUseId, 'allow');
+      } catch {
+        updateTool(toolUseId, { status: 'pending-confirmation' });
+      }
+    },
+    [sessionId, updateTool],
+  );
+
+  const handleRejectTool = useCallback(
+    async (toolUseId: string) => {
+      const sid = sessionId;
+      if (!sid) return;
+      updateTool(toolUseId, { status: 'error', errorText: '却下しました' });
+      try {
+        await postToolConfirmation(sid, toolUseId, 'deny', 'ユーザが却下しました');
+      } catch {
+        // 失敗時は pending-confirmation に戻すが、先に書いた errorText もクリアする
+        updateTool(toolUseId, { status: 'pending-confirmation', errorText: undefined });
+      }
+    },
+    [sessionId, updateTool],
+  );
+
   const handleHistorySelect = useCallback(
     (id: string) => {
       selectSession(id);
@@ -137,7 +167,11 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
           {messages.length === 0 && sessionId === null ? (
             <WelcomeMessage />
           ) : (
-            <MessageList messages={messages} />
+            <MessageList
+              messages={messages}
+              onApproveTool={handleApproveTool}
+              onRejectTool={handleRejectTool}
+            />
           )}
           {showConnectButton ? (
             <ConnectKintoneButton

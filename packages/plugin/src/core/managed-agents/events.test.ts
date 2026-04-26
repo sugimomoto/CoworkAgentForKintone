@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { fetchAllEventsSince, listEvents, postUserMessage } from './events';
+import { fetchAllEventsSince, listEvents, postToolConfirmation, postUserMessage } from './events';
 
 import type { ListResponse, SessionEvent } from './types';
 
@@ -179,5 +179,44 @@ describe('fetchAllEventsSince', () => {
 
     expect(result).toEqual([e1]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('postToolConfirmation', () => {
+  it('result=allow は user.tool_confirmation を送る (deny_message なし)', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await postToolConfirmation('sess_1', 'tu_42', 'allow');
+
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('https://api.anthropic.com/v1/sessions/sess_1/events');
+    expect((init as RequestInit).method).toBe('POST');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body).toEqual({
+      events: [{ type: 'user.tool_confirmation', tool_use_id: 'tu_42', result: 'allow' }],
+    });
+  });
+
+  it('result=deny + denyMessage は deny_message を含める', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await postToolConfirmation('sess_1', 'tu_42', 'deny', 'ユーザが却下しました');
+
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.events[0]).toEqual({
+      type: 'user.tool_confirmation',
+      tool_use_id: 'tu_42',
+      result: 'deny',
+      deny_message: 'ユーザが却下しました',
+    });
+  });
+
+  it('result=allow のときに denyMessage を渡しても無視される', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await postToolConfirmation('sess_1', 'tu_42', 'allow', 'ignored');
+
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.events[0]).not.toHaveProperty('deny_message');
   });
 });

@@ -11,7 +11,7 @@
 import { useEffect, useRef } from 'react';
 
 import { POLLING_INTERVAL_MS } from '../../core/constants';
-import { eventToMessage, isTerminalEvent } from '../../core/managed-agents/eventInterpreter';
+import { interpretEvent, isTerminalEvent } from '../../core/managed-agents/eventInterpreter';
 import { fetchAllEventsSince } from '../../core/managed-agents/events';
 import { useChatStore } from '../../store/chatStore';
 
@@ -25,6 +25,7 @@ export interface UseEventPollerProps {
 export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): void {
   const mergeMessage = useChatStore((s) => s.mergeMessage);
   const removeMessage = useChatStore((s) => s.removeMessage);
+  const updateTool = useChatStore((s) => s.updateTool);
   const lastEventIdRef = useRef<string | undefined>(undefined);
   const intervalIdxRef = useRef(0);
 
@@ -52,10 +53,14 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
       let sawTerminal = false;
       let sawAgentMessage = false;
       for (const e of events) {
-        const msg = eventToMessage(e);
-        if (msg) {
-          mergeMessage(msg);
-          if (msg.kind === 'agent') sawAgentMessage = true;
+        const r = interpretEvent(e);
+        if (r) {
+          if (r.kind === 'add') {
+            mergeMessage(r.message);
+            if (r.message.kind === 'agent') sawAgentMessage = true;
+          } else {
+            updateTool(r.toolUseId, r.patch);
+          }
         }
         lastEventIdRef.current = e.id;
         if (isTerminalEvent(e)) sawTerminal = true;
@@ -101,5 +106,5 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
       cancelled = true;
       if (timeoutId !== null) clearTimeout(timeoutId);
     };
-  }, [sessionId, enabled, mergeMessage, removeMessage]);
+  }, [sessionId, enabled, mergeMessage, removeMessage, updateTool]);
 }

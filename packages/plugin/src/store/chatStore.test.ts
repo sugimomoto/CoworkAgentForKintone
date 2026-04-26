@@ -185,4 +185,39 @@ describe('chatStore', () => {
     expect(state.messages).toEqual([]);
     expect(state.sessionId).toBe('sess_1'); // 呼び出し側で切り替える
   });
+
+  describe('updateTool', () => {
+    it('既存 tool message を id で部分更新する', () => {
+      useChatStore.getState().addMessage({
+        id: 'tu_1',
+        kind: 'tool',
+        name: 'kintone-add-record',
+        input: { app: '1' },
+        status: 'running',
+      });
+
+      useChatStore.getState().updateTool('tu_1', { status: 'success', result: { id: '42' } });
+
+      const m = useChatStore.getState().messages[0]!;
+      expect(m.kind).toBe('tool');
+      if (m.kind === 'tool') {
+        expect(m.status).toBe('success');
+        expect(m.result).toEqual({ id: '42' });
+        expect(m.name).toBe('kintone-add-record'); // patch 外のフィールドは保持
+      }
+    });
+
+    it('該当 ID が無いときは no-op', () => {
+      useChatStore.getState().addMessage({ id: 'm1', kind: 'agent', text: 'x' });
+      useChatStore.getState().updateTool('tu_unknown', { status: 'success' });
+      expect(useChatStore.getState().messages).toHaveLength(1);
+    });
+
+    it('同じ ID でも kind !== tool なら no-op', () => {
+      useChatStore.getState().addMessage({ id: 'tu_1', kind: 'agent', text: 'x' });
+      useChatStore.getState().updateTool('tu_1', { status: 'success' });
+      const m = useChatStore.getState().messages[0]!;
+      expect(m.kind).toBe('agent');
+    });
+  });
 });

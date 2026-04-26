@@ -33,6 +33,28 @@ export async function postUserMessage(
   });
 }
 
+/**
+ * `permission_policy: always_ask` のツール実行に対して許可 / 拒否を返す。
+ * 拒否時は `denyMessage` を Agent に渡せる (任意)。
+ */
+export async function postToolConfirmation(
+  sessionId: string,
+  toolUseId: string,
+  result: 'allow' | 'deny',
+  denyMessage?: string,
+): Promise<void> {
+  const event: Record<string, unknown> = {
+    type: 'user.tool_confirmation',
+    tool_use_id: toolUseId,
+    result,
+  };
+  if (result === 'deny' && denyMessage) event['deny_message'] = denyMessage;
+
+  await apiRequest('POST', `/v1/sessions/${sessionId}/events`, {
+    events: [event],
+  });
+}
+
 // ----- イベント取得 ---------------------------------------------------------
 
 export interface ListEventsParams {

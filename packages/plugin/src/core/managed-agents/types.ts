@@ -129,6 +129,15 @@ export interface ApiErrorBody {
   };
 }
 
+/** Session.status_idle の stop_reason */
+export interface StopReason {
+  /** 'end_turn' | 'tool_confirmation_required' | 'custom_tool_use' | 'max_tokens' | 'error' | 'retries_exhausted' など */
+  type: string;
+  /** tool_confirmation_required / custom_tool_use 時の pending tool_use_id 群 */
+  event_ids?: string[];
+  [k: string]: unknown;
+}
+
 /** イベント (Session 上のメッセージ・ツール呼び出しなど) */
 export type SessionEvent =
   | { type: 'user.message'; id: string; content: unknown; processed_at?: string }
@@ -146,7 +155,7 @@ export type SessionEvent =
   | {
       type: 'session.status_idle';
       id: string;
-      stop_reason: { type: string; [k: string]: unknown };
+      stop_reason: StopReason;
       processed_at: string;
     }
   | { type: 'session.status_running'; id: string; processed_at: string }

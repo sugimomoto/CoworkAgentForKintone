@@ -1,31 +1,84 @@
-// Cowork Agent for kintone — Managed Agents イベント → ChatMessage 変換
+// Cowork Agent for kintone — Managed Agents イベント → UI 操作 の変換
 //
 // useEventPoller から呼ばれる pure な変換ロジック。
-// Phase 1b で tool / plan / progress / result カードを増やす際もここを拡張する。
+// 戻り値は discriminated union:
+//   - { kind: 'add', message }            — 新規 ChatMessage を追加
+//   - { kind: 'update-tool', toolUseId, patch } — 既存 tool message を id で部分更新
+//   - null                                — 表示に関係しないイベント
 
-import type { ChatMessage } from '../../desktop/components/MessageList';
+import type { ChatMessage, ToolMessage } from '../../desktop/components/MessageList';
 import type { SessionEvent } from './types';
 
-/**
- * Managed Agents の SessionEvent を UI 用の ChatMessage に変換する。
- * 対応しないイベント (session.* / span.* など) は null を返す。
- */
-export function eventToMessage(event: SessionEvent): ChatMessage | null {
+export type InterpretedEvent =
+  | { kind: 'add'; message: ChatMessage }
+  | { kind: 'update-tool'; toolUseId: string; patch: Partial<Omit<ToolMessage, 'id' | 'kind'>> }
+  | null;
+
+export function interpretEvent(event: SessionEvent): InterpretedEvent {
   switch (event.type) {
     case 'user.message': {
-      // セッション復元時にユーザー発言を画面に戻すため。
       const content = (event as { content?: unknown }).content;
-      return { id: event.id, kind: 'user', text: extractText(content) };
+      return { kind: 'add', message: { id: event.id, kind: 'user', text: extractText(content) } };
     }
     case 'agent.message': {
       const content = (event as { content?: unknown }).content;
-      return { id: event.id, kind: 'agent', text: extractText(content) };
+      return { kind: 'add', message: { id: event.id, kind: 'agent', text: extractText(content) } };
     }
     case 'agent.thinking':
-      return { id: event.id, kind: 'thinking' };
+      return { kind: 'add', message: { id: event.id, kind: 'thinking' } };
+    case 'agent.tool_use': {
+      const e = event as Extract<SessionEvent, { type: 'agent.tool_use' }>;
+      return {
+        kind: 'add',
+        message: {
+          id: e.id,
+          kind: 'tool',
+          name: e.name,
+          input: e.input,
+          status: 'running',
+        },
+      };
+    }
+    case 'agent.tool_result': {
+      const e = event as Extract<SessionEvent, { type: 'agent.tool_result' }>;
+      const isError = e.is_error === true;
+      return {
+        kind: 'update-tool',
+        toolUseId: e.tool_use_id,
+        patch: {
+          status: isError ? 'error' : 'success',
+          result: e.content,
+          ...(isError ? { errorText: extractText(e.content) } : {}),
+        },
+      };
+    }
+    case 'session.status_idle': {
+      const e = event as Extract<SessionEvent, { type: 'session.status_idle' }>;
+      if (e.stop_reason.type !== 'tool_confirmation_required') return null;
+      const ids = e.stop_reason.event_ids;
+      if (!Array.isArray(ids) || ids.length === 0) return null;
+      // 複数 pending は events stream 上通常 1 件のため最初の 1 件のみ処理。
+      // 多重 pending を扱うなら interpretEvent を array 戻りに拡張する必要あり。
+      return {
+        kind: 'update-tool',
+        toolUseId: ids[0]!,
+        patch: { status: 'pending-confirmation' },
+      };
+    }
     default:
       return null;
   }
+}
+
+/**
+ * Session のターン終了を示すイベントか判定する。
+ * `session.status_idle` で `stop_reason.type` が `end_turn` または `retries_exhausted` のとき true。
+ * tool_confirmation_required は **ターン終了ではない** (ユーザ応答待ち) ので false。
+ */
+export function isTerminalEvent(event: SessionEvent): boolean {
+  if (event.type !== 'session.status_idle') return false;
+  const reason = (event as { stop_reason?: { type?: string } }).stop_reason;
+  return reason?.type === 'end_turn' || reason?.type === 'retries_exhausted';
 }
 
 /**
@@ -49,15 +102,4 @@ function extractText(content: unknown): string {
       .join('');
   }
   return '';
-}
-
-/**
- * Session のターン終了を示すイベントか判定する。
- * `session.status_idle` で `stop_reason.type` が `end_turn` または `retries_exhausted` のとき true。
- * これを返したイベント以降はポーリングを停止する。
- */
-export function isTerminalEvent(event: SessionEvent): boolean {
-  if (event.type !== 'session.status_idle') return false;
-  const reason = (event as { stop_reason?: { type?: string } }).stop_reason;
-  return reason?.type === 'end_turn' || reason?.type === 'retries_exhausted';
 }

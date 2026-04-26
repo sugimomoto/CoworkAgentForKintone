@@ -5,7 +5,7 @@
 
 import { create } from 'zustand';
 
-import type { ChatMessage } from '../desktop/components/MessageList';
+import type { ChatMessage, ToolMessage } from '../desktop/components/MessageList';
 
 export type ChatStatus = 'idle' | 'bootstrapping' | 'ready' | 'error';
 
@@ -65,6 +65,11 @@ export interface ChatState {
   replaceMessage: (id: string, next: ChatMessage) => void;
   /** 指定 ID のメッセージを削除 */
   removeMessage: (id: string) => void;
+  /**
+   * Tool メッセージを id (= tool_use_id) で部分更新する。
+   * 該当 ID が無い、または kind !== 'tool' の場合は no-op。
+   */
+  updateTool: (toolUseId: string, patch: Partial<Omit<ToolMessage, 'id' | 'kind'>>) => void;
 
   /** Session ID を設定 */
   setSessionId: (id: string | null) => void;
@@ -141,6 +146,15 @@ export const useChatStore = create<ChatState>((set) => ({
 
   removeMessage: (id) =>
     set((s) => ({ messages: s.messages.filter((m) => m.id !== id) })),
+
+  updateTool: (toolUseId, patch) =>
+    set((s) => {
+      const idx = s.messages.findIndex((m) => m.id === toolUseId && m.kind === 'tool');
+      if (idx < 0) return s;
+      const messages = s.messages.slice();
+      messages[idx] = { ...(messages[idx] as ToolMessage), ...patch };
+      return { messages };
+    }),
 
   setSessionId: (id) => set({ sessionId: id }),
 

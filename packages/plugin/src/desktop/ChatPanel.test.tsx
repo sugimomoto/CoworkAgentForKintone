@@ -31,6 +31,7 @@ vi.mock('../core/managed-agents/events', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../core/managed-agents/events')>()),
   fetchAllEventsSince: vi.fn(),
   postUserMessage: vi.fn(),
+  postToolConfirmation: vi.fn(),
 }));
 // useUserBinding は副作用 (listVaults / listEnvironments) を持つため、ChatPanel の
 // テストでは明示的にモック化して bindingStatus / bind を直接コントロールする。
@@ -41,7 +42,7 @@ vi.mock('./hooks/useUserBinding', () => ({
 import { resolveDefaultAgent } from '../core/bootstrap/resolveAgent';
 import { resolveBootstrapEnvironment } from '../core/bootstrap/resolveEnvironment';
 import { createUserSession, listUserSessions } from '../core/bootstrap/resolveSession';
-import { fetchAllEventsSince, postUserMessage } from '../core/managed-agents/events';
+import { fetchAllEventsSince, postToolConfirmation, postUserMessage } from '../core/managed-agents/events';
 import { useUserBinding } from './hooks/useUserBinding';
 
 const mockAgent = vi.mocked(resolveDefaultAgent);
@@ -50,6 +51,7 @@ const mockCreateSession = vi.mocked(createUserSession);
 const mockListSessions = vi.mocked(listUserSessions);
 const mockFetch = vi.mocked(fetchAllEventsSince);
 const mockPost = vi.mocked(postUserMessage);
+const mockPostToolConfirmation = vi.mocked(postToolConfirmation);
 const mockUseUserBinding = vi.mocked(useUserBinding);
 
 const mockConnect = vi.fn().mockResolvedValue(undefined);
@@ -72,8 +74,10 @@ beforeEach(() => {
   mockListSessions.mockReset();
   mockFetch.mockReset();
   mockPost.mockReset();
+  mockPostToolConfirmation.mockReset();
   mockFetch.mockResolvedValue([]);
   mockPost.mockResolvedValue(undefined);
+  mockPostToolConfirmation.mockResolvedValue(undefined);
   mockListSessions.mockResolvedValue([]);
   mockConnect.mockReset();
   mockConnect.mockResolvedValue(undefined);
@@ -285,5 +289,119 @@ describe('ChatPanel', () => {
     expect(useChatStore.getState().sessionId).toBeNull();
     expect(useChatStore.getState().messages).toEqual([]);
     expect(useChatStore.getState().view).toBe('chat');
+  });
+
+  describe('HITL 承認 UI', () => {
+    it('承認ボタンクリック → postToolConfirmation(allow) が呼ばれて status=running に戻る', async () => {
+      const user = userEvent.setup();
+      setBootstrapOk();
+      mockCreateSession.mockResolvedValue(makeSession({ id: 'sess_1', agent: { id: 'agent_1', type: 'agent' } }));
+
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+      // セッションをセットして tool message を pending-confirmation で配置
+      useChatStore.getState().setSessionId('sess_1');
+      useChatStore.getState().addMessage({
+        id: 'tu_1',
+        kind: 'tool',
+        name: 'kintone-delete-records',
+        input: { app: '5', ids: ['1', '2'] },
+        status: 'pending-confirmation',
+      });
+
+      const approveBtn = await screen.findByRole('button', { name: '承認' });
+      await user.click(approveBtn);
+
+      expect(mockPostToolConfirmation).toHaveBeenCalledWith('sess_1', 'tu_1', 'allow');
+      const m = useChatStore.getState().messages.find((x) => x.id === 'tu_1')!;
+      expect(m.kind).toBe('tool');
+      if (m.kind === 'tool') expect(m.status).toBe('running');
+    });
+
+    it('却下ボタンクリック → postToolConfirmation(deny) + tool が error 状態になる', async () => {
+      const user = userEvent.setup();
+      setBootstrapOk();
+      mockCreateSession.mockResolvedValue(makeSession({ id: 'sess_1', agent: { id: 'agent_1', type: 'agent' } }));
+
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+      useChatStore.getState().setSessionId('sess_1');
+      useChatStore.getState().addMessage({
+        id: 'tu_2',
+        kind: 'tool',
+        name: 'kintone-delete-records',
+        input: { app: '5', ids: ['9'] },
+        status: 'pending-confirmation',
+      });
+
+      const rejectBtn = await screen.findByRole('button', { name: '却下' });
+      await user.click(rejectBtn);
+
+      expect(mockPostToolConfirmation).toHaveBeenCalledWith('sess_1', 'tu_2', 'deny', 'ユーザが却下しました');
+      const m = useChatStore.getState().messages.find((x) => x.id === 'tu_2')!;
+      expect(m.kind).toBe('tool');
+      if (m.kind === 'tool') {
+        expect(m.status).toBe('error');
+        expect(m.errorText).toBe('却下しました');
+      }
+    });
+
+    it('reject 失敗時は pending-confirmation に戻し errorText もクリアする', async () => {
+      const user = userEvent.setup();
+      setBootstrapOk();
+      mockCreateSession.mockResolvedValue(makeSession({ id: 'sess_1', agent: { id: 'agent_1', type: 'agent' } }));
+      mockPostToolConfirmation.mockRejectedValueOnce(new Error('network'));
+
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+      useChatStore.getState().setSessionId('sess_1');
+      useChatStore.getState().addMessage({
+        id: 'tu_4',
+        kind: 'tool',
+        name: 'kintone-delete-records',
+        input: { app: '5', ids: ['1'] },
+        status: 'pending-confirmation',
+      });
+
+      await user.click(await screen.findByRole('button', { name: '却下' }));
+
+      await waitFor(() => {
+        const m = useChatStore.getState().messages.find((x) => x.id === 'tu_4')!;
+        if (m.kind === 'tool') {
+          expect(m.status).toBe('pending-confirmation');
+          // errorText: '却下しました' が残留しないこと
+          expect(m.errorText).toBeUndefined();
+        }
+      });
+    });
+
+    it('postToolConfirmation 失敗時は pending-confirmation に戻して再試行可能', async () => {
+      const user = userEvent.setup();
+      setBootstrapOk();
+      mockCreateSession.mockResolvedValue(makeSession({ id: 'sess_1', agent: { id: 'agent_1', type: 'agent' } }));
+      mockPostToolConfirmation.mockRejectedValueOnce(new Error('network'));
+
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+      useChatStore.getState().setSessionId('sess_1');
+      useChatStore.getState().addMessage({
+        id: 'tu_3',
+        kind: 'tool',
+        name: 'kintone-delete-records',
+        input: { app: '5', ids: ['1'] },
+        status: 'pending-confirmation',
+      });
+
+      await user.click(await screen.findByRole('button', { name: '承認' }));
+
+      await waitFor(() => {
+        const m = useChatStore.getState().messages.find((x) => x.id === 'tu_3')!;
+        if (m.kind === 'tool') expect(m.status).toBe('pending-confirmation');
+      });
+    });
   });
 });
