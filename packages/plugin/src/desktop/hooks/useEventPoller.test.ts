@@ -14,14 +14,27 @@ vi.mock('../../core/managed-agents/events', async (importOriginal) => {
     fetchAllEventsSince: vi.fn(),
   };
 });
+vi.mock('../../core/managed-agents/resources', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../core/managed-agents/resources')>();
+  return {
+    ...actual,
+    retrieveSession: vi.fn(),
+  };
+});
 
 import { fetchAllEventsSince } from '../../core/managed-agents/events';
+import { retrieveSession } from '../../core/managed-agents/resources';
+import { makeSession } from '../../test/fixtures';
 
 const mockFetch = vi.mocked(fetchAllEventsSince);
+const mockRetrieveSession = vi.mocked(retrieveSession);
 
 beforeEach(() => {
   useChatStore.getState().reset();
   mockFetch.mockReset();
+  mockRetrieveSession.mockReset();
+  // 既定: archive されていない通常 Session
+  mockRetrieveSession.mockResolvedValue(makeSession({ id: 'sess_1', archived_at: null, status: 'idle' }));
 });
 
 afterEach(() => {
@@ -245,5 +258,53 @@ describe('useEventPoller', () => {
     // 10 秒以上進めれば 2 回目が呼ばれる (terminal でも完全停止しない)
     await vi.advanceTimersByTimeAsync(6_000);
     await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+  });
+
+  describe('Session archive 検知', () => {
+    it('archived_at が立っていれば sessionTerminated=true にする', async () => {
+      vi.useFakeTimers();
+      mockFetch.mockResolvedValue([]);
+      mockRetrieveSession.mockResolvedValueOnce(
+        makeSession({ id: 'sess_1', archived_at: '2026-04-26T14:00:00Z' }),
+      );
+
+      renderHook(() => useEventPoller({ sessionId: 'sess_1', enabled: true }));
+
+      await vi.waitFor(() =>
+        expect(useChatStore.getState().sessionTerminated).toBe(true),
+      );
+      expect(useChatStore.getState().isAgentRunning).toBe(false);
+    });
+
+    it('status === "terminated" でも sessionTerminated=true', async () => {
+      vi.useFakeTimers();
+      mockFetch.mockResolvedValue([]);
+      mockRetrieveSession.mockResolvedValueOnce(
+        makeSession({ id: 'sess_1', archived_at: null, status: 'terminated' }),
+      );
+
+      renderHook(() => useEventPoller({ sessionId: 'sess_1', enabled: true }));
+
+      await vi.waitFor(() =>
+        expect(useChatStore.getState().sessionTerminated).toBe(true),
+      );
+    });
+
+    it('一度 terminated になったら以降は retrieveSession を呼ばない (無駄打ち防止)', async () => {
+      vi.useFakeTimers();
+      mockFetch.mockResolvedValue([]);
+      mockRetrieveSession.mockResolvedValue(
+        makeSession({ id: 'sess_1', archived_at: '2026-04-26T14:00:00Z' }),
+      );
+
+      renderHook(() => useEventPoller({ sessionId: 'sess_1', enabled: true }));
+
+      await vi.waitFor(() => expect(mockRetrieveSession).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => expect(useChatStore.getState().sessionTerminated).toBe(true));
+
+      // 次のポーリング cycle まで進めても retrieveSession は再度呼ばれない
+      await vi.advanceTimersByTimeAsync(11_000);
+      expect(mockRetrieveSession).toHaveBeenCalledTimes(1);
+    });
   });
 });

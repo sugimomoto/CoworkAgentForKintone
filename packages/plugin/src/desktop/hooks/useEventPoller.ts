@@ -13,6 +13,7 @@ import { useEffect, useRef } from 'react';
 import { POLLING_INTERVAL_MS } from '../../core/constants';
 import { interpretEvent, isTerminalEvent } from '../../core/managed-agents/eventInterpreter';
 import { fetchAllEventsSince } from '../../core/managed-agents/events';
+import { retrieveSession } from '../../core/managed-agents/resources';
 import { useChatStore } from '../../store/chatStore';
 
 import type { SessionEvent } from '../../core/managed-agents/types';
@@ -51,6 +52,26 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
         // エラーは無視して次のインターバルで再試行 (今はログもしない)
       }
       if (cancelled) return;
+
+      // Session 本体の状態も併せて確認する。
+      // archive (= terminated) は events ストリームでは通知されないため、
+      // Session リソースの archived_at / status を見ないと検知できない。
+      // 既に terminated 確定なら再 fetch しない (無駄打ち防止)。
+      if (!useChatStore.getState().sessionTerminated) {
+        try {
+          const session = await retrieveSession(sessionId);
+          if (session.archived_at !== null && session.archived_at !== undefined) {
+            setSessionTerminated(true);
+            setAgentRunning(false);
+          } else if (session.status === 'terminated') {
+            setSessionTerminated(true);
+            setAgentRunning(false);
+          }
+        } catch {
+          // 取得失敗は次のインターバルで再試行
+        }
+        if (cancelled) return;
+      }
 
       let sawTerminal = false;
       let sawAgentMessage = false;
