@@ -136,14 +136,17 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
     async (_toolUseId: string) => {
       const sid = sessionId;
       if (!sid) return;
-      // 失敗ツールを Agent に再試行依頼する: 同セッションへの新規ユーザメッセージで促す
+      // 楽観的に「Agent ターン進行中」へ — UI は thinking + ボタン消滅 で即フィードバック
+      addMessage({ id: `pending-thinking-${Date.now()}`, kind: 'thinking' });
+      setAgentRunning(true);
       try {
         await postUserMessage(sid, '前回失敗したツール呼び出しをもう一度試してください。');
       } catch {
-        // 握りつぶし
+        // 失敗時はフラグを下げる (本物の status_running が来ないため自動復帰しない)
+        setAgentRunning(false);
       }
     },
-    [sessionId],
+    [sessionId, addMessage, setAgentRunning],
   );
 
   const handleCancel = useCallback(async () => {
@@ -238,6 +241,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
               onApproveTool={handleApproveTool}
               onRejectTool={handleRejectTool}
               onRetryTool={handleRetryTool}
+              agentRunning={isAgentRunning}
             />
           )}
           {showConnectButton ? (

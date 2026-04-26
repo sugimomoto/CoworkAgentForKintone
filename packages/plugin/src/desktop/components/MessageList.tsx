@@ -38,17 +38,28 @@ export interface MessageListProps {
   onRejectTool?: (toolUseId: string) => void;
   /** 失敗ツールの再試行依頼 (tool kind, error のみ) */
   onRetryTool?: (toolUseId: string) => void;
+  /** Agent ターン進行中なら retry ボタンを出さない (連打防止) */
+  agentRunning?: boolean;
 }
 
-export function MessageList({ messages, onApproveTool, onRejectTool, onRetryTool }: MessageListProps): JSX.Element {
+export function MessageList({
+  messages,
+  onApproveTool,
+  onRejectTool,
+  onRetryTool,
+  agentRunning = false,
+}: MessageListProps): JSX.Element {
   // 「もう一度試す」ボタンは履歴の中で **最後の error tool カード** にだけ出す。
   // (複数 error が積み上がってもボタンは 1 つだけ → 連打 / 混乱を防ぐ)
+  // Agent ターン進行中は出さない (retry クリック後に Agent が処理している間は連打不可)
   let lastErrorToolId: string | null = null;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i];
-    if (m && m.kind === 'tool' && m.status === 'error') {
-      lastErrorToolId = m.id;
-      break;
+  if (!agentRunning) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m && m.kind === 'tool' && m.status === 'error') {
+        lastErrorToolId = m.id;
+        break;
+      }
     }
   }
 
