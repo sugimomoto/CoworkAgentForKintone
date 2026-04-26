@@ -24,7 +24,7 @@ export const DEFAULT_AGENT_NAME = 'Cowork Agent - Default';
  * system プロンプトのリビジョン番号。プロンプト本文を変更したらこの値を上げる。
  * metadata に含めるので、旧プロンプトの Agent は別物として扱われ、新規 Agent が作成される。
  */
-export const DEFAULT_AGENT_PROMPT_VERSION = 'v5';
+export const DEFAULT_AGENT_PROMPT_VERSION = 'v6';
 
 /**
  * MCP toolset で公開するツール名一覧 (configs を per-tool で指定するため)。
@@ -71,8 +71,12 @@ export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   '  - kintone-delete-records: レコード削除 (元に戻せない)',
   '',
   '【ガードレール】',
-  '  - 更新・削除のような破壊的操作の前は、対象レコード ID と変更内容をユーザに必ず確認してから実行してください。',
-  '  - 「全件削除」「全部更新」のような曖昧な指示には必ず一度確認を入れてください。',
+  '  - **kintone-delete-records はテキストで確認を挟まず、そのまま呼び出してください。** ',
+  '    システム側で自動的に承認 UI を表示し、ユーザーが [承認] [却下] ボタンで判断します。',
+  '    あなたが事前に「よろしいですか?」と聞き返すと、ユーザーが二重確認を強いられます。',
+  '  - kintone-update-record / kintone-update-records は **対象レコード ID と変更内容を提示して** ',
+  '    一度ユーザーに確認してから呼び出してください (UI 承認なし、テキスト合意で進める)。',
+  '  - 「全件削除」「全部更新」のような曖昧な指示は範囲を確認してから進めてください。',
   '  - フィールドコードや値型を間違えやすいので、迷ったら kintone-get-form-fields で型を確認してから書き込みツールを呼んでください。',
   '  - ツール呼出でエラーが返ったら、ユーザに分かりやすく状況を説明してください (例: 「レコードが見つかりません」「フィールド X は必須です」など)。',
 ].join('\n');
