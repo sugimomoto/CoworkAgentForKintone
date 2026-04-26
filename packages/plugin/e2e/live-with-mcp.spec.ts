@@ -53,4 +53,9 @@ test('「アプリ一覧を見せて」→ MCP ツール経由でアプリ情報
     expect(text).toMatch(/\d/); // アプリ ID 数値
     expect(text.length).toBeGreaterThan(20); // 単なる挨拶でない
   }).toPass({ timeout: 150_000, intervals: [3_000, 5_000] });
+
+  // ツール実行カード (Phase 1b-5 で追加) が DOM に現れていること
+  // get-apps の tool_use イベントが ToolCardMessage として描画される想定
+  const toolCards = root.locator('[data-msg-kind="tool"]');
+  expect(await toolCards.count()).toBeGreaterThanOrEqual(1);
 });

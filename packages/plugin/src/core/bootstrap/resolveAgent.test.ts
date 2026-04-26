@@ -60,7 +60,7 @@ describe('resolveDefaultAgent', () => {
     expect(body.metadata).toEqual({
       source: 'cowork-agent-for-kintone',
       type: 'default',
-      promptVersion: 'v4',
+      promptVersion: 'v5',
     });
     // tools に agent_toolset_20260401 が含まれること (bash + write + read)
     expect(Array.isArray(body.tools)).toBe(true);
@@ -220,14 +220,52 @@ describe('resolveDefaultAgent', () => {
       expect(body.metadata.kintoneDomain).toBe('tenant.cybozu.com');
     });
 
+    it('mcp_toolset.configs: kintone-delete-records だけ always_ask、他は always_allow', async () => {
+      const created = makeAgent({ id: 'agent_with_mcp' });
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data: [], next_page: null }));
+      fetchMock.mockResolvedValueOnce(jsonResponse(created, 201));
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data: [created], next_page: null }));
+
+      await resolveDefaultAgent({
+        workerUrl: 'https://worker.example.com',
+        kintoneDomain: 'tenant.cybozu.com',
+      });
+
+      const init = fetchMock.mock.calls[1]![1] as RequestInit;
+      const body = JSON.parse(init.body as string);
+      const mcpToolset = (body.tools as Array<{ type: string; configs?: Array<{ name: string; permission_policy: { type: string } }> }>).find(
+        (t) => t.type === 'mcp_toolset',
+      );
+      const configs = mcpToolset?.configs ?? [];
+
+      const policyOf = (name: string): string | undefined =>
+        configs.find((c) => c.name === name)?.permission_policy.type;
+
+      expect(policyOf('kintone-delete-records')).toBe('always_ask');
+      // 残り 9 ツールは全部 always_allow
+      for (const name of [
+        'kintone-get-apps',
+        'kintone-get-app',
+        'kintone-get-form-fields',
+        'kintone-get-records',
+        'kintone-add-record',
+        'kintone-add-records',
+        'kintone-update-record',
+        'kintone-update-records',
+        'kintone-add-record-comment',
+      ]) {
+        expect(policyOf(name)).toBe('always_allow');
+      }
+    });
+
     it('workerUrl 指定が異なれば別の Agent として解決される (in-flight キャッシュも分離)', async () => {
       const a = makeAgent({
         id: 'agent_a',
-        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v4', workerUrl: 'https://a.example', kintoneDomain: 'a.cybozu.com' },
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v5', workerUrl: 'https://a.example', kintoneDomain: 'a.cybozu.com' },
       });
       const b = makeAgent({
         id: 'agent_b',
-        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v4', workerUrl: 'https://b.example', kintoneDomain: 'b.cybozu.com' },
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v5', workerUrl: 'https://b.example', kintoneDomain: 'b.cybozu.com' },
       });
 
       // a の解決: list で a が返る

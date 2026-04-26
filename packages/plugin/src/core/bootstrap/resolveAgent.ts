@@ -24,7 +24,7 @@ export const DEFAULT_AGENT_NAME = 'Cowork Agent - Default';
  * system プロンプトのリビジョン番号。プロンプト本文を変更したらこの値を上げる。
  * metadata に含めるので、旧プロンプトの Agent は別物として扱われ、新規 Agent が作成される。
  */
-export const DEFAULT_AGENT_PROMPT_VERSION = 'v4';
+export const DEFAULT_AGENT_PROMPT_VERSION = 'v5';
 
 /**
  * MCP toolset で公開するツール名一覧 (configs を per-tool で指定するため)。
@@ -44,6 +44,12 @@ const KINTONE_TOOL_NAMES = [
   'kintone-delete-records',
   'kintone-add-record-comment',
 ] as const;
+
+/**
+ * 破壊的 (= 復元不能) なツール。これだけは `always_ask` で UI 承認を要求する。
+ * update / add / comment はやり直しが効くので `always_allow` のままでよい。
+ */
+const DESTRUCTIVE_TOOL_NAMES = new Set<string>(['kintone-delete-records']);
 
 /** Default Agent の system プロンプト */
 export const DEFAULT_AGENT_SYSTEM_PROMPT = [
@@ -103,7 +109,9 @@ function buildAgentTools(includeMcp: boolean): Array<Record<string, unknown>> {
       configs: KINTONE_TOOL_NAMES.map((name) => ({
         name,
         enabled: true,
-        permission_policy: { type: 'always_allow' as const },
+        permission_policy: {
+          type: DESTRUCTIVE_TOOL_NAMES.has(name) ? ('always_ask' as const) : ('always_allow' as const),
+        },
       })),
     });
   }
