@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { listUserSessions } from '../core/bootstrap/resolveSession';
 import { formatRelative } from '../core/format';
 import { getCurrentSessionContext } from '../core/kintone/user';
+import { toErrorMessage } from '../core/utils';
 
 import type { Session } from '../core/managed-agents/types';
 
@@ -41,7 +42,7 @@ export function HistoryView({ agentId, onSelect }: HistoryViewProps): JSX.Elemen
         setState({ status: 'ready', sessions });
       } catch (err) {
         if (cancelled) return;
-        const message = err instanceof Error ? err.message : String(err);
+        const message = toErrorMessage(err);
         setState({ status: 'error', message });
       }
     })();

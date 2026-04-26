@@ -12,9 +12,7 @@ import type { KintoneCreds } from '../../src/kintone';
 
 const CREDS: KintoneCreds = {
   domain: 'tenant.cybozu.com',
-  auth_type: 'basic',
-  login: 'sato',
-  password: 'p4ss',
+  bearer: 'oauth-access-token',
 };
 
 let fetchMock: ReturnType<typeof vi.fn>;

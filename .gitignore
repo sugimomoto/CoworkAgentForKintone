@@ -39,6 +39,7 @@ packages/plugin/dist/
 packages/plugin/dist-plugin/
 packages/plugin/plugin/js/
 packages/plugin/plugin/css/
+packages/plugin/src/generated/
 
 # Playwright
 packages/plugin/.auth/

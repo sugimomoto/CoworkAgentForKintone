@@ -190,4 +190,55 @@ describe('resolveDefaultAgent', () => {
     const result = await resolveDefaultAgent();
     expect(result.id).toBe('agent_retry_success');
   });
+
+  describe('workerUrl オプション', () => {
+    it('workerUrl + kintoneDomain 指定時は /mcp/<domain> 形式の mcp_servers + mcp_toolset を含む Agent を作成', async () => {
+      // list 空 → create → 検証 list
+      const created = makeAgent({ id: 'agent_with_mcp' });
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data: [], next_page: null }));
+      fetchMock.mockResolvedValueOnce(jsonResponse(created, 201));
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data: [created], next_page: null }));
+
+      await resolveDefaultAgent({
+        workerUrl: 'https://worker.example.com',
+        kintoneDomain: 'tenant.cybozu.com',
+      });
+
+      // create 呼出 (2 番目の fetch) の body を検証
+      const createCall = fetchMock.mock.calls[1]!;
+      const init = createCall[1] as RequestInit;
+      const body = JSON.parse(init.body as string);
+
+      expect(body.mcp_servers).toEqual([
+        { type: 'url', name: 'kintone', url: 'https://worker.example.com/mcp/tenant.cybozu.com' },
+      ]);
+      const tools = body.tools as Array<{ type: string; mcp_server_name?: string }>;
+      const mcpToolset = tools.find((t) => t.type === 'mcp_toolset');
+      expect(mcpToolset?.mcp_server_name).toBe('kintone');
+      expect(body.metadata.workerUrl).toBe('https://worker.example.com');
+      expect(body.metadata.kintoneDomain).toBe('tenant.cybozu.com');
+    });
+
+    it('workerUrl 指定が異なれば別の Agent として解決される (in-flight キャッシュも分離)', async () => {
+      const a = makeAgent({
+        id: 'agent_a',
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', workerUrl: 'https://a.example', kintoneDomain: 'a.cybozu.com' },
+      });
+      const b = makeAgent({
+        id: 'agent_b',
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', workerUrl: 'https://b.example', kintoneDomain: 'b.cybozu.com' },
+      });
+
+      // a の解決: list で a が返る
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data: [a], next_page: null }));
+      // b の解決: list で b が返る
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data: [b], next_page: null }));
+
+      const ra = await resolveDefaultAgent({ workerUrl: 'https://a.example', kintoneDomain: 'a.cybozu.com' });
+      const rb = await resolveDefaultAgent({ workerUrl: 'https://b.example', kintoneDomain: 'b.cybozu.com' });
+
+      expect(ra.id).toBe('agent_a');
+      expect(rb.id).toBe('agent_b');
+    });
+  });
 });

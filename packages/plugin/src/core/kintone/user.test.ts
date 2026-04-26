@@ -37,6 +37,7 @@ function makeKintoneStub(overrides: Partial<KintoneLoginUser> = {}): KintoneGlob
       },
     },
     api: () => Promise.resolve({}),
+    proxy: () => Promise.resolve(['', 200, {}] as [string, number, Record<string, string>]),
   };
 }
 

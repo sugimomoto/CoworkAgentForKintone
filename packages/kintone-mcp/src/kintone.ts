@@ -1,21 +1,16 @@
 // kintone REST API クライアントヘルパ。
 // Cloudflare Workers の標準 fetch + Web API のみ使用 (Node 互換不要)。
 //
-// Phase 1b-1 の Python helper の TypeScript 版に相当する最小実装。
-// 認証は Basic 認証 / API トークン両対応。
+// 認証は OAuth Bearer 専用。
+// Anthropic Managed Agents が Vault Credential (mcp_oauth) から取得した access_token を
+// Authorization: Bearer <token> でそのまま MCP リクエストに乗せてくる前提。
 
-export type KintoneCreds =
-  | {
-      domain: string;
-      auth_type: 'basic';
-      login: string;
-      password: string;
-    }
-  | {
-      domain: string;
-      auth_type: 'api_token';
-      api_token: string;
-    };
+export interface KintoneCreds {
+  /** kintone domain (例: tenant.cybozu.com) */
+  domain: string;
+  /** OAuth access_token (Anthropic から渡ってきたもの) */
+  bearer: string;
+}
 
 export interface KintoneRequestOptions {
   /** URL クエリパラメータ。配列値は `key=v1&key=v2` で送出される。null/undefined は送らない */
@@ -25,14 +20,12 @@ export interface KintoneRequestOptions {
 }
 
 function buildHeaders(creds: KintoneCreds, hasBody: boolean): Record<string, string> {
-  const headers: Record<string, string> = {};
-  if (creds.auth_type === 'basic') {
-    headers['X-Cybozu-Authorization'] = btoa(`${creds.login}:${creds.password}`);
-  } else {
-    headers['X-Cybozu-API-Token'] = creds.api_token;
-  }
-  // GET など body 無しのリクエストには Content-Type を付けない
-  // (kintone は CB_IL02 で拒否することがある — Phase 1b-1 で踏んだ罠)
+  const headers: Record<string, string> = {
+    // cybozu.com Cloudflare WAF が User-Agent 無しを 1003 で弾くため明示。
+    'User-Agent':
+      'cowork-agent-kintone-mcp/0.1.0 (+https://github.com/sugimomoto/CoworkAgentForKintone)',
+    Authorization: `Bearer ${creds.bearer}`,
+  };
   if (hasBody) headers['Content-Type'] = 'application/json';
   return headers;
 }

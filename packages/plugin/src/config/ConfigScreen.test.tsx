@@ -1,132 +1,180 @@
-import { render, screen, waitFor } from '@testing-library/react';
+// ConfigScreen (Phase 1b-3 OAuth ウィザード) のテスト。
+//
+// 検証:
+// - workerUrl 入力で callbackUrl が `<workerUrl>/oauth/callback` で計算される
+// - cybozu admin リンクが `https://<location.hostname>/admin/integrations/oauth/list`
+// - 保存時 setProxyConfig が 4 経路 (oauth2/token, /credentials/upsert, anthropic POST, anthropic GET)
+// - setConfig には secret (client_secret / anthropic_api_key) が含まれない
+
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfigScreen } from './ConfigScreen';
 
-function makeKintoneStub(overrides?: { getConfig?: () => Record<string, string> }) {
-  return {
-    plugin: {
-      app: {
-        getConfig: overrides?.getConfig ?? vi.fn(() => ({})),
-        setConfig: vi.fn((_config: Record<string, string>, cb?: () => void) => {
-          cb?.();
-        }),
-        setProxyConfig: vi.fn(),
-      },
-    },
-    app: { getId: () => 42 },
-  };
-}
+const PLUGIN_ID = 'plg_x';
+
+let setProxyConfigMock: ReturnType<typeof vi.fn>;
+let setConfigMock: ReturnType<typeof vi.fn>;
+let getConfigMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  vi.stubGlobal('kintone', makeKintoneStub());
-  // window.location をスタブ (setConfig 後の遷移用)
+  setProxyConfigMock = vi.fn((_url, _method, _headers, _data, cb) => cb && cb());
+  setConfigMock = vi.fn((_cfg, cb) => cb && cb());
+  getConfigMock = vi.fn(() => ({}));
+  // @ts-expect-error global kintone shim — proxy / events 等は test では未使用
+  globalThis.kintone = {
+    plugin: {
+      app: {
+        setProxyConfig: setProxyConfigMock,
+        setConfig: setConfigMock,
+        getConfig: getConfigMock,
+        proxy: vi.fn(),
+      },
+    },
+    app: { getId: () => 1 },
+  };
   Object.defineProperty(window, 'location', {
+    value: { hostname: 'tenant.cybozu.com', href: '' },
     writable: true,
-    value: { href: '', hostname: 'example.cybozu.com' },
   });
-  // alert はテスト中ノーオペ
-  vi.stubGlobal('alert', vi.fn());
+  // alert をモック
+  vi.spyOn(window, 'alert').mockImplementation(() => undefined);
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  // @ts-expect-error cleanup
+  delete globalThis.kintone;
 });
 
 describe('ConfigScreen', () => {
-  it('Anthropic API Key 入力欄を表示する (password type)', () => {
-    render(<ConfigScreen pluginId="abc" />);
-    const input = screen.getByLabelText(/Anthropic API Key/);
-    expect(input).toBeInTheDocument();
-    expect(input).toHaveAttribute('type', 'password');
-  });
-
-  it('既に proxy 登録済 (marker あり) の場合は登録済バッジを表示する', () => {
-    vi.stubGlobal(
-      'kintone',
-      makeKintoneStub({ getConfig: () => ({ proxyConfigured: 'true' }) }),
-    );
-    render(<ConfigScreen pluginId="abc" />);
-    // ラベル隣の小さいバッジ要素が描画されること (Tailwind class で識別)
-    const badges = screen.getAllByText('登録済み');
-    expect(badges.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('API Key 入力欄は常に空でレンダリングされる (セキュリティのため平文保持しない)', () => {
-    vi.stubGlobal(
-      'kintone',
-      makeKintoneStub({ getConfig: () => ({ proxyConfigured: 'true' }) }),
-    );
-    render(<ConfigScreen pluginId="abc" />);
-    expect(screen.getByLabelText(/Anthropic API Key/)).toHaveValue('');
-  });
-
-  it('保存ボタン押下で GET / POST 各メソッドに setProxyConfig が呼ばれる', async () => {
-    const setProxyConfig = vi.fn();
-    const setConfig = vi.fn((_config: Record<string, string>, cb?: () => void) => cb?.());
-    vi.stubGlobal('kintone', {
-      plugin: {
-        app: {
-          getConfig: vi.fn(() => ({})),
-          setConfig,
-          setProxyConfig,
-        },
-      },
-      app: { getId: () => 42 },
-    });
+  it('Worker URL 入力で callbackUrl が動的に計算される', async () => {
     const user = userEvent.setup();
-    render(<ConfigScreen pluginId="abc" />);
+    render(<ConfigScreen pluginId={PLUGIN_ID} />);
 
-    await user.type(screen.getByLabelText(/Anthropic API Key/), 'sk-ant-new');
+    const workerUrlInput = screen.getByLabelText('Worker URL');
+    await user.type(workerUrlInput, 'https://my-worker.example.com');
+
+    const cb = screen.getByTestId('callback-url');
+    expect(cb.textContent).toBe('https://my-worker.example.com/oauth/callback');
+  });
+
+  it('cybozu admin 画面のリンクが location.hostname から組み立てられる', () => {
+    render(<ConfigScreen pluginId={PLUGIN_ID} />);
+    const link = screen.getByTestId('cybozu-admin-link');
+    expect(link.getAttribute('href')).toBe(
+      'https://tenant.cybozu.com/admin/integrations/oauth/list',
+    );
+  });
+
+  it('全項目入力 → 保存で setProxyConfig が 4 経路呼ばれる', async () => {
+    const user = userEvent.setup();
+    render(<ConfigScreen pluginId={PLUGIN_ID} />);
+
+    await user.type(screen.getByLabelText('Worker URL'), 'https://w.example.com');
+    await user.type(screen.getByLabelText('Anthropic API Key'), 'sk-ant-x');
+    await user.type(screen.getByLabelText('client_id'), 'cid');
+    await user.type(screen.getByLabelText('client_secret'), 'csec');
+
     await user.click(screen.getByRole('button', { name: '保存' }));
 
-    await waitFor(() => {
-      expect(setProxyConfig).toHaveBeenCalledTimes(2);
+    // setProxyConfig は逐次 await + sleep(700ms) を入れているので待つ
+    await waitFor(() => expect(setProxyConfigMock).toHaveBeenCalledTimes(4), {
+      timeout: 10_000,
     });
 
-    const methods = setProxyConfig.mock.calls.map((c) => c[1]);
-    expect(methods).toEqual(expect.arrayContaining(['GET', 'POST']));
+    const calls = setProxyConfigMock.mock.calls;
+    const urls = calls.map((c) => c[0]);
+    const methods = calls.map((c) => c[1]);
 
-    for (const call of setProxyConfig.mock.calls) {
-      expect(call[0]).toBe('https://api.anthropic.com/'); // URL prefix
-      expect(call[2]).toMatchObject({ 'X-Api-Key': 'sk-ant-new' });
-      expect(call[3]).toEqual({}); // 固定 body なし (動的に渡す)
-    }
+    // 1) oauth2/token POST
+    const tokenIdx = urls.indexOf('https://tenant.cybozu.com/oauth2/token');
+    expect(tokenIdx).toBeGreaterThanOrEqual(0);
+    expect(methods[tokenIdx]).toBe('POST');
+    const tokenHeaders = calls[tokenIdx]![2] as Record<string, string>;
+    expect(tokenHeaders['Authorization']).toContain('Basic ');
+
+    // 2) credentials/upsert POST with all 3 secret headers
+    const upsertIdx = urls.indexOf('https://w.example.com/credentials/upsert');
+    expect(upsertIdx).toBeGreaterThanOrEqual(0);
+    const upsertHeaders = calls[upsertIdx]![2] as Record<string, string>;
+    expect(upsertHeaders['X-Anthropic-Api-Key']).toBe('sk-ant-x');
+    expect(upsertHeaders['X-Kintone-OAuth-Client-Id']).toBe('cid');
+    expect(upsertHeaders['X-Kintone-OAuth-Client-Secret']).toBe('csec');
+
+    // 3, 4) Anthropic POST + GET
+    const anthropicCalls = calls.filter((c) => c[0] === 'https://api.anthropic.com/');
+    expect(anthropicCalls.length).toBe(2);
+    expect(anthropicCalls.map((c) => c[1]).sort()).toEqual(['GET', 'POST']);
   });
 
-  it('保存後は setConfig に proxyConfigured マーカーのみ書き、API Key 自体は保存しない', async () => {
-    const setProxyConfig = vi.fn();
-    const setConfig = vi.fn((_config: Record<string, string>, cb?: () => void) => cb?.());
-    vi.stubGlobal('kintone', {
-      plugin: {
-        app: { getConfig: vi.fn(() => ({})), setConfig, setProxyConfig },
-      },
-      app: { getId: () => 42 },
-    });
+  it('保存時 setConfig には secret が含まれない', async () => {
     const user = userEvent.setup();
-    render(<ConfigScreen pluginId="abc" />);
+    render(<ConfigScreen pluginId={PLUGIN_ID} />);
 
-    await user.type(screen.getByLabelText(/Anthropic API Key/), 'sk-ant-secret');
+    await user.type(screen.getByLabelText('Worker URL'), 'https://w.example.com');
+    await user.type(screen.getByLabelText('Anthropic API Key'), 'sk-ant-secret');
+    await user.type(screen.getByLabelText('client_id'), 'cid');
+    await user.type(screen.getByLabelText('client_secret'), 'csec-secret');
     await user.click(screen.getByRole('button', { name: '保存' }));
 
-    await waitFor(() => expect(setConfig).toHaveBeenCalled());
-    const config = setConfig.mock.calls[0]![0] as Record<string, string>;
-    expect(config['proxyConfigured']).toBe('true');
-    expect(config['anthropicApiKey']).toBeUndefined();
+    await waitFor(() => expect(setConfigMock).toHaveBeenCalled(), { timeout: 10_000 });
+    const config = setConfigMock.mock.calls[0]![0] as Record<string, string>;
+    expect(config.workerUrl).toBe('https://w.example.com');
+    expect(config.oauthClientId).toBe('cid');
+    expect(config.saved).toBe('true');
+    // secret 値は setConfig に含まれない
+    expect(JSON.stringify(config)).not.toContain('sk-ant-secret');
+    expect(JSON.stringify(config)).not.toContain('csec-secret');
   });
 
-  it('API Key が空の状態では保存ボタンは無効', () => {
-    render(<ConfigScreen pluginId="abc" />);
-    expect(screen.getByRole('button', { name: '保存' })).toBeDisabled();
-  });
-
-  it('キャンセルボタン押下で history.back が呼ばれる', async () => {
-    const back = vi.spyOn(history, 'back').mockImplementation(() => {});
+  it('全項目を埋めるまで保存ボタンが disabled', async () => {
     const user = userEvent.setup();
-    render(<ConfigScreen pluginId="abc" />);
+    render(<ConfigScreen pluginId={PLUGIN_ID} />);
 
-    await user.click(screen.getByRole('button', { name: 'キャンセル' }));
-    expect(back).toHaveBeenCalled();
+    const saveBtn = screen.getByRole('button', { name: '保存' });
+    expect(saveBtn).toBeDisabled();
+
+    await user.type(screen.getByLabelText('Worker URL'), 'https://w.example.com');
+    expect(saveBtn).toBeDisabled();
+    await user.type(screen.getByLabelText('Anthropic API Key'), 'sk');
+    expect(saveBtn).toBeDisabled();
+    await user.type(screen.getByLabelText('client_id'), 'cid');
+    expect(saveBtn).toBeDisabled();
+    await user.type(screen.getByLabelText('client_secret'), 'csec');
+    expect(saveBtn).not.toBeDisabled();
+  });
+
+  it('既存設定がある状態で開くと workerUrl / clientId / scope が復元される (secret は復元されない)', () => {
+    getConfigMock.mockReturnValue({
+      saved: 'true',
+      workerUrl: 'https://prev.example.com',
+      oauthClientId: 'prev-cid',
+      oauthScope: 'k:app_record:read',
+    });
+    render(<ConfigScreen pluginId={PLUGIN_ID} />);
+
+    expect((screen.getByLabelText('Worker URL') as HTMLInputElement).value).toBe(
+      'https://prev.example.com',
+    );
+    expect((screen.getByLabelText('client_id') as HTMLInputElement).value).toBe('prev-cid');
+    expect((screen.getByLabelText('scope') as HTMLInputElement).value).toBe('k:app_record:read');
+    // secret は空欄
+    expect((screen.getByLabelText('client_secret') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Anthropic API Key') as HTMLInputElement).value).toBe('');
+  });
+
+  it('Worker URL が無効なら Step 2 / Step 3 は disabled (aria-disabled=true)', async () => {
+    const user = userEvent.setup();
+    render(<ConfigScreen pluginId={PLUGIN_ID} />);
+
+    // 無効な URL
+    await user.type(screen.getByLabelText('Worker URL'), 'not-a-url');
+
+    const heading2 = screen.getByText('Step 2. cybozu.com に OAuth クライアントを登録');
+    const heading3 = screen.getByText('Step 3. OAuth クライアント情報と スコープ');
+    expect(heading2.closest('section')!.getAttribute('aria-disabled')).toBe('true');
+    expect(heading3.closest('section')!.getAttribute('aria-disabled')).toBe('true');
   });
 });

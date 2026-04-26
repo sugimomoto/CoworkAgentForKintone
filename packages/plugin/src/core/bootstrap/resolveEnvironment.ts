@@ -1,7 +1,8 @@
 // Cowork Agent for kintone — Bootstrap Environment の解決
 //
-// Phase 1a 用の最小 Environment (kintone 接続なし) を解決・作成する。
-// Phase 1b で `resolveUserEnvironment` (ユーザー専用、ヘルパーライブラリ + allowed_hosts 設定済) に置き換え予定。
+// MCP server へのアクセスを許可するため Environment は `networking.allow_mcp_servers = true`
+// が必須。旧 Environment にはこの設定が無いので、metadata `mcpEnabled: 'true'` で
+// 識別して MCP 対応世代だけを返す (旧世代は残置)。
 
 import { METADATA_SOURCE } from '../constants';
 import {
@@ -14,17 +15,21 @@ import {
 import type { Environment } from '../managed-agents/types';
 
 /** Bootstrap Environment の表示名 */
-export const BOOTSTRAP_ENV_NAME = 'Cowork Agent - Bootstrap';
+export const BOOTSTRAP_ENV_NAME = 'Cowork Agent - Bootstrap (MCP)';
 
 /** Bootstrap Environment 識別用 metadata.purpose 値 */
 export const BOOTSTRAP_PURPOSE = 'bootstrap';
 
+/** MCP 対応世代を識別する metadata key/value */
+const MCP_ENABLED_KEY = 'mcpEnabled';
+const MCP_ENABLED_VALUE = 'true';
+
 /**
- * Phase 1a 用の bootstrap Environment を取得する。なければ作成する。
+ * Bootstrap Environment を取得する。なければ作成する。
  *
- * - kintone への外向き通信なし (`allowed_hosts: []`)
- * - パッケージなし (`packages: {}`)
- * - metadata: `{ source, purpose: 'bootstrap' }`
+ * - `networking.allow_mcp_servers = true` (MCP server エンドポイントへの通信許可)
+ * - パッケージなし
+ * - metadata: `{ source, purpose: 'bootstrap', mcpEnabled: 'true' }`
  */
 export async function resolveBootstrapEnvironment(): Promise<Environment> {
   const matches = await findByMetadata<Environment>(
@@ -32,6 +37,7 @@ export async function resolveBootstrapEnvironment(): Promise<Environment> {
     {
       source: METADATA_SOURCE,
       purpose: BOOTSTRAP_PURPOSE,
+      [MCP_ENABLED_KEY]: MCP_ENABLED_VALUE,
     },
   );
   // 別タブが race で重複作成した場合に備え、created_at 最古を採用 (決定論的選択)
@@ -43,6 +49,7 @@ export async function resolveBootstrapEnvironment(): Promise<Environment> {
       type: 'cloud',
       networking: {
         type: 'limited',
+        allow_mcp_servers: true,
         allow_package_managers: false,
         allowed_hosts: [],
       },
@@ -51,6 +58,7 @@ export async function resolveBootstrapEnvironment(): Promise<Environment> {
     metadata: {
       source: METADATA_SOURCE,
       purpose: BOOTSTRAP_PURPOSE,
+      [MCP_ENABLED_KEY]: MCP_ENABLED_VALUE,
     },
   });
 }

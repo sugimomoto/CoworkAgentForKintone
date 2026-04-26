@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { KintoneCreds } from '../../src/kintone';
 import { createTool, createToolCallback } from '../../src/tools/factory';
 
 describe('createTool', () => {
@@ -25,12 +26,7 @@ describe('createTool', () => {
 
 describe('createToolCallback', () => {
   it('options を bind した関数を返し、引数だけで呼出可能になる', async () => {
-    const creds = {
-      domain: 'x.cybozu.com',
-      auth_type: 'basic' as const,
-      login: 'sato',
-      password: 'p',
-    };
+    const creds: KintoneCreds = { domain: 'x.cybozu.com', bearer: 'tok' };
     const inner = vi.fn(async (args: { app: string }) => ({
       structuredContent: { app: args.app },
       content: [{ type: 'text' as const, text: 'ok' }],

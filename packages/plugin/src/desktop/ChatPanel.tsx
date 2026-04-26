@@ -1,17 +1,16 @@
 // Cowork Agent for kintone — チャットパネル全体
 //
-// Header + (MessageList + Composer) | HistoryView を view に応じて切替。
-// 未バインディング状態 (Vault/Environment 未作成) で送信されたら CredentialDialog を出し、
-// bind 完了後に保留テキストを送信する。
+// Header + (MessageList + Composer + ConnectKintoneButton) | HistoryView を view に応じて切替。
+// 未バインディング状態 (kintone OAuth 未連携) では Composer の代わりに ConnectKintoneButton を表示。
+// connect() 完了後に保留テキストを送信する。
 
 import { useCallback, useState } from 'react';
 
 import { postUserMessage } from '../core/managed-agents/events';
-import { getCurrentSessionContext } from '../core/kintone/user';
 import { useChatStore } from '../store/chatStore';
 
 import { Composer } from './components/Composer';
-import { CredentialDialog } from './components/CredentialDialog';
+import { ConnectKintoneButton } from './components/ConnectKintoneButton';
 import { Header } from './components/Header';
 import { MessageList } from './components/MessageList';
 import { WelcomeMessage } from './components/WelcomeMessage';
@@ -21,7 +20,7 @@ import { useSession } from './hooks/useSession';
 import { useUserBinding } from './hooks/useUserBinding';
 
 export interface ChatPanelProps {
-  /** 設定画面を開くハンドラ (任意)。指定すると Header の歯車から CredentialDialog を再表示する */
+  /** 設定画面を開くハンドラ (任意)。Header の歯車から呼ばれる */
   onSettingsClick?: () => void;
   /** パネルを閉じるハンドラ (任意) */
   onClose?: () => void;
@@ -36,19 +35,11 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   const view = useChatStore((s) => s.view);
   const setView = useChatStore((s) => s.setView);
   const addMessage = useChatStore((s) => s.addMessage);
-  const removeMessage = useChatStore((s) => s.removeMessage);
-
   const { ensureSession, selectSession, startNewConversation } = useSession();
-  const { status: bindingStatus, bind } = useUserBinding();
+  const { status: bindingStatus, error: bindingError, connect } = useUserBinding();
 
-  // 未バインドで送信した場合の保留テキストとオプティミスティック ID
-  // (Dialog cancel 時に楽観追加分を巻き戻すために id も覚えておく)
-  const [pending, setPending] = useState<{
-    text: string;
-    userId: string;
-    pendingThinkingId: string;
-  } | null>(null);
-  const [credentialDialogOpen, setCredentialDialogOpen] = useState(false);
+  // 未バインドで送信したテキストの保留先 (連携完了後に再送信する)
+  const [pendingText, setPendingText] = useState<string | null>(null);
 
   useEventPoller({ sessionId, enabled: status === 'ready' && sessionId !== null });
 
@@ -56,13 +47,11 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
     async (text: string) => {
       const userId = `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       addMessage({ id: userId, kind: 'user', text });
-      const pendingThinkingId = `pending-thinking-${Date.now()}`;
-      addMessage({ id: pendingThinkingId, kind: 'thinking' });
+      addMessage({ id: `pending-thinking-${Date.now()}`, kind: 'thinking' });
 
-      // 未バインドなら CredentialDialog を出して保留
+      // 未バインドなら一旦保留して連携ボタンへ誘導
       if (bindingStatus === 'unbound' || bindingStatus === 'error') {
-        setPending({ text, userId, pendingThinkingId });
-        setCredentialDialogOpen(true);
+        setPendingText(text);
         return;
       }
 
@@ -76,39 +65,24 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
     [addMessage, bindingStatus, ensureSession],
   );
 
-  const handleBindSubmit = useCallback(
-    async (values: { login: string; password: string }) => {
-      await bind(values);
-      // bind 成功 → ダイアログ閉じる + 保留テキストを送信
-      setCredentialDialogOpen(false);
-      const p = pending;
-      setPending(null);
-      if (p) {
-        try {
-          const sid = await ensureSession();
-          await postUserMessage(sid, p.text);
-        } catch {
-          // 握りつぶし
-        }
+  const handleConnect = useCallback(async () => {
+    try {
+      await connect();
+      // connect 成功後、保留テキストを送信
+      const text = pendingText;
+      setPendingText(null);
+      if (text) {
+        const sid = await ensureSession();
+        await postUserMessage(sid, text);
       }
-    },
-    [bind, ensureSession, pending],
-  );
-
-  const handleBindCancel = useCallback(() => {
-    setCredentialDialogOpen(false);
-    // オプティミスティック追加した user message と thinking を巻き戻す
-    if (pending) {
-      removeMessage(pending.userId);
-      removeMessage(pending.pendingThinkingId);
-      setPending(null);
+    } catch {
+      // useUserBinding が status='error' に設定するので UI は反映される。
+      // 保留テキストは残しておき、再試行時に送信する。
     }
-  }, [pending, removeMessage]);
+  }, [connect, ensureSession, pendingText]);
 
   const handleSettingsClick = useCallback(() => {
     if (onSettingsClick) onSettingsClick();
-    // 設定アイコンから明示的に CredentialDialog を再表示する
-    setCredentialDialogOpen(true);
   }, [onSettingsClick]);
 
   const handleHistoryClick = useCallback(() => {
@@ -128,25 +102,16 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
     [selectSession, setView],
   );
 
-  const statusLine =
-    status === 'ready'
-      ? '接続中'
-      : status === 'bootstrapping'
-        ? '起動中...'
-        : status === 'error'
-          ? 'エラー'
-          : '待機';
-
-  // CredentialDialog 用: kintone JS API から domain と login の初期値を自動取得
-  const kctxFallback = (() => {
-    try {
-      return getCurrentSessionContext();
-    } catch {
-      return { kintoneDomain: '', kintoneUserCode: '' };
-    }
+  const statusLine = ((): string => {
+    if (status === 'bootstrapping') return '起動中...';
+    if (status === 'error') return 'エラー';
+    if (status !== 'ready') return '待機';
+    return bindingStatus === 'bound' ? '接続中' : '連携待ち';
   })();
-  const dialogDomain = kctxFallback.kintoneDomain;
-  const dialogInitialLogin = kctxFallback.kintoneUserCode;
+
+  const showConnectButton =
+    status === 'ready' &&
+    (bindingStatus === 'unbound' || bindingStatus === 'binding' || bindingStatus === 'error');
 
   return (
     <div className="cowork-agent-root flex h-full flex-col bg-bg">
@@ -174,17 +139,17 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
           ) : (
             <MessageList messages={messages} />
           )}
-          <Composer onSubmit={handleSubmit} disabled={status !== 'ready'} />
+          {showConnectButton ? (
+            <ConnectKintoneButton
+              status={bindingStatus}
+              error={bindingError}
+              onConnect={handleConnect}
+            />
+          ) : (
+            <Composer onSubmit={handleSubmit} disabled={status !== 'ready'} />
+          )}
         </>
       )}
-
-      <CredentialDialog
-        open={credentialDialogOpen}
-        domain={dialogDomain}
-        initialLogin={dialogInitialLogin}
-        onSubmit={handleBindSubmit}
-        onClose={handleBindCancel}
-      />
     </div>
   );
 }

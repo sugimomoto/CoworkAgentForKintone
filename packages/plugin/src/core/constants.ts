@@ -36,10 +36,13 @@ export const AGENT_TYPE = {
   custom: 'custom',
 } as const;
 
-// ----- kintone ヘルパーライブラリ -------------------------------------------
-//
-// Phase 1b-1 で Python パッケージ (cowork-agent-kintone) を helper-v* タグで配布したが、
-// Phase 1b-2 (改訂) では Remote MCP (Cloudflare Workers) 方式に切替えたため、
-// Environment への pip install は廃止。helper パッケージは Pattern A 用途で残置。
-// 関連定数 (HELPER_PACKAGE_NAME / HELPER_VERSION / HELPER_WHEEL_URL / HELPER_DOWNLOAD_HOSTS)
-// は Phase 1b-2 改訂で削除。Phase 1c 以降で必要になれば復活させる。
+/** kintone OAuth scope のデフォルト推奨。ConfigScreen 初期値 + connect 時 fallback。 */
+export const DEFAULT_KINTONE_OAUTH_SCOPE =
+  'k:app_record:read k:app_record:write k:app_settings:read k:file:read';
+
+/** Cloudflare Workers script 名 (固定)。Worker URL の subdomain にも使われる。 */
+export const CLOUDFLARE_WORKER_SCRIPT_NAME = 'cowork-agent-kintone-mcp';
+
+/** OAuth callback の postMessage source 識別子 (popup ↔ opener)。
+ *  Worker /oauth/callback と Plugin core/oauth/popup の両側で照合する。 */
+export const OAUTH_POSTMESSAGE_SOURCE = 'cowork-agent-kintone-mcp';

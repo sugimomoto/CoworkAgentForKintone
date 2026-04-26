@@ -1,25 +1,19 @@
+// /mcp/<domain> Bearer 透過モードのテスト (マルチテナント版)。
+//
+// 検証:
+// - URL 形式違反 → 404
+// - Bearer 無し → 401
+// - 正規 URL + Bearer + initialize → serverInfo
+// - tools/list → 4 ツール並び
+// - tools/call (kintone-get-apps) → kintone fetch を Bearer + 正しいドメインで叩く
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { signJwt } from '../src/jwt';
 import { handleMcp } from '../src/mcp';
 
-const ENV = {
-  JWT_HMAC_SECRET: 'jwt-secret-32-bytes-or-more-yes',
-  MINT_API_KEY: 'mint-api-key-32-bytes-or-more-x',
-};
-
-const VALID_KINTONE_PAYLOAD = {
-  iss: 'cowork-agent-for-kintone',
-  sub: 'kintone-creds',
-  iat: Math.floor(Date.now() / 1000),
-  exp: Math.floor(Date.now() / 1000) + 3600,
-  kintone: {
-    domain: 'tenant.cybozu.com',
-    auth_type: 'basic' as const,
-    login: 'sato',
-    password: 'p',
-  },
-};
+const BEARER = 'oauth-access-token';
+const DOMAIN = 'tenant.cybozu.com';
+const URL_PATH = `https://example.com/mcp/${DOMAIN}`;
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -32,161 +26,111 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function mcpRequest(body: unknown, opts?: { authHeader?: string }): Promise<Request> {
-  const jwt = await signJwt(VALID_KINTONE_PAYLOAD, ENV.JWT_HMAC_SECRET);
+function mcpRequest(
+  body: unknown,
+  opts: { authHeader?: string | null; url?: string } = {},
+): Request {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (opts?.authHeader !== undefined) {
+  if (opts.authHeader === undefined) {
+    headers['Authorization'] = `Bearer ${BEARER}`;
+  } else if (opts.authHeader !== null) {
     headers['Authorization'] = opts.authHeader;
-  } else {
-    headers['Authorization'] = `Bearer ${jwt}`;
   }
-  return new Request('https://worker.example.com/mcp', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
+  const init: RequestInit = { method: 'POST', headers, body: JSON.stringify(body) };
+  return new Request(opts.url ?? URL_PATH, init);
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-describe('/mcp 認証', () => {
-  it('Authorization 無しで 401', async () => {
-    const req = await mcpRequest({ jsonrpc: '2.0', id: 1, method: 'initialize' }, {
-      authHeader: '',
-    });
-    const res = await handleMcp(req, ENV);
-    expect(res.status).toBe(401);
-  });
-
-  it('JWT が不正で 401', async () => {
-    const req = await mcpRequest({ jsonrpc: '2.0', id: 1, method: 'initialize' }, {
-      authHeader: 'Bearer not-a-jwt',
-    });
-    const res = await handleMcp(req, ENV);
-    expect(res.status).toBe(401);
-  });
-
-  it('JWT 署名鍵違いで 401', async () => {
-    const evilJwt = await signJwt(VALID_KINTONE_PAYLOAD, 'different-secret');
-    const req = await mcpRequest({ jsonrpc: '2.0', id: 1, method: 'initialize' }, {
-      authHeader: `Bearer ${evilJwt}`,
-    });
-    const res = await handleMcp(req, ENV);
-    expect(res.status).toBe(401);
-  });
-
-  it('JWT exp 切れで 401', async () => {
-    const expiredJwt = await signJwt(
-      { ...VALID_KINTONE_PAYLOAD, exp: Math.floor(Date.now() / 1000) - 60 },
-      ENV.JWT_HMAC_SECRET,
+describe('handleMcp', () => {
+  it('URL が /mcp/<domain> 形式でないと 404', async () => {
+    const res = await handleMcp(
+      mcpRequest({ jsonrpc: '2.0', method: 'initialize', id: 1 }, { url: 'https://example.com/mcp' }),
     );
-    const req = await mcpRequest({ jsonrpc: '2.0', id: 1, method: 'initialize' }, {
-      authHeader: `Bearer ${expiredJwt}`,
-    });
-    const res = await handleMcp(req, ENV);
+    expect(res.status).toBe(404);
+  });
+
+  it('cybozu.com 以外のドメインは 404', async () => {
+    const res = await handleMcp(
+      mcpRequest(
+        { jsonrpc: '2.0', method: 'initialize', id: 1 },
+        { url: 'https://example.com/mcp/example.com' },
+      ),
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('Authorization ヘッダ無しなら 401', async () => {
+    const res = await handleMcp(
+      mcpRequest({ jsonrpc: '2.0', method: 'initialize', id: 1 }, { authHeader: null }),
+    );
     expect(res.status).toBe(401);
   });
-});
 
-describe('/mcp JSON-RPC', () => {
-  it('initialize で server info / capabilities を返す', async () => {
-    const req = await mcpRequest({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
-    const res = await handleMcp(req, ENV);
+  it('initialize は serverInfo + capabilities を返す', async () => {
+    const res = await handleMcp(mcpRequest({ jsonrpc: '2.0', method: 'initialize', id: 1 }));
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { jsonrpc: string; id: number; result: { serverInfo: unknown; capabilities: unknown } };
-    expect(body.jsonrpc).toBe('2.0');
-    expect(body.id).toBe(1);
-    expect(body.result.serverInfo).toBeDefined();
-    expect(body.result.capabilities).toBeDefined();
+    const json = (await res.json()) as { result: { serverInfo: { name: string }; capabilities: unknown } };
+    expect(json.result.serverInfo.name).toBe('cowork-agent-kintone-mcp');
+    expect(json.result.capabilities).toBeDefined();
   });
 
-  it('tools/list で 4 ツールを返す (Basic 認証)', async () => {
-    const req = await mcpRequest({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
-    const res = await handleMcp(req, ENV);
-    const body = (await res.json()) as { result: { tools: { name: string }[] } };
-    const names = body.result.tools.map((t) => t.name);
-    expect(names).toContain('kintone-get-apps');
-    expect(names).toContain('kintone-get-records');
-    expect(names).toHaveLength(4);
-  });
-
-  it('tools/list で API トークン認証時は kintone-get-apps が除外される', async () => {
-    const apiTokenJwt = await signJwt(
-      {
-        ...VALID_KINTONE_PAYLOAD,
-        kintone: {
-          domain: 'tenant.cybozu.com',
-          auth_type: 'api_token',
-          api_token: 'tok',
-        },
-      },
-      ENV.JWT_HMAC_SECRET,
+  it('tools/list は登録済 4 ツールを返す', async () => {
+    const res = await handleMcp(mcpRequest({ jsonrpc: '2.0', method: 'tools/list', id: 2 }));
+    const json = (await res.json()) as { result: { tools: Array<{ name: string }> } };
+    const names = json.result.tools.map((t) => t.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'kintone-get-apps',
+        'kintone-get-app',
+        'kintone-get-form-fields',
+        'kintone-get-records',
+      ]),
     );
-    const req = new Request('https://worker.example.com/mcp', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiTokenJwt}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-    });
-    const res = await handleMcp(req, ENV);
-    const body = (await res.json()) as { result: { tools: { name: string }[] } };
-    const names = body.result.tools.map((t) => t.name);
-    expect(names).not.toContain('kintone-get-apps');
-    expect(names).toContain('kintone-get-records');
   });
 
-  it('tools/call で対応するツールが起動して結果を返す', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ apps: [{ appId: '1', name: 'X' }] }));
+  it('tools/call kintone-get-apps は URL のドメインに対して Bearer で叩く', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ apps: [{ appId: '1', name: 'App1' }] }), { status: 200 }),
+    );
 
-    const req = await mcpRequest({
-      jsonrpc: '2.0',
-      id: 3,
-      method: 'tools/call',
-      params: { name: 'kintone-get-apps', arguments: { limit: 10 } },
-    });
-    const res = await handleMcp(req, ENV);
+    const res = await handleMcp(
+      mcpRequest({
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        id: 3,
+        params: { name: 'kintone-get-apps', arguments: {} },
+      }),
+    );
 
-    const body = (await res.json()) as {
-      result: { structuredContent: unknown; content: { type: string; text: string }[] };
-    };
-    expect(body.result.content[0]?.type).toBe('text');
-    const text = body.result.content[0]!.text;
-    expect(text).toContain('appId');
+    expect(res.status).toBe(200);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toContain(`https://${DOMAIN}/k/v1/apps.json`);
+    const h = init.headers as Record<string, string>;
+    expect(h['Authorization']).toBe(`Bearer ${BEARER}`);
   });
 
-  it('tools/call で不明なツール名は error を返す', async () => {
-    const req = await mcpRequest({
-      jsonrpc: '2.0',
-      id: 4,
-      method: 'tools/call',
-      params: { name: 'kintone-unknown', arguments: {} },
-    });
-    const res = await handleMcp(req, ENV);
-    const body = (await res.json()) as { error?: { code: number; message: string } };
-    expect(body.error).toBeDefined();
-    expect(body.error?.message).toMatch(/unknown|not found/i);
+  it('別ドメインの URL なら別ドメインに対して叩く', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ apps: [] }), { status: 200 }));
+    await handleMcp(
+      mcpRequest(
+        { jsonrpc: '2.0', method: 'tools/call', id: 4, params: { name: 'kintone-get-apps', arguments: {} } },
+        { url: 'https://example.com/mcp/another.cybozu.com' },
+      ),
+    );
+    const [url] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toContain('https://another.cybozu.com/k/v1/apps.json');
   });
 
-  it('未対応 method は error を返す', async () => {
-    const req = await mcpRequest({ jsonrpc: '2.0', id: 5, method: 'unknown/method' });
-    const res = await handleMcp(req, ENV);
-    const body = (await res.json()) as { error?: { code: number; message: string } };
-    expect(body.error).toBeDefined();
+  it('未知のツール名は -32601', async () => {
+    const res = await handleMcp(
+      mcpRequest({ jsonrpc: '2.0', method: 'tools/call', id: 5, params: { name: 'no-such' } }),
+    );
+    const json = (await res.json()) as { error: { code: number } };
+    expect(json.error.code).toBe(-32601);
   });
 
-  it('JSON parse 失敗で error を返す', async () => {
-    const jwt = await signJwt(VALID_KINTONE_PAYLOAD, ENV.JWT_HMAC_SECRET);
-    const req = new Request('https://worker.example.com/mcp', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
-      body: 'not json',
-    });
-    const res = await handleMcp(req, ENV);
-    const body = (await res.json()) as { error?: { code: number } };
-    expect(body.error).toBeDefined();
+  it('未知の method は -32601', async () => {
+    const res = await handleMcp(mcpRequest({ jsonrpc: '2.0', method: 'unknown', id: 6 }));
+    const json = (await res.json()) as { error: { code: number } };
+    expect(json.error.code).toBe(-32601);
   });
 });

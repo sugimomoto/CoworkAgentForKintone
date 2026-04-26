@@ -1,15 +1,12 @@
-// POST /mcp エンドポイント。
-// Anthropic Managed Agents から Bearer JWT 付きで MCP HTTP transport (JSON-RPC 2.0) で呼ばれる。
+// POST /mcp/:domain エンドポイント (マルチテナント版)。
+// Anthropic Managed Agents から MCP HTTP transport (JSON-RPC 2.0) で呼ばれる。
 //
-// 対応 method:
-//   - initialize     — server info / capabilities を返す
-//   - tools/list     — ツール一覧 (auth_type に応じて除外フィルタ適用)
-//   - tools/call     — 指定ツールを実行
+// URL パス末尾の :domain (例: tenant.cybozu.com) で kintone ドメインを指定する。
+// Authorization: Bearer <kintone_oauth_access_token> をそのまま kintone API
+// リクエストに転送する。Worker は何の env / secret も保持しない。
 
-import type { Env } from './index';
-import { verifyJwt } from './jwt';
+import { jsonResponse, maskToken } from './_http';
 import type { KintoneCreds } from './kintone';
-import { shouldEnableTool } from './server/tool-filters';
 import { tools } from './tools';
 
 const SERVER_INFO = {
@@ -40,18 +37,6 @@ interface JsonRpcError {
   error: { code: number; message: string };
 }
 
-interface JwtKintonePayload {
-  kintone: KintoneCreds;
-  exp?: number;
-}
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
 function rpcSuccess(id: number | string | null, result: unknown): JsonRpcSuccess {
   return { jsonrpc: '2.0', id, result };
 }
@@ -60,21 +45,34 @@ function rpcError(id: number | string | null, code: number, message: string): Js
   return { jsonrpc: '2.0', id, error: { code, message } };
 }
 
-async function authenticate(request: Request, env: Env): Promise<KintoneCreds | null> {
+/** URL `/mcp/<domain>` の domain 部分を取り出す。形式: `<sub>.cybozu.com` 等 */
+function extractDomain(request: Request): string | null {
+  const url = new URL(request.url);
+  const match = url.pathname.match(/^\/mcp\/([a-z0-9.-]+\.(cybozu\.com|kintone\.com|cybozu-dev\.com|cybozu\.cn))$/i);
+  return match ? match[1]! : null;
+}
+
+function authenticate(request: Request, domain: string): KintoneCreds | null {
   const auth = request.headers.get('Authorization');
   if (!auth || !auth.startsWith('Bearer ')) return null;
   const token = auth.slice(7).trim();
   if (token === '') return null;
-  try {
-    const payload = await verifyJwt<JwtKintonePayload>(token, env.JWT_HMAC_SECRET);
-    return payload.kintone;
-  } catch {
-    return null;
-  }
+  return { domain, bearer: token };
 }
 
-export async function handleMcp(request: Request, env: Env): Promise<Response> {
-  const creds = await authenticate(request, env);
+export async function handleMcp(request: Request): Promise<Response> {
+  // 検証用: 受信したヘッダのプレビューをログ
+  const allHeaders: Record<string, string> = {};
+  request.headers.forEach((v, k) => {
+    allHeaders[k] = k.toLowerCase() === 'authorization' ? maskToken(v.replace(/^Bearer /, '')) : v;
+  });
+  console.log('[/mcp] headers:', JSON.stringify(allHeaders));
+
+  const domain = extractDomain(request);
+  if (!domain) {
+    return jsonResponse({ error: 'invalid_path', message: 'Expected /mcp/<sub>.cybozu.com' }, 404);
+  }
+  const creds = authenticate(request, domain);
   if (!creds) {
     return jsonResponse({ error: 'unauthorized' }, 401);
   }
@@ -91,6 +89,7 @@ export async function handleMcp(request: Request, env: Env): Promise<Response> {
   }
 
   const id = req.id ?? null;
+  console.log('[/mcp] method:', req.method);
 
   switch (req.method) {
     case 'initialize':
@@ -103,18 +102,15 @@ export async function handleMcp(request: Request, env: Env): Promise<Response> {
       );
 
     case 'tools/list': {
-      const isApiTokenAuth = creds.auth_type === 'api_token';
-      const enabled = tools
-        .filter((t) => shouldEnableTool(t.name, { isApiTokenAuth }))
-        .map((t) => ({
-          name: t.name,
-          title: t.config.title,
-          description: t.config.description,
-          inputSchema: { type: 'object', properties: t.config.inputSchema },
-          ...(t.config.outputSchema
-            ? { outputSchema: { type: 'object', properties: t.config.outputSchema } }
-            : {}),
-        }));
+      const enabled = tools.map((t) => ({
+        name: t.name,
+        title: t.config.title,
+        description: t.config.description,
+        inputSchema: { type: 'object', properties: t.config.inputSchema },
+        ...(t.config.outputSchema
+          ? { outputSchema: { type: 'object', properties: t.config.outputSchema } }
+          : {}),
+      }));
       return jsonResponse(rpcSuccess(id, { tools: enabled }));
     }
 
@@ -123,10 +119,7 @@ export async function handleMcp(request: Request, env: Env): Promise<Response> {
       if (!params || typeof params.name !== 'string') {
         return jsonResponse(rpcError(id, -32602, 'Invalid params (name is required)'));
       }
-      const isApiTokenAuth = creds.auth_type === 'api_token';
-      const tool = tools.find(
-        (t) => t.name === params.name && shouldEnableTool(t.name, { isApiTokenAuth }),
-      );
+      const tool = tools.find((t) => t.name === params.name);
       if (!tool) {
         return jsonResponse(rpcError(id, -32601, `Unknown tool: ${params.name}`));
       }
@@ -135,7 +128,7 @@ export async function handleMcp(request: Request, env: Env): Promise<Response> {
         return jsonResponse(rpcSuccess(id, result));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        // ツール内エラーは isError: true で MCP に返す (= プロトコル成功、論理エラー)
+        console.log('[/mcp] tool error:', message);
         return jsonResponse(
           rpcSuccess(id, {
             isError: true,

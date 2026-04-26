@@ -13,7 +13,9 @@ import { useCallback, useEffect, useRef } from 'react';
 import { resolveDefaultAgent } from '../../core/bootstrap/resolveAgent';
 import { resolveBootstrapEnvironment } from '../../core/bootstrap/resolveEnvironment';
 import { createUserSession } from '../../core/bootstrap/resolveSession';
+import { getPluginConfig } from '../../core/kintone/pluginConfig';
 import { getCurrentSessionContext } from '../../core/kintone/user';
+import { toErrorMessage } from '../../core/utils';
 import { useChatStore } from '../../store/chatStore';
 
 export interface UseSessionResult {
@@ -47,12 +49,18 @@ export function useSession(): UseSessionResult {
     setStatus('bootstrapping');
     (async () => {
       try {
+        const pluginId = useChatStore.getState().pluginId;
+        const cfg = pluginId ? getPluginConfig(pluginId) : { workerUrl: null };
+        const workerUrl = cfg.workerUrl ?? undefined;
+        const kctx = getCurrentSessionContext();
+
         const [agent, env] = await Promise.all([
-          resolveDefaultAgent(),
+          resolveDefaultAgent(
+            workerUrl ? { workerUrl, kintoneDomain: kctx.kintoneDomain } : {},
+          ),
           resolveBootstrapEnvironment(),
         ]);
         if (cancelled) return;
-        const kctx = getCurrentSessionContext();
         ctxRef.current = {
           agentId: agent.id,
           environmentId: env.id,
@@ -63,7 +71,7 @@ export function useSession(): UseSessionResult {
         setStatus('ready');
       } catch (err) {
         if (cancelled) return;
-        const message = err instanceof Error ? err.message : String(err);
+        const message = toErrorMessage(err);
         const lower = message.toLowerCase();
         const hint =
           lower.includes('failed to fetch') || lower.includes('network')
@@ -88,8 +96,7 @@ export function useSession(): UseSessionResult {
     const ctx = ctxRef.current;
     if (!ctx) throw new Error('bootstrap が完了していません');
 
-    // bound 状態 (Vault Credential 登録済) なら vault_ids を含めて Session 作成。
-    // Environment は bootstrap Env のまま (Phase 1b-2 改訂: ユーザー専用 Env は廃止)。
+    // bound 状態なら vault_ids を含めて Session を作成 (MCP の access_token 解決に必要)
     const useVault =
       state.bindingStatus === 'bound' &&
       state.vaultId !== null &&

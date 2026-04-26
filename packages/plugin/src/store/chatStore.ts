@@ -74,7 +74,7 @@ export interface ChatState {
   setPluginId: (id: string | null) => void;
   /** Vault ID を設定 */
   setVaultId: (id: string | null) => void;
-  /** Vault Credential ID を設定 (Phase 1b-2 改訂で旧 userEnvironmentId から改名) */
+  /** Vault Credential ID を設定 */
   setCredentialId: (id: string | null) => void;
   /** バインディング状態を設定。'error' のときのみ第 2 引数のメッセージを保持する */
   setBindingStatus: (status: BindingStatus, error?: string | null) => void;

@@ -65,6 +65,7 @@ declare global {
       method: string,
       headers: Record<string, string>,
       data: Record<string, unknown>,
+      successCallback?: () => void,
     ): void;
   }
 
@@ -78,6 +79,16 @@ declare global {
     events: KintoneEvents;
     plugin: KintonePlugin;
     api(path: string, method: string, params: unknown): Promise<unknown>;
+    /**
+     * 任意の外部 URL に対する HTTP リクエストを kintone サーバ経由で送る (CORS 回避)。
+     * Plugin 設定画面 / カスタマイズ JS どこからでも呼べる (proxyConfig 不要)。
+     */
+    proxy(
+      url: string,
+      method: string,
+      headers: Record<string, string>,
+      data: string | Record<string, unknown>,
+    ): Promise<[string, number, Record<string, string>]>;
   }
 
   // eslint-disable-next-line no-var

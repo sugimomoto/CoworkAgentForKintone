@@ -52,15 +52,15 @@ const mockFetch = vi.mocked(fetchAllEventsSince);
 const mockPost = vi.mocked(postUserMessage);
 const mockUseUserBinding = vi.mocked(useUserBinding);
 
-const mockBind = vi.fn().mockResolvedValue(undefined);
+const mockConnect = vi.fn().mockResolvedValue(undefined);
 
 function setBootstrapOk(): void {
   mockAgent.mockResolvedValue(makeAgent({ id: 'agent_1' }));
   mockEnv.mockResolvedValue(makeEnv({ id: 'env_1' }));
 }
 
-function setBindingStatus(status: 'bound' | 'unbound' | 'binding' | 'error' | 'unknown' | 'checking'): void {
-  mockUseUserBinding.mockReturnValue({ status, bind: mockBind });
+function setBindingStatus(status: 'bound' | 'unbound' | 'binding' | 'error' | 'unknown' | 'checking', error: string | null = null): void {
+  mockUseUserBinding.mockReturnValue({ status, error, connect: mockConnect });
 }
 
 beforeEach(() => {
@@ -75,8 +75,8 @@ beforeEach(() => {
   mockFetch.mockResolvedValue([]);
   mockPost.mockResolvedValue(undefined);
   mockListSessions.mockResolvedValue([]);
-  mockBind.mockReset();
-  mockBind.mockResolvedValue(undefined);
+  mockConnect.mockReset();
+  mockConnect.mockResolvedValue(undefined);
   // 既存テストは「バインド済」前提で書かれているのでデフォルト bound にする。
   // unbound / cancel をテストする箇所では個別に上書き。
   setBindingStatus('bound');
@@ -233,54 +233,41 @@ describe('ChatPanel', () => {
     });
   });
 
-  it('bindingStatus=unbound で送信すると CredentialDialog が開き、postUserMessage は呼ばれない', async () => {
+  it('bindingStatus=unbound で Composer の代わりに ConnectKintoneButton が表示され、postUserMessage は呼ばれない', async () => {
     setBootstrapOk();
     setBindingStatus('unbound');
 
-    const user = userEvent.setup();
     render(<ChatPanel />);
     await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
 
-    await user.type(screen.getByRole('textbox'), 'こんにちは{Enter}');
-
-    expect(await screen.findByTestId('credential-dialog')).toBeInTheDocument();
+    expect(await screen.findByTestId('connect-kintone')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).toBeNull();
     expect(mockCreateSession).not.toHaveBeenCalled();
     expect(mockPost).not.toHaveBeenCalled();
   });
 
-  it('CredentialDialog のキャンセルでオプティミスティック追加分が削除される', async () => {
+  it('bindingStatus=error で再試行ボタンが表示される', async () => {
     setBootstrapOk();
-    setBindingStatus('unbound');
+    setBindingStatus('error', 'auth failed');
 
-    const user = userEvent.setup();
     render(<ChatPanel />);
     await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
 
-    await user.type(screen.getByRole('textbox'), 'やあ{Enter}');
-    expect(await screen.findByTestId('credential-dialog')).toBeInTheDocument();
-
-    // 楽観追加された user メッセージと pending thinking が存在
-    expect(useChatStore.getState().messages.length).toBe(2);
-
-    await user.click(screen.getByRole('button', { name: 'キャンセル' }));
-
-    // 削除されている
-    expect(useChatStore.getState().messages.length).toBe(0);
-    expect(screen.queryByTestId('credential-dialog')).toBeNull();
+    expect(await screen.findByTestId('connect-kintone-error')).toBeInTheDocument();
+    expect(screen.getByText(/auth failed/)).toBeInTheDocument();
   });
 
-  it('Header の設定アイコンで CredentialDialog を再オープンできる', async () => {
+  it('Header の設定アイコンクリックで onSettingsClick が呼ばれる', async () => {
     setBootstrapOk();
     setBindingStatus('bound');
 
+    const onSettingsClick = vi.fn();
     const user = userEvent.setup();
-    render(<ChatPanel />);
+    render(<ChatPanel onSettingsClick={onSettingsClick} />);
     await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
 
-    expect(screen.queryByTestId('credential-dialog')).toBeNull();
-
     await user.click(screen.getByLabelText('設定'));
-    expect(screen.getByTestId('credential-dialog')).toBeInTheDocument();
+    expect(onSettingsClick).toHaveBeenCalled();
   });
 
   it('Header の新規会話ボタンで startNewConversation が呼ばれる (sessionId と messages がクリアされる)', async () => {

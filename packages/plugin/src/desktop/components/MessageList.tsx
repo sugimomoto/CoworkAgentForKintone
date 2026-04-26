@@ -1,7 +1,6 @@
 // Cowork Agent for kintone — メッセージ一覧
 //
 // kind 別に対応するコンポーネントへ振り分ける。
-// Phase 1a では user / agent / thinking のみ。tool / plan / progress / result は Phase 1b で追加。
 
 import { AgentMessage } from './MessageItem/AgentMessage';
 import { ThinkingDots } from './MessageItem/ThinkingDots';
