@@ -8,12 +8,7 @@ import { getApps } from '../../src/tools/get-apps';
 import { getFormFields } from '../../src/tools/get-form-fields';
 import { getRecords } from '../../src/tools/get-records';
 
-import type { KintoneCreds } from '../../src/kintone';
-
-const CREDS: KintoneCreds = {
-  domain: 'tenant.cybozu.com',
-  bearer: 'oauth-access-token',
-};
+import { TEST_CREDS as CREDS, jsonResponse } from './_helpers';
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -25,13 +20,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
 });
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
 
 describe('kintone-get-apps', () => {
   it('name / spaceIds などのパラメータが付与される', async () => {

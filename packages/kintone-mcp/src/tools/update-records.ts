@@ -1,7 +1,7 @@
-// kintone-update-records: 複数件更新 (1 リクエストで最大 100 件)。
-
 import { kintoneRequest } from '../kintone';
 import { createTool } from './factory';
+import { appIdSchema, updateKeySchema } from './utils/schemas';
+import { assertIdOrUpdateKey, assertMaxBatch } from './utils/validators';
 
 interface UpdateEntry {
   id?: string;
@@ -15,15 +15,17 @@ interface Args {
   records: UpdateEntry[];
 }
 
+const TOOL = 'kintone-update-records';
+
 export const updateRecords = createTool<Args>(
-  'kintone-update-records',
+  TOOL,
   {
     title: 'Update Records',
     description:
       'Update multiple records in a single request (up to 100). Each entry takes either `id` or `updateKey`. ' +
       'Returns { records: [{ id, revision }, ...] }.',
     inputSchema: {
-      app: { type: 'string' },
+      app: appIdSchema,
       records: {
         type: 'array',
         description: 'Array of update entries (max 100).',
@@ -32,13 +34,7 @@ export const updateRecords = createTool<Args>(
           type: 'object',
           properties: {
             id: { type: 'string' },
-            updateKey: {
-              type: 'object',
-              properties: {
-                field: { type: 'string' },
-                value: { type: 'string' },
-              },
-            },
+            updateKey: updateKeySchema,
             record: { type: 'object' },
             revision: { type: 'string' },
           },
@@ -48,16 +44,8 @@ export const updateRecords = createTool<Args>(
     outputSchema: { records: { type: 'array' } },
   },
   async (args, { creds }) => {
-    if (args.records.length > 100) {
-      throw new Error(
-        `kintone-update-records: max 100 records per request (got ${args.records.length})`,
-      );
-    }
-    for (const e of args.records) {
-      if (!e.id && !e.updateKey) {
-        throw new Error('kintone-update-records: each entry needs id or updateKey');
-      }
-    }
+    assertMaxBatch(TOOL, args.records);
+    for (const e of args.records) assertIdOrUpdateKey(TOOL, e);
     const result = (await kintoneRequest(creds, 'PUT', '/k/v1/records.json', {
       body: { app: args.app, records: args.records },
     })) as { records: Array<{ id: string; revision: string }> };

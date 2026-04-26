@@ -10,12 +10,7 @@ import { deleteRecords } from '../../src/tools/delete-records';
 import { updateRecord } from '../../src/tools/update-record';
 import { updateRecords } from '../../src/tools/update-records';
 
-import type { KintoneCreds } from '../../src/kintone';
-
-const CREDS: KintoneCreds = {
-  domain: 'tenant.cybozu.com',
-  bearer: 'oauth-access-token',
-};
+import { TEST_CREDS as CREDS, jsonResponse } from './_helpers';
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -27,13 +22,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
 });
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
 
 describe('kintone-add-record', () => {
   it('POST /k/v1/record.json + body = {app, record}', async () => {
@@ -188,6 +176,24 @@ describe('kintone-update-records', () => {
       /max 100/,
     );
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('id と updateKey 両方指定のエントリがあれば例外', async () => {
+    await expect(
+      updateRecords.callback(
+        {
+          app: '1',
+          records: [
+            {
+              id: '1',
+              updateKey: { field: 'code', value: 'ABC' },
+              record: { x: { value: 'y' } },
+            },
+          ],
+        },
+        { creds: CREDS },
+      ),
+    ).rejects.toThrow(/exclusive/);
   });
 });
 

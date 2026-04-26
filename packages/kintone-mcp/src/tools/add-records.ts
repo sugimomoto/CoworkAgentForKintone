@@ -1,22 +1,24 @@
-// kintone-add-records: 複数件追加 (1 リクエストで最大 100 件)。
-
 import { kintoneRequest } from '../kintone';
 import { createTool } from './factory';
+import { appIdSchema } from './utils/schemas';
+import { assertMaxBatch } from './utils/validators';
 
 interface Args {
   app: string;
   records: Array<Record<string, { value: unknown }>>;
 }
 
+const TOOL = 'kintone-add-records';
+
 export const addRecords = createTool<Args>(
-  'kintone-add-records',
+  TOOL,
   {
     title: 'Add Records',
     description:
       'Add multiple records to a kintone app in a single request (up to 100). ' +
       'Returns { ids[], revisions[] }. For larger batches, call this tool repeatedly.',
     inputSchema: {
-      app: { type: 'string', description: 'App ID (numeric value as string)' },
+      app: appIdSchema,
       records: {
         type: 'array',
         description: 'Array of records (max 100). Each record is the same shape as kintone-add-record.',
@@ -30,9 +32,7 @@ export const addRecords = createTool<Args>(
     },
   },
   async (args, { creds }) => {
-    if (args.records.length > 100) {
-      throw new Error(`kintone-add-records: max 100 records per request (got ${args.records.length})`);
-    }
+    assertMaxBatch(TOOL, args.records);
     const result = (await kintoneRequest(creds, 'POST', '/k/v1/records.json', {
       body: { app: args.app, records: args.records },
     })) as { ids: string[]; revisions: string[] };

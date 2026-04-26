@@ -31,3 +31,6 @@ export const tools: Array<Tool<any>> = [
   deleteRecords,
   addRecordComment,
 ];
+
+/** 全ツール名 (Anthropic Agent の mcp_toolset.configs に渡す用) */
+export const TOOL_NAMES: readonly string[] = tools.map((t) => t.name);

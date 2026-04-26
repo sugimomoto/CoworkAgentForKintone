@@ -1,9 +1,6 @@
-// kintone-add-record-comment: レコードへコメント追加。
-//
-// アプリ設定でコメント機能が有効である必要がある。
-
 import { kintoneRequest } from '../kintone';
 import { createTool } from './factory';
+import { appIdSchema } from './utils/schemas';
 
 interface Mention {
   /** kintone code (USER) / グループ code (GROUP) / 組織 code (ORGANIZATION) */
@@ -13,7 +10,6 @@ interface Mention {
 
 interface Args {
   app: string;
-  /** 対象レコード ID (string) */
   record: string;
   comment: {
     text: string;
@@ -29,7 +25,7 @@ export const addRecordComment = createTool<Args>(
       'Add a comment to a record. Supports mentions (USER / GROUP / ORGANIZATION). ' +
       'Returns { id } of the new comment. The app must have the comment feature enabled.',
     inputSchema: {
-      app: { type: 'string' },
+      app: appIdSchema,
       record: { type: 'string', description: 'Target record ID' },
       comment: {
         type: 'object',
