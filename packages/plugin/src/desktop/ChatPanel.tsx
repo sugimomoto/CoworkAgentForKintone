@@ -117,11 +117,15 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
     async (toolUseId: string) => {
       const sid = sessionId;
       if (!sid) return;
-      updateTool(toolUseId, { status: 'error', errorText: '却下しました' });
+      updateTool(toolUseId, { status: 'rejected', errorText: undefined });
       try {
-        await postToolConfirmation(sid, toolUseId, 'deny', 'ユーザが却下しました');
+        await postToolConfirmation(
+          sid,
+          toolUseId,
+          'deny',
+          'ユーザがこのツール呼び出しを却下しました。再試行はせず、次の指示を待ってください。',
+        );
       } catch {
-        // 失敗時は pending-confirmation に戻すが、先に書いた errorText もクリアする
         updateTool(toolUseId, { status: 'pending-confirmation', errorText: undefined });
       }
     },

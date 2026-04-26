@@ -187,6 +187,27 @@ describe('ToolCardMessage', () => {
       render(<ToolCardMessage message={make({ status: 'success' })} onRetry={vi.fn()} />);
       expect(screen.queryByRole('button', { name: 'もう一度試す' })).toBeNull();
     });
+
+    it('rejected 時は onRetry を渡しても出ない', () => {
+      render(<ToolCardMessage message={make({ status: 'rejected' })} onRetry={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: 'もう一度試す' })).toBeNull();
+    });
+  });
+
+  describe('rejected 状態', () => {
+    it('rejected は data-tool-status=rejected + 「キャンセル」表示', () => {
+      const { container } = render(<ToolCardMessage message={make({ status: 'rejected' })} />);
+      const card = container.querySelector('[data-tool-status]');
+      expect(card?.getAttribute('data-tool-status')).toBe('rejected');
+      expect(screen.getByText('キャンセル')).toBeTruthy();
+      expect(screen.getByText(/キャンセルされました/)).toBeTruthy();
+    });
+
+    it('rejected 時は承認/却下ボタンは出ない', () => {
+      render(<ToolCardMessage message={make({ status: 'rejected' })} onApprove={vi.fn()} onReject={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: '承認' })).toBeNull();
+      expect(screen.queryByRole('button', { name: '却下' })).toBeNull();
+    });
   });
 
   describe('承認 / 却下ボタン', () => {

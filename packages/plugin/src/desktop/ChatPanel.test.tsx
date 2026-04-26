@@ -502,12 +502,17 @@ describe('ChatPanel', () => {
       const rejectBtn = await screen.findByRole('button', { name: '却下' });
       await user.click(rejectBtn);
 
-      expect(mockPostToolConfirmation).toHaveBeenCalledWith('sess_1', 'tu_2', 'deny', 'ユーザが却下しました');
+      expect(mockPostToolConfirmation).toHaveBeenCalledWith(
+        'sess_1',
+        'tu_2',
+        'deny',
+        expect.stringMatching(/却下/),
+      );
       const m = useChatStore.getState().messages.find((x) => x.id === 'tu_2')!;
       expect(m.kind).toBe('tool');
       if (m.kind === 'tool') {
-        expect(m.status).toBe('error');
-        expect(m.errorText).toBe('却下しました');
+        // 却下時は `error` ではなく `rejected` 状態 (retry ボタンを出さない)
+        expect(m.status).toBe('rejected');
       }
     });
 

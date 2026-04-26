@@ -33,6 +33,11 @@ const STATUS_STYLES: Record<ToolMessage['status'], { wrap: string; label: string
     label: 'text-amber-900',
     icon: '?',
   },
+  rejected: {
+    wrap: 'border-border bg-surface-2',
+    label: 'text-text-muted',
+    icon: '✕',
+  },
 };
 
 const STATUS_TEXT: Record<ToolMessage['status'], string> = {
@@ -40,6 +45,7 @@ const STATUS_TEXT: Record<ToolMessage['status'], string> = {
   success: '完了',
   error: '失敗',
   'pending-confirmation': '承認が必要',
+  rejected: 'キャンセル',
 };
 
 export function ToolCardMessage({
@@ -80,6 +86,12 @@ export function ToolCardMessage({
 
       {message.status === 'error' && message.errorText && (
         <div className="text-[11px] text-red-700">{truncate(message.errorText, 200)}</div>
+      )}
+
+      {message.status === 'rejected' && (
+        <div className="text-[11px] text-text-muted">
+          このツール呼び出しはキャンセルされました。
+        </div>
       )}
 
       {(message.input !== undefined || message.result !== undefined) && (

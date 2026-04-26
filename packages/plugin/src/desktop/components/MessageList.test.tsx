@@ -49,4 +49,35 @@ describe('MessageList', () => {
     const { container } = render(<MessageList messages={messages} />);
     expect(container.querySelectorAll('[data-msg]')).toHaveLength(0);
   });
+
+  describe('「もう一度試す」ボタンは最後の error tool カードにのみ出す', () => {
+    it('error が複数あっても retry ボタンは最後の 1 つだけ', () => {
+      const messages: ChatMessage[] = [
+        { id: 'tu_1', kind: 'tool', name: 'kintone-add-record', input: {}, status: 'error', errorText: 'oops 1' },
+        { id: 'tu_2', kind: 'tool', name: 'kintone-update-record', input: {}, status: 'error', errorText: 'oops 2' },
+      ];
+      render(<MessageList messages={messages} onRetryTool={() => undefined} />);
+      const buttons = screen.queryAllByRole('button', { name: 'もう一度試す' });
+      expect(buttons).toHaveLength(1);
+    });
+
+    it('error より新しい success/running があっても、最後の error にのみ表示', () => {
+      const messages: ChatMessage[] = [
+        { id: 'tu_e', kind: 'tool', name: 'kintone-add-record', input: {}, status: 'error' },
+        { id: 'tu_s', kind: 'tool', name: 'kintone-get-records', input: {}, status: 'success' },
+      ];
+      render(<MessageList messages={messages} onRetryTool={() => undefined} />);
+      // 直近の error が tu_e、それより後にも tool カードはあるが error は tu_e だけ → tu_e に retry が出る
+      expect(screen.queryAllByRole('button', { name: 'もう一度試す' })).toHaveLength(1);
+    });
+
+    it('error が無ければ retry ボタンは出ない', () => {
+      const messages: ChatMessage[] = [
+        { id: 'tu_s', kind: 'tool', name: 'x', input: {}, status: 'success' },
+        { id: 'tu_r', kind: 'tool', name: 'x', input: {}, status: 'rejected' },
+      ];
+      render(<MessageList messages={messages} onRetryTool={() => undefined} />);
+      expect(screen.queryAllByRole('button', { name: 'もう一度試す' })).toHaveLength(0);
+    });
+  });
 });

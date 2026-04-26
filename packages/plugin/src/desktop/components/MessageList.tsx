@@ -7,7 +7,7 @@ import { ThinkingDots } from './MessageItem/ThinkingDots';
 import { ToolCardMessage } from './MessageItem/ToolCardMessage';
 import { UserMessage } from './MessageItem/UserMessage';
 
-export type ToolStatus = 'running' | 'success' | 'error' | 'pending-confirmation';
+export type ToolStatus = 'running' | 'success' | 'error' | 'pending-confirmation' | 'rejected';
 
 export interface ToolMessage {
   /** tool_use_id をそのまま使う (後続 tool_result の突合キー) */
@@ -41,10 +41,27 @@ export interface MessageListProps {
 }
 
 export function MessageList({ messages, onApproveTool, onRejectTool, onRetryTool }: MessageListProps): JSX.Element {
+  // 「もう一度試す」ボタンは履歴の中で **最後の error tool カード** にだけ出す。
+  // (複数 error が積み上がってもボタンは 1 つだけ → 連打 / 混乱を防ぐ)
+  let lastErrorToolId: string | null = null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m && m.kind === 'tool' && m.status === 'error') {
+      lastErrorToolId = m.id;
+      break;
+    }
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-[14px] overflow-y-auto overscroll-contain px-[16px] py-[18px]">
       {messages.map((m) => {
-        const rendered = renderMessage(m, onApproveTool, onRejectTool, onRetryTool);
+        const showRetry = m.kind === 'tool' && m.id === lastErrorToolId;
+        const rendered = renderMessage(
+          m,
+          onApproveTool,
+          onRejectTool,
+          showRetry ? onRetryTool : undefined,
+        );
         if (!rendered) return null;
         return (
           <div key={m.id} data-msg data-msg-kind={m.kind}>
