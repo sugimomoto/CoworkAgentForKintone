@@ -72,6 +72,15 @@ function setBindingStatus(status: 'bound' | 'unbound' | 'binding' | 'error' | 'u
   mockUseUserBinding.mockReturnValue({ status, error, connect: mockConnect });
 }
 
+/**
+ * mid-session 状態 (sessionId + 1 件以上のメッセージ) を render 前にセットする。
+ * 「会話途中で起きた事象」(OAuth 失効バナー / terminated バナー / tool retry 等) のテスト用。
+ */
+function seedMidSession(sessionId = 'sess_1'): void {
+  useChatStore.getState().setSessionId(sessionId);
+  useChatStore.getState().addMessage({ id: 'm-seed', kind: 'user', text: 'seed' });
+}
+
 beforeEach(() => {
   useChatStore.getState().reset();
   _resetResolveDefaultAgentCache();
@@ -362,10 +371,7 @@ describe('ChatPanel', () => {
     it('mid-session (session 有り) で bindingStatus=error なら再連携バナーが出る', async () => {
       setBootstrapOk();
       setBindingStatus('error', 'token expired');
-
-      // mid-session 状態を render 前にセット
-      useChatStore.getState().setSessionId('sess_1');
-      useChatStore.getState().addMessage({ id: 'm1', kind: 'user', text: 'x' });
+      seedMidSession();
 
       render(<ChatPanel />);
       await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));

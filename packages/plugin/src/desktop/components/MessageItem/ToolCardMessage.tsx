@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useElapsedSeconds } from '../../hooks/useElapsedSeconds';
 
 import type { ToolMessage } from '../MessageList';
 
@@ -10,23 +10,6 @@ export interface ToolCardMessageProps {
   onReject?: (toolUseId: string) => void;
   /** 失敗時の再試行依頼 (error のみ) */
   onRetry?: (toolUseId: string) => void;
-}
-
-/** running 状態の経過秒数を 1s 刻みで返すフック */
-function useElapsedSeconds(active: boolean): number {
-  const [seconds, setSeconds] = useState(0);
-  useEffect(() => {
-    if (!active) {
-      setSeconds(0);
-      return;
-    }
-    const startedAt = Date.now();
-    const id = setInterval(() => {
-      setSeconds(Math.floor((Date.now() - startedAt) / 1000));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [active]);
-  return seconds;
 }
 
 const STATUS_STYLES: Record<ToolMessage['status'], { wrap: string; label: string; icon: string }> = {

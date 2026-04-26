@@ -18,13 +18,18 @@ export interface BannerProps {
   testId?: string;
 }
 
+/**
+ * tone ごとのスタイル。
+ * warn: ボタンを次行 (mt-*) — 設定 CTA 等の重い動線で目線を縦に動かす
+ * info: ボタンを同行 (ml-*) — 軽い案内 + 1 タップで完結する動線
+ */
 const TONE_CLASS: Record<BannerTone, string> = {
   warn: 'border-b border-border bg-warn-soft px-[14px] py-[10px] text-[12px] text-warn',
   info: 'border-b border-border bg-amber-50 px-[14px] py-[8px] text-[12px] text-amber-900',
 };
 
 const BUTTON_CLASS: Record<BannerTone, string> = {
-  warn: 'mt-[6px] rounded border border-warn px-[10px] py-[3px] text-[11px] text-warn hover:bg-warn/10',
+  warn: 'mt-[6px] block rounded border border-warn px-[10px] py-[3px] text-[11px] text-warn hover:bg-warn/10',
   info: 'ml-[8px] rounded border border-amber-700 px-[8px] py-[2px] text-[11px] text-amber-800 hover:bg-amber-100',
 };
 
@@ -37,7 +42,7 @@ export function Banner({
 }: BannerProps): JSX.Element {
   return (
     <div className={TONE_CLASS[tone]} {...(testId ? { 'data-banner': testId } : {})}>
-      {tone === 'warn' ? <div>{children}</div> : <>{children}</>}
+      <span>{children}</span>
       {actionLabel && onAction && (
         <button type="button" onClick={onAction} className={BUTTON_CLASS[tone]}>
           {actionLabel}
