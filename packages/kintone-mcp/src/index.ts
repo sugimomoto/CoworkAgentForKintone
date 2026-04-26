@@ -6,6 +6,9 @@
 //
 // 詳細は packages/kintone-mcp/README.md を参照。
 
+import { handleMcp } from './mcp';
+import { handleMint } from './mint';
+
 export interface Env {
   /** JWT 署名・検証に使う HMAC-SHA256 秘密鍵 (Worker 内部のみ) */
   JWT_HMAC_SECRET: string;
@@ -14,17 +17,20 @@ export interface Env {
 }
 
 export default {
-  async fetch(request: Request, _env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // M9 で実装: /mint と /mcp ルーティング
     if (url.pathname === '/mint' && request.method === 'POST') {
-      return new Response('Not Implemented (M4)', { status: 501 });
+      return handleMint(request, env);
     }
     if (url.pathname === '/mcp' && request.method === 'POST') {
-      return new Response('Not Implemented (M8)', { status: 501 });
+      return handleMcp(request, env);
     }
 
+    // Health check / 405
+    if (url.pathname === '/' || url.pathname === '/healthz') {
+      return new Response('OK', { status: 200 });
+    }
     return new Response('Not Found', { status: 404 });
   },
 } satisfies ExportedHandler<Env>;
