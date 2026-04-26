@@ -152,16 +152,30 @@ describe('interpretEvent', () => {
     });
   });
 
-  it('session.status_idle + tool_confirmation_required を update-tool (pending-confirmation) に変換', () => {
+  it('session.status_idle + requires_action を update-tool (pending-confirmation) に変換 (実 API 仕様)', () => {
     const evt: SessionEvent = {
       id: 'evt_idle_1',
       type: 'session.status_idle',
-      stop_reason: { type: 'tool_confirmation_required', event_ids: ['tu_3'] },
+      stop_reason: { type: 'requires_action', event_ids: ['tu_3'] },
       processed_at: '...',
     };
     expect(interpretEvent(evt)).toEqual({
       kind: 'update-tool',
       toolUseId: 'tu_3',
+      patch: { status: 'pending-confirmation' },
+    });
+  });
+
+  it('session.status_idle + tool_confirmation_required も同様に処理 (docs の名称も許容)', () => {
+    const evt: SessionEvent = {
+      id: 'evt_idle_1b',
+      type: 'session.status_idle',
+      stop_reason: { type: 'tool_confirmation_required', event_ids: ['tu_3b'] },
+      processed_at: '...',
+    };
+    expect(interpretEvent(evt)).toEqual({
+      kind: 'update-tool',
+      toolUseId: 'tu_3b',
       patch: { status: 'pending-confirmation' },
     });
   });
@@ -176,11 +190,11 @@ describe('interpretEvent', () => {
     expect(interpretEvent(evt)).toBeNull();
   });
 
-  it('session.status_idle + tool_confirmation_required で event_ids 空配列は null', () => {
+  it('session.status_idle + requires_action で event_ids 空配列は null', () => {
     const evt: SessionEvent = {
       id: 'evt_idle_3',
       type: 'session.status_idle',
-      stop_reason: { type: 'tool_confirmation_required', event_ids: [] },
+      stop_reason: { type: 'requires_action', event_ids: [] },
       processed_at: '...',
     };
     expect(interpretEvent(evt)).toBeNull();

@@ -64,7 +64,11 @@ export function interpretEvent(event: SessionEvent): InterpretedEvent {
     }
     case 'session.status_idle': {
       const e = event as Extract<SessionEvent, { type: 'session.status_idle' }>;
-      if (e.stop_reason.type !== 'tool_confirmation_required') return null;
+      // 承認待ちの stop_reason は実 API では `requires_action` で来る (docs の
+      // `tool_confirmation_required` は記載通りの名前ではなかった)。両方を許容して
+      // 将来 API が揃った場合にも対応できるようにする。
+      const stopType = e.stop_reason.type;
+      if (stopType !== 'requires_action' && stopType !== 'tool_confirmation_required') return null;
       const ids = e.stop_reason.event_ids;
       if (!Array.isArray(ids) || ids.length === 0) return null;
       // 複数 pending は events stream 上通常 1 件のため最初の 1 件のみ処理。
