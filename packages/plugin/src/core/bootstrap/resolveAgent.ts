@@ -20,6 +20,31 @@ import type { Agent } from '../managed-agents/types';
 /** Default Agent の表示名 (functional-design.md §3.1.3) */
 export const DEFAULT_AGENT_NAME = 'Cowork Agent - Default';
 
+/**
+ * system プロンプトのリビジョン番号。プロンプト本文を変更したらこの値を上げる。
+ * metadata に含めるので、旧プロンプトの Agent は別物として扱われ、新規 Agent が作成される。
+ */
+export const DEFAULT_AGENT_PROMPT_VERSION = 'v4';
+
+/**
+ * MCP toolset で公開するツール名一覧 (configs を per-tool で指定するため)。
+ *
+ * 真のソースは [packages/kintone-mcp/src/tools/index.ts](../../../../kintone-mcp/src/tools/index.ts) の
+ * `TOOL_NAMES`。プラグインは別バンドルなので import せず手動同期する。ツール追加時は両方を更新すること。
+ */
+const KINTONE_TOOL_NAMES = [
+  'kintone-get-apps',
+  'kintone-get-app',
+  'kintone-get-form-fields',
+  'kintone-get-records',
+  'kintone-add-record',
+  'kintone-add-records',
+  'kintone-update-record',
+  'kintone-update-records',
+  'kintone-delete-records',
+  'kintone-add-record-comment',
+] as const;
+
 /** Default Agent の system プロンプト */
 export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   'あなたは kintone の業務支援エージェント Cowork Agent です。',
@@ -65,6 +90,9 @@ function buildAgentTools(includeMcp: boolean): Array<Record<string, unknown>> {
     },
   ];
   if (includeMcp) {
+    // Anthropic 側で MCP の write 系ツールが default_config の always_allow を伝播しない
+    // ことがあるため、各ツールに per-tool で configs を明示する。
+    // configs は { name, enabled, permission_policy } の配列形式 (object map ではない)。
     tools.push({
       type: 'mcp_toolset',
       mcp_server_name: KINTONE_MCP_SERVER_NAME,
@@ -72,6 +100,11 @@ function buildAgentTools(includeMcp: boolean): Array<Record<string, unknown>> {
         enabled: true,
         permission_policy: { type: 'always_allow' },
       },
+      configs: KINTONE_TOOL_NAMES.map((name) => ({
+        name,
+        enabled: true,
+        permission_policy: { type: 'always_allow' as const },
+      })),
     });
   }
   return tools;
@@ -137,6 +170,7 @@ async function doResolve(options: ResolveDefaultAgentOptions): Promise<Agent> {
   const filter: Record<string, string> = {
     source: METADATA_SOURCE,
     type: AGENT_TYPE.default,
+    promptVersion: DEFAULT_AGENT_PROMPT_VERSION,
   };
   if (includeMcp) {
     filter['workerUrl'] = options.workerUrl!;
