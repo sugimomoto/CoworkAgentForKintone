@@ -1,0 +1,22 @@
+{
+  "name": "@cowork-agent/kintone-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker that bridges Anthropic Managed Agents (MCP) to kintone REST API",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "secret:put": "wrangler secret put"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240909.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.9",
+    "wrangler": "^3.78.0"
+  }
+}

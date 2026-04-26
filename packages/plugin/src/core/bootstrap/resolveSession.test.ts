@@ -48,6 +48,31 @@ describe('createUserSession', () => {
   });
 });
 
+describe('createUserSession (vault_ids)', () => {
+  it('vaultId を指定すると vault_ids: [vaultId] が POST body に含まれる', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(makeSession({ id: 'sess_v' }), 201));
+
+    await createUserSession({
+      ...CTX,
+      vaultId: 'vault_x',
+    });
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.vault_ids).toEqual(['vault_x']);
+  });
+
+  it('vaultId 未指定なら vault_ids は body に含まれない (alpha 互換)', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(makeSession(), 201));
+
+    await createUserSession(CTX);
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.vault_ids).toBeUndefined();
+  });
+});
+
 describe('listUserSessions', () => {
   it('agent_id + order=desc + limit=100 で listSessions を呼ぶ', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ data: [], next_page: null }));

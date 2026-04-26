@@ -15,6 +15,8 @@ export interface SessionContext {
   environmentId: string;
   kintoneDomain: string;
   kintoneUserCode: string;
+  /** ユーザー Vault ID。指定された場合 vault_ids: [vaultId] で Session が作られる。 */
+  vaultId?: string;
 }
 
 export type ListUserSessionsContext = Pick<
@@ -37,6 +39,7 @@ export async function createUserSession(ctx: SessionContext): Promise<Session> {
   return await createSession({
     agent: ctx.agentId,
     environment_id: ctx.environmentId,
+    ...(ctx.vaultId ? { vault_ids: [ctx.vaultId] } : {}),
     title: makeInitialTitle(),
     metadata: {
       source: METADATA_SOURCE,

@@ -152,6 +152,53 @@ describe('useSession.ensureSession', () => {
   });
 });
 
+describe('useSession.ensureSession (Phase 1b-2 改訂: vault_ids 注入)', () => {
+  it('bindingStatus=bound + vaultId + credentialId が揃っているとき、bootstrap env + vaultId が createUserSession に渡る', async () => {
+    mockResolveAgent.mockResolvedValue(agentForTest());
+    mockResolveEnv.mockResolvedValue(envForTest());
+    mockCreateSession.mockResolvedValue(sessionForTest('sess_user'));
+
+    const { result } = renderHook(() => useSession());
+    await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+    useChatStore.getState().setVaultId('vault_x');
+    useChatStore.getState().setCredentialId('cred_x');
+    useChatStore.getState().setBindingStatus('bound');
+
+    await act(async () => {
+      await result.current.ensureSession();
+    });
+
+    expect(mockCreateSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        // Phase 1b-2 改訂: ユーザー専用 Env は廃止、bootstrap Env のまま
+        environmentId: 'env_1',
+        vaultId: 'vault_x',
+      }),
+    );
+  });
+
+  it('bindingStatus=unbound のときは bootstrap env で作成 (vaultId 未指定)', async () => {
+    mockResolveAgent.mockResolvedValue(agentForTest());
+    mockResolveEnv.mockResolvedValue(envForTest());
+    mockCreateSession.mockResolvedValue(sessionForTest('sess_boot'));
+
+    const { result } = renderHook(() => useSession());
+    await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+    // bindingStatus はデフォルト 'unknown'。'unbound' をシミュレート
+    useChatStore.getState().setBindingStatus('unbound');
+
+    await act(async () => {
+      await result.current.ensureSession();
+    });
+
+    const lastCall = mockCreateSession.mock.calls.at(-1)!;
+    expect(lastCall[0]).not.toHaveProperty('vaultId');
+    expect(lastCall[0].environmentId).toBe('env_1'); // bootstrap env
+  });
+});
+
 describe('useSession.selectSession / startNewConversation', () => {
   it('selectSession は messages をクリアして sessionId を切替える', async () => {
     mockResolveAgent.mockResolvedValue(agentForTest());

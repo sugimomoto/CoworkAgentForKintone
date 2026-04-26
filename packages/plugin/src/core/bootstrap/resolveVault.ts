@@ -12,7 +12,6 @@ import {
   filterByMetadata,
   listVaults,
   pickOldest,
-  setVaultKeys,
 } from '../managed-agents/resources';
 
 import type { Vault } from '../managed-agents/types';
@@ -52,21 +51,6 @@ export async function resolveUserVault(ctx: VaultContext): Promise<Vault> {
   })();
 
   return inFlightResolve;
-}
-
-/**
- * Vault に kintone の認証情報を upsert する (3 キー: DOMAIN/LOGIN/PASSWORD)。
- * 既存値がある場合は上書きされる (Vault の仕様)。
- */
-export async function setVaultCredentials(
-  vaultId: string,
-  creds: { domain: string; login: string; password: string },
-): Promise<void> {
-  await setVaultKeys(vaultId, {
-    KINTONE_DOMAIN: creds.domain,
-    KINTONE_LOGIN: creds.login,
-    KINTONE_PASSWORD: creds.password,
-  });
 }
 
 /** テスト用に in-flight キャッシュを reset する。 */

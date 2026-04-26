@@ -22,11 +22,20 @@ export default defineConfig({
     timezoneId: 'Asia/Tokyo',
   },
 
-  // ログイン処理を 1 回だけ走らせて storageState を共有
+  // ログイン → kintone 認証バインドを順に実行してから本テスト
   projects: [
     {
-      name: 'setup',
+      name: 'auth-setup',
       testMatch: /auth\.setup\.ts/,
+    },
+    {
+      name: 'bind-setup',
+      testMatch: /credential-bind\.setup\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: '.auth/kintone.json',
+      },
+      dependencies: ['auth-setup'],
     },
     {
       name: 'chromium',
@@ -34,7 +43,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         storageState: '.auth/kintone.json',
       },
-      dependencies: ['setup'],
+      dependencies: ['bind-setup'],
     },
   ],
 });

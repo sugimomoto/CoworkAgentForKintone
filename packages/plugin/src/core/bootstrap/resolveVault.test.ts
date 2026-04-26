@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { jsonResponse, makeVault } from '../../test/fixtures';
 
-import { _resetResolveUserVaultCache, resolveUserVault, setVaultCredentials } from './resolveVault';
+import { _resetResolveUserVaultCache, resolveUserVault } from './resolveVault';
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -129,26 +129,4 @@ describe('resolveUserVault', () => {
   });
 });
 
-describe('setVaultCredentials', () => {
-  it('3 キー (DOMAIN/LOGIN/PASSWORD) を upsert する', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(makeVault(), 200));
-
-    await setVaultCredentials('vault_x', {
-      domain: 'example.cybozu.com',
-      login: 'sato',
-      password: 'p4ss',
-    });
-
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe('https://api.anthropic.com/v1/vaults/vault_x/keys');
-    expect((init as RequestInit).method).toBe('POST');
-    const body = JSON.parse((init as RequestInit).body as string);
-    expect(body).toEqual({
-      keys: {
-        KINTONE_DOMAIN: 'example.cybozu.com',
-        KINTONE_LOGIN: 'sato',
-        KINTONE_PASSWORD: 'p4ss',
-      },
-    });
-  });
-});
+// setVaultCredentials は Phase 1b-2 改訂で削除 (createVaultCredential に置換、P1 で実装)

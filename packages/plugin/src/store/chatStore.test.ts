@@ -80,20 +80,20 @@ describe('chatStore', () => {
   });
 
   describe('binding', () => {
-    it('初期値は bindingStatus="unknown" / vaultId=null / userEnvironmentId=null / bindingError=null', () => {
+    it('初期値は bindingStatus="unknown" / vaultId=null / credentialId=null / bindingError=null', () => {
       const s = useChatStore.getState();
       expect(s.bindingStatus).toBe('unknown');
       expect(s.vaultId).toBeNull();
-      expect(s.userEnvironmentId).toBeNull();
+      expect(s.credentialId).toBeNull();
       expect(s.bindingError).toBeNull();
     });
 
-    it('setVaultId / setUserEnvironmentId で値を設定できる', () => {
+    it('setVaultId / setCredentialId で値を設定できる', () => {
       useChatStore.getState().setVaultId('vault_x');
-      useChatStore.getState().setUserEnvironmentId('env_x');
+      useChatStore.getState().setCredentialId('env_x');
       const s = useChatStore.getState();
       expect(s.vaultId).toBe('vault_x');
-      expect(s.userEnvironmentId).toBe('env_x');
+      expect(s.credentialId).toBe('env_x');
     });
 
     it('setBindingStatus("error", msg) でエラーメッセージが保持される', () => {
@@ -111,12 +111,12 @@ describe('chatStore', () => {
 
     it('reset() で binding 状態も初期化される', () => {
       useChatStore.getState().setVaultId('v1');
-      useChatStore.getState().setUserEnvironmentId('e1');
+      useChatStore.getState().setCredentialId('e1');
       useChatStore.getState().setBindingStatus('bound');
       useChatStore.getState().reset();
       const s = useChatStore.getState();
       expect(s.vaultId).toBeNull();
-      expect(s.userEnvironmentId).toBeNull();
+      expect(s.credentialId).toBeNull();
       expect(s.bindingStatus).toBe('unknown');
     });
   });

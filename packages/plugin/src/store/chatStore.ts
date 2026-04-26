@@ -18,7 +18,7 @@ export type ChatView = 'chat' | 'history';
  * - checking: listVaults / listEnvironments 検索中
  * - unbound: 未バインド (CredentialDialog で入力が必要)
  * - binding: bind() 進行中
- * - bound: 完了 (vaultId / userEnvironmentId が store に揃っている)
+ * - bound: 完了 (vaultId / credentialId が store に揃っている)
  * - error: 検索 or 作成で失敗
  */
 export type BindingStatus =
@@ -39,7 +39,7 @@ export interface ChatState {
   /** ユーザー Vault の ID。bind 完了まで null */
   vaultId: string | null;
   /** ユーザー専用 Environment の ID。bind 完了まで null */
-  userEnvironmentId: string | null;
+  credentialId: string | null;
   /** ユーザー (Vault + Environment) のバインディング状態 */
   bindingStatus: BindingStatus;
   /** bindingStatus === 'error' のときのエラーメッセージ */
@@ -70,8 +70,8 @@ export interface ChatState {
   setAgentId: (id: string | null) => void;
   /** Vault ID を設定 */
   setVaultId: (id: string | null) => void;
-  /** ユーザー Environment ID を設定 */
-  setUserEnvironmentId: (id: string | null) => void;
+  /** Vault Credential ID を設定 (Phase 1b-2 改訂で旧 userEnvironmentId から改名) */
+  setCredentialId: (id: string | null) => void;
   /** バインディング状態を設定。'error' のときのみ第 2 引数のメッセージを保持する */
   setBindingStatus: (status: BindingStatus, error?: string | null) => void;
   /** Status を設定。error 時のみ 2 番目の引数で詳細を渡す */
@@ -96,7 +96,7 @@ const INITIAL_STATE = {
   sessionId: null,
   agentId: null,
   vaultId: null,
-  userEnvironmentId: null,
+  credentialId: null,
   bindingStatus: 'unknown' as BindingStatus,
   bindingError: null,
   status: 'idle' as ChatStatus,
@@ -143,7 +143,7 @@ export const useChatStore = create<ChatState>((set) => ({
 
   setVaultId: (id) => set({ vaultId: id }),
 
-  setUserEnvironmentId: (id) => set({ userEnvironmentId: id }),
+  setCredentialId: (id) => set({ credentialId: id }),
 
   setBindingStatus: (status, error = null) =>
     set({ bindingStatus: status, bindingError: status === 'error' ? error : null }),

@@ -38,26 +38,8 @@ export const AGENT_TYPE = {
 
 // ----- kintone ヘルパーライブラリ -------------------------------------------
 //
-// Managed Agents の Environment コンテナにインストールする Python パッケージ。
-// alpha 段階では GitHub Release 添付 wheel を直接 URL 指定で pip install する
-// (リポジトリが Public なため認証不要)。
-
-/** kintone ヘルパー Python パッケージ名 */
-export const HELPER_PACKAGE_NAME = 'cowork-agent-kintone' as const;
-
-/** ヘルパーパッケージのバージョン (helper-v* タグと連動) */
-export const HELPER_VERSION = '0.1.0a3' as const;
-
-/**
- * Environment 構築時に `packages.pip` に渡す wheel URL。
- * pip は wheel URL を package specifier として直接受け付けるので、
- * --extra-index-url 等の補助設定は不要。
- */
-export const HELPER_WHEEL_URL =
-  `https://github.com/sugimomoto/CoworkAgentForKintone/releases/download/helper-v${HELPER_VERSION}/cowork_agent_kintone-${HELPER_VERSION}-py3-none-any.whl` as const;
-
-/**
- * pip が wheel をダウンロードする際にアクセスするホスト群。
- * `allowed_hosts` に kintone ドメインと併せて追加する。
- */
-export const HELPER_DOWNLOAD_HOSTS = ['github.com', 'objects.githubusercontent.com'] as const;
+// Phase 1b-1 で Python パッケージ (cowork-agent-kintone) を helper-v* タグで配布したが、
+// Phase 1b-2 (改訂) では Remote MCP (Cloudflare Workers) 方式に切替えたため、
+// Environment への pip install は廃止。helper パッケージは Pattern A 用途で残置。
+// 関連定数 (HELPER_PACKAGE_NAME / HELPER_VERSION / HELPER_WHEEL_URL / HELPER_DOWNLOAD_HOSTS)
+// は Phase 1b-2 改訂で削除。Phase 1c 以降で必要になれば復活させる。

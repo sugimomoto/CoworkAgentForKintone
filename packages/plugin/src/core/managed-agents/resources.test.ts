@@ -14,7 +14,6 @@ import {
   listVaults,
   retrieveAgent,
   retrieveSession,
-  setVaultKeys,
 } from './resources';
 
 import type { Agent, Environment, ListResponse, Session, Vault } from './types';
@@ -139,26 +138,7 @@ describe('Vaults', () => {
     expect(init.body).toBe(JSON.stringify(params));
   });
 
-  it('setVaultKeys は POST /v1/vaults/{id}/keys に { keys: ... } body を送る', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ id: 'vault_1', type: 'vault' }, 200));
-    await setVaultKeys('vault_1', {
-      KINTONE_DOMAIN: 'example.cybozu.com',
-      KINTONE_LOGIN: 'sato',
-      KINTONE_PASSWORD: 'p4ss',
-    });
-    const url = fetchMock.mock.calls[0]![0] as string;
-    expect(url).toBe('https://api.anthropic.com/v1/vaults/vault_1/keys');
-    const init = fetchMock.mock.calls[0]![1] as RequestInit;
-    expect(init.method).toBe('POST');
-    const body = JSON.parse(init.body as string);
-    expect(body).toEqual({
-      keys: {
-        KINTONE_DOMAIN: 'example.cybozu.com',
-        KINTONE_LOGIN: 'sato',
-        KINTONE_PASSWORD: 'p4ss',
-      },
-    });
-  });
+  // setVaultKeys テストは削除 (Phase 1b-2 改訂で createVaultCredential に置換、P1 で再追加)
 });
 
 describe('Sessions', () => {

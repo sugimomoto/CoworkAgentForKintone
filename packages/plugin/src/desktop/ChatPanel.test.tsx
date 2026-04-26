@@ -32,11 +32,17 @@ vi.mock('../core/managed-agents/events', async (importOriginal) => ({
   fetchAllEventsSince: vi.fn(),
   postUserMessage: vi.fn(),
 }));
+// useUserBinding は副作用 (listVaults / listEnvironments) を持つため、ChatPanel の
+// テストでは明示的にモック化して bindingStatus / bind を直接コントロールする。
+vi.mock('./hooks/useUserBinding', () => ({
+  useUserBinding: vi.fn(),
+}));
 
 import { resolveDefaultAgent } from '../core/bootstrap/resolveAgent';
 import { resolveBootstrapEnvironment } from '../core/bootstrap/resolveEnvironment';
 import { createUserSession, listUserSessions } from '../core/bootstrap/resolveSession';
 import { fetchAllEventsSince, postUserMessage } from '../core/managed-agents/events';
+import { useUserBinding } from './hooks/useUserBinding';
 
 const mockAgent = vi.mocked(resolveDefaultAgent);
 const mockEnv = vi.mocked(resolveBootstrapEnvironment);
@@ -44,10 +50,17 @@ const mockCreateSession = vi.mocked(createUserSession);
 const mockListSessions = vi.mocked(listUserSessions);
 const mockFetch = vi.mocked(fetchAllEventsSince);
 const mockPost = vi.mocked(postUserMessage);
+const mockUseUserBinding = vi.mocked(useUserBinding);
+
+const mockBind = vi.fn().mockResolvedValue(undefined);
 
 function setBootstrapOk(): void {
   mockAgent.mockResolvedValue(makeAgent({ id: 'agent_1' }));
   mockEnv.mockResolvedValue(makeEnv({ id: 'env_1' }));
+}
+
+function setBindingStatus(status: 'bound' | 'unbound' | 'binding' | 'error' | 'unknown' | 'checking'): void {
+  mockUseUserBinding.mockReturnValue({ status, bind: mockBind });
 }
 
 beforeEach(() => {
@@ -62,6 +75,11 @@ beforeEach(() => {
   mockFetch.mockResolvedValue([]);
   mockPost.mockResolvedValue(undefined);
   mockListSessions.mockResolvedValue([]);
+  mockBind.mockReset();
+  mockBind.mockResolvedValue(undefined);
+  // 既存テストは「バインド済」前提で書かれているのでデフォルト bound にする。
+  // unbound / cancel をテストする箇所では個別に上書き。
+  setBindingStatus('bound');
 });
 
 afterEach(() => {
@@ -213,6 +231,56 @@ describe('ChatPanel', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('welcome-message')).toBeNull();
     });
+  });
+
+  it('bindingStatus=unbound で送信すると CredentialDialog が開き、postUserMessage は呼ばれない', async () => {
+    setBootstrapOk();
+    setBindingStatus('unbound');
+
+    const user = userEvent.setup();
+    render(<ChatPanel />);
+    await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+    await user.type(screen.getByRole('textbox'), 'こんにちは{Enter}');
+
+    expect(await screen.findByTestId('credential-dialog')).toBeInTheDocument();
+    expect(mockCreateSession).not.toHaveBeenCalled();
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('CredentialDialog のキャンセルでオプティミスティック追加分が削除される', async () => {
+    setBootstrapOk();
+    setBindingStatus('unbound');
+
+    const user = userEvent.setup();
+    render(<ChatPanel />);
+    await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+    await user.type(screen.getByRole('textbox'), 'やあ{Enter}');
+    expect(await screen.findByTestId('credential-dialog')).toBeInTheDocument();
+
+    // 楽観追加された user メッセージと pending thinking が存在
+    expect(useChatStore.getState().messages.length).toBe(2);
+
+    await user.click(screen.getByRole('button', { name: 'キャンセル' }));
+
+    // 削除されている
+    expect(useChatStore.getState().messages.length).toBe(0);
+    expect(screen.queryByTestId('credential-dialog')).toBeNull();
+  });
+
+  it('Header の設定アイコンで CredentialDialog を再オープンできる', async () => {
+    setBootstrapOk();
+    setBindingStatus('bound');
+
+    const user = userEvent.setup();
+    render(<ChatPanel />);
+    await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+    expect(screen.queryByTestId('credential-dialog')).toBeNull();
+
+    await user.click(screen.getByLabelText('設定'));
+    expect(screen.getByTestId('credential-dialog')).toBeInTheDocument();
   });
 
   it('Header の新規会話ボタンで startNewConversation が呼ばれる (sessionId と messages がクリアされる)', async () => {

@@ -1,0 +1,17 @@
+# Cloudflare Workers 設定 — cowork-agent-kintone-mcp
+#
+# Deploy 手順:
+#   1. wrangler login
+#   2. wrangler secret put JWT_HMAC_SECRET   (32 バイト以上のランダム値)
+#   3. wrangler secret put MINT_API_KEY      (32 バイト以上のランダム値)
+#   4. wrangler deploy
+#
+# secrets はリポジトリに含めない (このファイルには値を書かない)。
+# admin が Plugin 設定画面で MINT_API_KEY を入力するのと同じ値を Worker secret として登録する。
+
+name = "cowork-agent-kintone-mcp"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+
+# Workers の標準 fetch ハンドラを使う。Node.js 互換は不要 (Web Crypto + fetch のみ)。
+# compatibility_flags = ["nodejs_compat"]   ← 不要 (依存ライブラリは pure Web API)

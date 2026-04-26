@@ -80,16 +80,32 @@ export function useSession(): UseSessionResult {
   }, [setStatus, setAgentId]);
 
   const ensureSession = useCallback(async (): Promise<string> => {
-    const existing = useChatStore.getState().sessionId;
+    const state = useChatStore.getState();
+    const existing = state.sessionId;
     if (existing) return existing;
     if (inFlightRef.current) return inFlightRef.current;
 
     const ctx = ctxRef.current;
     if (!ctx) throw new Error('bootstrap が完了していません');
 
+    // bound 状態 (Vault Credential 登録済) なら vault_ids を含めて Session 作成。
+    // Environment は bootstrap Env のまま (Phase 1b-2 改訂: ユーザー専用 Env は廃止)。
+    const useVault =
+      state.bindingStatus === 'bound' &&
+      state.vaultId !== null &&
+      state.credentialId !== null;
+    const environmentId = ctx.environmentId;
+    const vaultId = useVault ? state.vaultId! : undefined;
+
     const p = (async (): Promise<string> => {
       try {
-        const session = await createUserSession(ctx);
+        const session = await createUserSession({
+          agentId: ctx.agentId,
+          environmentId,
+          kintoneDomain: ctx.kintoneDomain,
+          kintoneUserCode: ctx.kintoneUserCode,
+          ...(vaultId ? { vaultId } : {}),
+        });
         setSessionId(session.id);
         return session.id;
       } finally {
