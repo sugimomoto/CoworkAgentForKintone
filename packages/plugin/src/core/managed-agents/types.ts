@@ -152,6 +152,15 @@ export type SessionEvent =
       is_error?: boolean;
       processed_at: string;
     }
+  | { type: 'agent.mcp_tool_use'; id: string; name: string; input: unknown; processed_at: string }
+  | {
+      type: 'agent.mcp_tool_result';
+      id: string;
+      tool_use_id: string;
+      content?: unknown;
+      is_error?: boolean;
+      processed_at: string;
+    }
   | {
       type: 'session.status_idle';
       id: string;

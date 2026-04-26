@@ -26,8 +26,11 @@ export function interpretEvent(event: SessionEvent): InterpretedEvent {
     }
     case 'agent.thinking':
       return { kind: 'add', message: { id: event.id, kind: 'thinking' } };
-    case 'agent.tool_use': {
-      const e = event as Extract<SessionEvent, { type: 'agent.tool_use' }>;
+    // 組み込みツール (agent_toolset_20260401: bash/read/write 等) と
+    // MCP ツール (kintone-* 等) は別イベント名で来るが、payload は同型なので同じ扱い。
+    case 'agent.tool_use':
+    case 'agent.mcp_tool_use': {
+      const e = event as Extract<SessionEvent, { type: 'agent.tool_use' | 'agent.mcp_tool_use' }>;
       return {
         kind: 'add',
         message: {
@@ -39,8 +42,12 @@ export function interpretEvent(event: SessionEvent): InterpretedEvent {
         },
       };
     }
-    case 'agent.tool_result': {
-      const e = event as Extract<SessionEvent, { type: 'agent.tool_result' }>;
+    case 'agent.tool_result':
+    case 'agent.mcp_tool_result': {
+      const e = event as Extract<
+        SessionEvent,
+        { type: 'agent.tool_result' | 'agent.mcp_tool_result' }
+      >;
       const isError = e.is_error === true;
       return {
         kind: 'update-tool',

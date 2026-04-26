@@ -39,6 +39,60 @@ describe('interpretEvent', () => {
     });
   });
 
+  it('agent.mcp_tool_use を tool kind (running) の add に変換 (kintone MCP)', () => {
+    const evt = {
+      id: 'mtu_1',
+      type: 'agent.mcp_tool_use',
+      name: 'kintone-get-apps',
+      input: { name: '顧客' },
+      processed_at: '...',
+    } as unknown as SessionEvent;
+    expect(interpretEvent(evt)).toEqual({
+      kind: 'add',
+      message: {
+        id: 'mtu_1',
+        kind: 'tool',
+        name: 'kintone-get-apps',
+        input: { name: '顧客' },
+        status: 'running',
+      },
+    });
+  });
+
+  it('agent.mcp_tool_result (success) を update-tool に変換', () => {
+    const evt = {
+      id: 'evt_mr1',
+      type: 'agent.mcp_tool_result',
+      tool_use_id: 'mtu_1',
+      content: [{ type: 'text', text: '{"apps":[]}' }],
+      processed_at: '...',
+    } as unknown as SessionEvent;
+    expect(interpretEvent(evt)).toEqual({
+      kind: 'update-tool',
+      toolUseId: 'mtu_1',
+      patch: {
+        status: 'success',
+        result: [{ type: 'text', text: '{"apps":[]}' }],
+      },
+    });
+  });
+
+  it('agent.mcp_tool_result (is_error=true) を update-tool (error) に変換', () => {
+    const evt = {
+      id: 'evt_mr2',
+      type: 'agent.mcp_tool_result',
+      tool_use_id: 'mtu_2',
+      is_error: true,
+      content: [{ type: 'text', text: 'kintone API: app not found' }],
+      processed_at: '...',
+    } as unknown as SessionEvent;
+    expect(interpretEvent(evt)).toMatchObject({
+      kind: 'update-tool',
+      toolUseId: 'mtu_2',
+      patch: { status: 'error', errorText: 'kintone API: app not found' },
+    });
+  });
+
   it('agent.tool_use を tool kind (running) の add に変換', () => {
     const evt = {
       id: 'tu_1',
