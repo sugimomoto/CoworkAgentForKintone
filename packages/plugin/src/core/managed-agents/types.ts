@@ -65,6 +65,40 @@ export interface Vault {
   type: 'vault';
 }
 
+/**
+ * Vault Credential の auth 設定。
+ * - static_bearer: 固定 Bearer トークン (kintone-mcp の MCP server 用に使う)
+ * - mcp_oauth: 将来用 (本 Phase では未使用)
+ */
+export type VaultCredentialAuth =
+  | {
+      type: 'static_bearer';
+      mcp_server_url: string;
+      /** 書込み専用。create / update リクエスト body にだけ含む。レスポンスでは返らない */
+      token?: string;
+    }
+  | {
+      type: 'mcp_oauth';
+      mcp_server_url: string;
+      access_token?: string;
+      expires_at?: string;
+      // 簡易宣言。Phase 1c 以降で必要なら詳細化
+    };
+
+/** Vault Credential リソース (シークレット値はレスポンスに返らない) */
+export interface VaultCredential {
+  id: string;
+  vault_id: string;
+  display_name: string;
+  /** auth.type と mcp_server_url のみ含む。token / access_token は write-only */
+  auth: VaultCredentialAuth;
+  metadata?: ManagedAgentsMetadata;
+  created_at: string;
+  updated_at: string;
+  archived_at?: string | null;
+  type: 'credential';
+}
+
 /** Session リソース */
 export interface Session {
   id: string;

@@ -1,32 +1,33 @@
 // Cowork Agent for kintone — kintone 認証情報入力ダイアログ
 //
-// 未バインディング状態のときに最初の送信で開く。Vault に保存する 3 値
-// (KINTONE_DOMAIN / LOGIN / PASSWORD) を入力させ、onSubmit で useUserBinding.bind
-// にハンドオフする。
+// 未バインディング状態のときに最初の送信で開く。
+// Phase 1b-2 改訂: domain は kintone JS API で自動取得 (read-only)、login のみ
+// kintone.getLoginUser().code で初期値、password は必須入力。
+// onSubmit({login, password}) で useUserBinding.bind にハンドオフ。
 
 import { useEffect, useId, useState } from 'react';
 
 export interface CredentialDialogProps {
   /** 開閉状態。true で表示、false で何も描画しない。 */
   open: boolean;
-  /** domain 入力欄の既定値 (kintone セッションコンテキストから取得) */
-  initialDomain?: string;
+  /** kintone ドメイン (read-only 表示)。kintone JS API で自動取得した値を渡す */
+  domain: string;
+  /** ログイン名の初期値 (kintone.getLoginUser().code 等)。空の場合は空欄から開始 */
+  initialLogin?: string;
   /** 「登録」押下時に呼ばれる。Promise 中はボタン disabled + スピナー表示 */
-  onSubmit: (values: { domain: string; login: string; password: string }) => Promise<void>;
+  onSubmit: (values: { login: string; password: string }) => Promise<void>;
   /** キャンセル / ESC / 背景クリック時に呼ばれる */
   onClose: () => void;
 }
 
-const DOMAIN_RE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
-
 export function CredentialDialog({
   open,
-  initialDomain = '',
+  domain,
+  initialLogin = '',
   onSubmit,
   onClose,
 }: CredentialDialogProps): JSX.Element | null {
-  const [domain, setDomain] = useState(initialDomain);
-  const [login, setLogin] = useState('');
+  const [login, setLogin] = useState(initialLogin);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -37,16 +38,15 @@ export function CredentialDialog({
   const loginId = useId();
   const passwordId = useId();
 
-  // 開いた瞬間に初期値で reset (前回失敗値が残らないように)
+  // 開いた瞬間に初期値で reset
   useEffect(() => {
     if (open) {
-      setDomain(initialDomain);
-      setLogin('');
+      setLogin(initialLogin);
       setPassword('');
       setShowPassword(false);
       setError(null);
     }
-  }, [open, initialDomain]);
+  }, [open, initialLogin]);
 
   // ESC で閉じる
   useEffect(() => {
@@ -60,9 +60,8 @@ export function CredentialDialog({
 
   if (!open) return null;
 
-  const domainValid = DOMAIN_RE.test(domain);
-  const allFilled = domain.trim() !== '' && login.trim() !== '' && password.trim() !== '';
-  const canSubmit = !submitting && allFilled && domainValid;
+  const allFilled = login.trim() !== '' && password.trim() !== '';
+  const canSubmit = !submitting && allFilled;
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -70,7 +69,7 @@ export function CredentialDialog({
     setSubmitting(true);
     setError(null);
     try {
-      await onSubmit({ domain: domain.trim(), login: login.trim(), password });
+      await onSubmit({ login: login.trim(), password });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -113,18 +112,14 @@ export function CredentialDialog({
               id={domainId}
               type="text"
               value={domain}
-              onChange={(e) => setDomain(e.target.value)}
-              disabled={submitting}
-              placeholder="example.cybozu.com"
-              autoComplete="off"
-              spellCheck={false}
-              className="rounded-[8px] border border-border bg-card px-[10px] py-[8px] text-[13px] text-text outline-none focus:border-accent disabled:opacity-50"
+              readOnly
+              aria-readonly="true"
+              tabIndex={-1}
+              className="rounded-[8px] border border-border bg-bg px-[10px] py-[8px] text-[13px] text-muted outline-none cursor-not-allowed"
             />
-            {!domainValid && domain.length > 0 && (
-              <span className="text-[11px] text-warn">
-                ドメイン形式が不正です (例: example.cybozu.com)
-              </span>
-            )}
+            <span className="text-[10px] text-subtle">
+              現在の kintone セッションのドメインから自動取得
+            </span>
           </label>
 
           <label className="flex flex-col gap-[4px] text-[12px] text-text" htmlFor={loginId}>

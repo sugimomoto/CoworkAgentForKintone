@@ -11,9 +11,13 @@ import {
   listAll,
   listEnvironments,
   listSessions,
+  listVaultCredentials,
   listVaults,
   retrieveAgent,
   retrieveSession,
+  archiveVaultCredential,
+  createVaultCredential,
+  updateVaultCredential,
 } from './resources';
 
 import type { Agent, Environment, ListResponse, Session, Vault } from './types';
@@ -138,7 +142,61 @@ describe('Vaults', () => {
     expect(init.body).toBe(JSON.stringify(params));
   });
 
-  // setVaultKeys テストは削除 (Phase 1b-2 改訂で createVaultCredential に置換、P1 で再追加)
+});
+
+describe('Vault Credentials', () => {
+  it('listVaultCredentials は GET /v1/vaults/{id}/credentials を呼ぶ', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: [], next_page: null }));
+    await listVaultCredentials('vault_1');
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      'https://api.anthropic.com/v1/vaults/vault_1/credentials',
+    );
+  });
+
+  it('createVaultCredential は static_bearer 形式の auth を POST する', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ id: 'cred_1', vault_id: 'vault_1', type: 'credential' }, 201),
+    );
+    const result = await createVaultCredential('vault_1', {
+      display_name: 'kintone (sato@x.cybozu.com)',
+      auth: {
+        type: 'static_bearer',
+        mcp_server_url: 'https://worker.example.com/mcp',
+        token: 'jwt-token-xxx',
+      },
+    });
+    expect(result.id).toBe('cred_1');
+
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('https://api.anthropic.com/v1/vaults/vault_1/credentials');
+    expect((init as RequestInit).method).toBe('POST');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.auth.type).toBe('static_bearer');
+    expect(body.auth.mcp_server_url).toBe('https://worker.example.com/mcp');
+    expect(body.auth.token).toBe('jwt-token-xxx');
+  });
+
+  it('updateVaultCredential は POST /v1/vaults/{id}/credentials/{cred_id} で auth を更新', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ id: 'cred_1', vault_id: 'vault_1', type: 'credential' }),
+    );
+    await updateVaultCredential('vault_1', 'cred_1', {
+      auth: { type: 'static_bearer', mcp_server_url: 'https://x.com/mcp', token: 'new-jwt' },
+    });
+
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('https://api.anthropic.com/v1/vaults/vault_1/credentials/cred_1');
+    expect((init as RequestInit).method).toBe('POST');
+  });
+
+  it('archiveVaultCredential は POST /v1/vaults/{id}/credentials/{cred_id}/archive', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}, 200));
+    await archiveVaultCredential('vault_1', 'cred_1');
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      'https://api.anthropic.com/v1/vaults/vault_1/credentials/cred_1/archive',
+    );
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).method).toBe('POST');
+  });
 });
 
 describe('Sessions', () => {

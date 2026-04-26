@@ -15,6 +15,8 @@ import type {
   PackagesConfig,
   Session,
   Vault,
+  VaultCredential,
+  VaultCredentialAuth,
 } from './types';
 
 // ----- 共通 -----------------------------------------------------------------
@@ -131,6 +133,61 @@ export function createVault(params: CreateVaultParams): Promise<Vault> {
 
 export function retrieveVault(id: string): Promise<Vault> {
   return get<Vault>(`/v1/vaults/${id}`);
+}
+
+// ----- Vault Credentials ----------------------------------------------------
+//
+// 1 Vault に対して 1 mcp_server_url につき 1 credential。
+// 同じ URL で 2 個目を作ろうとすると 409。
+// secret (token / access_token / refresh_token) は write-only。
+
+export interface CreateVaultCredentialParams {
+  display_name: string;
+  auth: VaultCredentialAuth;
+  metadata?: ManagedAgentsMetadata;
+}
+
+export interface UpdateVaultCredentialParams {
+  /** auth は部分更新可。mcp_server_url / token_endpoint / client_id は不変 (作成後ロック) */
+  auth?: Partial<VaultCredentialAuth>;
+  display_name?: string;
+}
+
+export function listVaultCredentials(vaultId: string): Promise<ListResponse<VaultCredential>> {
+  return get<ListResponse<VaultCredential>>(`/v1/vaults/${vaultId}/credentials`);
+}
+
+export function createVaultCredential(
+  vaultId: string,
+  params: CreateVaultCredentialParams,
+): Promise<VaultCredential> {
+  return post<VaultCredential>(`/v1/vaults/${vaultId}/credentials`, params);
+}
+
+export async function updateVaultCredential(
+  vaultId: string,
+  credentialId: string,
+  params: UpdateVaultCredentialParams,
+): Promise<VaultCredential> {
+  // Anthropic API は POST で update を受け付ける (公式ドキュメントの例より)
+  // ただし PATCH の可能性もあるため、実装時に切替えやすくしておく。
+  const result = await apiRequest<VaultCredential>(
+    'POST',
+    `/v1/vaults/${vaultId}/credentials/${credentialId}`,
+    params,
+  );
+  if (result === null) {
+    throw new Error(`Unexpected null response from updateVaultCredential ${credentialId}`);
+  }
+  return result;
+}
+
+export async function archiveVaultCredential(vaultId: string, credentialId: string): Promise<void> {
+  await apiRequest<unknown>(
+    'POST',
+    `/v1/vaults/${vaultId}/credentials/${credentialId}/archive`,
+    {},
+  );
 }
 
 // ----- Sessions -------------------------------------------------------------

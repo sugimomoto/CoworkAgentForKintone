@@ -77,7 +77,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   );
 
   const handleBindSubmit = useCallback(
-    async (values: { domain: string; login: string; password: string }) => {
+    async (values: { login: string; password: string }) => {
       await bind(values);
       // bind 成功 → ダイアログ閉じる + 保留テキストを送信
       setCredentialDialogOpen(false);
@@ -137,14 +137,16 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
           ? 'エラー'
           : '待機';
 
-  // CredentialDialog の domain 既定値は kintone セッションコンテキストから
-  const initialDomain = (() => {
+  // CredentialDialog 用: kintone JS API から domain と login の初期値を自動取得
+  const kctxFallback = (() => {
     try {
-      return getCurrentSessionContext().kintoneDomain;
+      return getCurrentSessionContext();
     } catch {
-      return '';
+      return { kintoneDomain: '', kintoneUserCode: '' };
     }
   })();
+  const dialogDomain = kctxFallback.kintoneDomain;
+  const dialogInitialLogin = kctxFallback.kintoneUserCode;
 
   return (
     <div className="cowork-agent-root flex h-full flex-col bg-bg">
@@ -178,7 +180,8 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
 
       <CredentialDialog
         open={credentialDialogOpen}
-        initialDomain={initialDomain}
+        domain={dialogDomain}
+        initialLogin={dialogInitialLogin}
         onSubmit={handleBindSubmit}
         onClose={handleBindCancel}
       />

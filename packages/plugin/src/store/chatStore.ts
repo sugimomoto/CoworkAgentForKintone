@@ -36,6 +36,8 @@ export interface ChatState {
   sessionId: string | null;
   /** Default Agent の ID。bootstrap 完了まで null */
   agentId: string | null;
+  /** kintone プラグイン ID (起動時に固定される)。kintone proxy 呼出時の第 1 引数 */
+  pluginId: string | null;
   /** ユーザー Vault の ID。bind 完了まで null */
   vaultId: string | null;
   /** ユーザー専用 Environment の ID。bind 完了まで null */
@@ -68,6 +70,8 @@ export interface ChatState {
   setSessionId: (id: string | null) => void;
   /** Agent ID を設定 (bootstrap で解決後に呼ぶ) */
   setAgentId: (id: string | null) => void;
+  /** Plugin ID を設定 (mount 時に固定する) */
+  setPluginId: (id: string | null) => void;
   /** Vault ID を設定 */
   setVaultId: (id: string | null) => void;
   /** Vault Credential ID を設定 (Phase 1b-2 改訂で旧 userEnvironmentId から改名) */
@@ -95,6 +99,7 @@ const INITIAL_STATE = {
   messages: [],
   sessionId: null,
   agentId: null,
+  pluginId: null,
   vaultId: null,
   credentialId: null,
   bindingStatus: 'unknown' as BindingStatus,
@@ -140,6 +145,8 @@ export const useChatStore = create<ChatState>((set) => ({
   setSessionId: (id) => set({ sessionId: id }),
 
   setAgentId: (id) => set({ agentId: id }),
+
+  setPluginId: (id) => set({ pluginId: id }),
 
   setVaultId: (id) => set({ vaultId: id }),
 

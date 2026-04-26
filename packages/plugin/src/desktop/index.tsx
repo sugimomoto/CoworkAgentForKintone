@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 
 import { createKintoneProxyTransport } from '../core/kintone/proxyTransport';
 import { setTransport } from '../core/managed-agents/client';
+import { useChatStore } from '../store/chatStore';
 
 import { App } from './App';
 
@@ -31,6 +32,9 @@ function mountRoot(): HTMLElement {
     // x-api-key は ConfigScreen で setProxyConfig 登録された固定ヘッダとして
     // kintone runtime が自動注入するため、JS 側からは渡さない。
     setTransport(createKintoneProxyTransport(PLUGIN_ID));
+    // Plugin ID を store に保存。useUserBinding が /mint 呼出時に kintone proxy の
+    // 第 1 引数として使う。
+    useChatStore.getState().setPluginId(PLUGIN_ID);
   }
 
   kintone.events.on('app.record.index.show', (event) => {

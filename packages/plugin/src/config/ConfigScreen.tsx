@@ -1,11 +1,12 @@
-// Cowork Agent for kintone — プラグイン設定画面
+// Cowork Agent for kintone — プラグイン設定画面 (admin 専用)
 //
-// 管理者が Anthropic API Key を入力すると、kintone.plugin.app.setProxyConfig で
-// Anthropic API URL に対する固定ヘッダ (x-api-key) として登録される。
-// API Key 自体はプラグイン設定領域には保存しない (登録済みマーカーのみ)。
+// 管理者が以下を入力する:
+//   1. Anthropic API Key  → setProxyConfig (https://api.anthropic.com/)
+//   2. MCP Worker URL     → setConfig (通常 config、URL 自体は秘匿性低)
+//   3. MINT_API_KEY       → setProxyConfig (Worker /mint URL 宛 POST の Bearer)
 //
-// セキュリティ: 登録後、API Key はブラウザ JS から参照不可になる。
-// kintone.plugin.app.proxy 呼び出し時に kintone runtime が自動付与する。
+// secret 系 (1, 3) は setProxyConfig 経由で kintone runtime に隠蔽。
+// end-user JS から `getConfig` / `getProxyConfig` で値を読出不可。
 
 import { useState } from 'react';
 
@@ -14,36 +15,94 @@ export interface ConfigScreenProps {
 }
 
 const ANTHROPIC_URL_PREFIX = 'https://api.anthropic.com/';
-// Managed Agents API で実際に使用するメソッドのみ登録 (kintone の proxy 設定は許可メソッド毎に必要)
-// 現状の resources/events モジュールは GET (list/retrieve) と POST (create/event 送信) のみ使用
+// Managed Agents API は GET (list/retrieve) と POST (create/event/credential 等) のみ
 const PROXY_METHODS = ['GET', 'POST'] as const;
+
 const CONFIG_KEY_CONFIGURED = 'proxyConfigured';
+const CONFIG_KEY_WORKER_URL = 'workerUrl';
+const CONFIG_KEY_MCP_CONFIGURED = 'mcpConfigured';
+
+const WORKER_URL_RE = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+(\/.*)?$/i;
 
 export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
-  const isConfigured =
-    (typeof kintone !== 'undefined' &&
-      kintone &&
-      kintone.plugin.app.getConfig(pluginId)?.[CONFIG_KEY_CONFIGURED] === 'true') ?? false;
+  const existing =
+    typeof kintone !== 'undefined' && kintone
+      ? (kintone.plugin.app.getConfig(pluginId) ?? {})
+      : {};
 
-  const [apiKey, setApiKeyInput] = useState<string>('');
+  const isApiKeyConfigured = existing[CONFIG_KEY_CONFIGURED] === 'true';
+  const isMcpConfigured = existing[CONFIG_KEY_MCP_CONFIGURED] === 'true';
+  const existingWorkerUrl = existing[CONFIG_KEY_WORKER_URL] ?? '';
+
+  const [apiKey, setApiKey] = useState<string>('');
+  const [workerUrl, setWorkerUrl] = useState<string>(existingWorkerUrl);
+  const [mintApiKey, setMintApiKey] = useState<string>('');
   const [saving, setSaving] = useState(false);
 
-  const trimmed = apiKey.trim();
-  const canSave = trimmed.length > 0 && !saving;
+  const apiKeyTrimmed = apiKey.trim();
+  const workerUrlTrimmed = workerUrl.trim();
+  const mintApiKeyTrimmed = mintApiKey.trim();
+
+  // 個別更新を許可:
+  //   - Anthropic API Key は値が入っていれば更新
+  //   - Worker URL は値が変わっていれば更新
+  //   - MINT_API_KEY は値が入っていれば更新
+  const apiKeyDirty = apiKeyTrimmed.length > 0;
+  const workerUrlDirty =
+    workerUrlTrimmed.length > 0 && workerUrlTrimmed !== existingWorkerUrl;
+  const mintApiKeyDirty = mintApiKeyTrimmed.length > 0;
+
+  const workerUrlValid =
+    workerUrlTrimmed.length === 0 || WORKER_URL_RE.test(workerUrlTrimmed);
+
+  // 何か 1 つでも更新あり、かつ Worker URL を変える場合は MINT_API_KEY 必須
+  // (Worker URL 変更したら mint 認証も再設定する必要があるため)
+  const mintRequiredButMissing =
+    workerUrlDirty && mintApiKeyTrimmed.length === 0;
+
+  const canSave =
+    !saving &&
+    workerUrlValid &&
+    !mintRequiredButMissing &&
+    (apiKeyDirty || workerUrlDirty || mintApiKeyDirty);
 
   function handleSave(): void {
     if (!canSave || typeof kintone === 'undefined' || !kintone) return;
     setSaving(true);
 
-    // Anthropic API URL に対し HTTP メソッドごとに proxy 設定を登録
-    // ヘッダ名は Postman で動作確認済の "X-Api-Key" 表記に揃える
-    const fixedHeaders = { 'X-Api-Key': trimmed };
-    for (const method of PROXY_METHODS) {
-      kintone.plugin.app.setProxyConfig(ANTHROPIC_URL_PREFIX, method, fixedHeaders, {});
+    const config: Record<string, string> = { ...existing };
+
+    if (apiKeyDirty) {
+      const fixedHeaders = { 'X-Api-Key': apiKeyTrimmed };
+      for (const method of PROXY_METHODS) {
+        kintone.plugin.app.setProxyConfig(ANTHROPIC_URL_PREFIX, method, fixedHeaders, {});
+      }
+      config[CONFIG_KEY_CONFIGURED] = 'true';
     }
 
-    // 登録済みマーカーのみ保存。API Key は保存しない
-    kintone.plugin.app.setConfig({ [CONFIG_KEY_CONFIGURED]: 'true' }, () => {
+    const finalWorkerUrl = workerUrlDirty ? workerUrlTrimmed : existingWorkerUrl;
+
+    if (workerUrlDirty || mintApiKeyDirty) {
+      // Worker URL を変えるなら必ず MINT_API_KEY も更新される (上の必須チェック)
+      // MINT_API_KEY だけの更新時は既存 Worker URL に対して登録
+      if (finalWorkerUrl) {
+        const mintUrl = `${finalWorkerUrl.replace(/\/$/, '')}/mint`;
+        if (mintApiKeyDirty) {
+          kintone.plugin.app.setProxyConfig(
+            mintUrl,
+            'POST',
+            { Authorization: `Bearer ${mintApiKeyTrimmed}` },
+            {},
+          );
+        }
+        config[CONFIG_KEY_WORKER_URL] = finalWorkerUrl;
+        if (mintApiKeyDirty || isMcpConfigured) {
+          config[CONFIG_KEY_MCP_CONFIGURED] = 'true';
+        }
+      }
+    }
+
+    kintone.plugin.app.setConfig(config, () => {
       alert('Cowork Agent: 設定を保存しました。');
       const appId = kintone?.app.getId() ?? '';
       window.location.href = `../../flow?app=${appId}`;
@@ -60,11 +119,12 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
         Cowork Agent for kintone — 設定
       </h1>
 
+      {/* Anthropic API Key */}
       <section className="mb-[20px] rounded-[12px] border border-card-border bg-card p-[16px]">
         <label className="mb-[8px] flex items-center gap-[8px] text-[13px] font-semibold text-text">
           Anthropic API Key
           <span className="text-[11px] font-normal text-warn">必須</span>
-          {isConfigured && (
+          {isApiKeyConfigured && (
             <span className="rounded-[4px] bg-accent-soft px-[6px] py-[1px] text-[10px] font-medium text-accent">
               登録済み
             </span>
@@ -74,7 +134,7 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
           type="password"
           aria-label="Anthropic API Key"
           value={apiKey}
-          onChange={(e) => setApiKeyInput(e.target.value)}
+          onChange={(e) => setApiKey(e.target.value)}
           placeholder="sk-ant-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
           autoComplete="off"
           spellCheck={false}
@@ -90,11 +150,70 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
           >
             console.anthropic.com
           </a>
-          ) で発行した API Key を入力してください。
-          値はプラグインのプロキシ設定として登録され、kintone runtime が自動的に
-          リクエストヘッダに付与します。ブラウザの JavaScript からは参照できません。
-          {isConfigured &&
-            '既に登録済みです。再入力すると上書きされます (空欄のまま保存はできません)。'}
+          ) で発行した API Key を入力してください。値はプラグインのプロキシ設定として登録され、
+          kintone runtime が自動的にリクエストヘッダに付与します。ブラウザの JavaScript からは
+          参照できません。
+          {isApiKeyConfigured &&
+            ' 既に登録済みです。再入力すると上書きされます (空欄のままでも他項目を保存できます)。'}
+        </p>
+      </section>
+
+      {/* MCP Worker */}
+      <section className="mb-[20px] rounded-[12px] border border-card-border bg-card p-[16px]">
+        <label className="mb-[8px] flex items-center gap-[8px] text-[13px] font-semibold text-text">
+          kintone MCP Server (Cloudflare Workers)
+          <span className="text-[11px] font-normal text-warn">必須</span>
+          {isMcpConfigured && (
+            <span className="rounded-[4px] bg-accent-soft px-[6px] py-[1px] text-[10px] font-medium text-accent">
+              登録済み
+            </span>
+          )}
+        </label>
+
+        <label className="mb-[4px] block text-[12px] text-text" htmlFor="worker-url-input">
+          Worker URL
+        </label>
+        <input
+          id="worker-url-input"
+          type="text"
+          aria-label="MCP Worker URL"
+          value={workerUrl}
+          onChange={(e) => setWorkerUrl(e.target.value)}
+          placeholder="https://cowork-agent-kintone-mcp.your-account.workers.dev"
+          autoComplete="off"
+          spellCheck={false}
+          className="w-full rounded-[8px] border border-card-border bg-bg px-[12px] py-[8px] font-mono text-[12px] text-text outline-none focus:border-accent"
+        />
+        {workerUrlTrimmed.length > 0 && !workerUrlValid && (
+          <p className="mt-[2px] text-[11px] text-warn">
+            URL は https:// で始まる必要があります
+          </p>
+        )}
+
+        <label className="mt-[10px] mb-[4px] block text-[12px] text-text" htmlFor="mint-api-key-input">
+          MINT_API_KEY
+        </label>
+        <input
+          id="mint-api-key-input"
+          type="password"
+          aria-label="MINT_API_KEY"
+          value={mintApiKey}
+          onChange={(e) => setMintApiKey(e.target.value)}
+          placeholder={isMcpConfigured ? '●●●●●●●● (再入力で更新)' : '32 byte 以上のランダム値'}
+          autoComplete="off"
+          spellCheck={false}
+          className="w-full rounded-[8px] border border-card-border bg-bg px-[12px] py-[8px] font-mono text-[12px] text-text outline-none focus:border-accent"
+        />
+        {mintRequiredButMissing && (
+          <p className="mt-[2px] text-[11px] text-warn">
+            Worker URL を変更する場合は MINT_API_KEY も入力してください
+          </p>
+        )}
+
+        <p className="mt-[8px] text-[11px] leading-[1.6] text-muted">
+          Cloudflare Worker をデプロイした後、ダッシュボードで生成した値を入力してください。
+          MINT_API_KEY は kintone のプロキシ設定経由でのみ使用され、ブラウザ JavaScript からは
+          参照できません。
         </p>
       </section>
 
