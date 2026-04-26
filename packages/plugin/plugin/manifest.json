@@ -1,6 +1,6 @@
 {
   "manifest_version": 1,
-  "version": 45,
+  "version": 46,
   "type": "APP",
   "name": {
     "ja": "Cowork Agent for kintone",

@@ -4,7 +4,7 @@
 // - URL 形式違反 → 404
 // - Bearer 無し → 401
 // - 正規 URL + Bearer + initialize → serverInfo
-// - tools/list → 4 ツール並び
+// - tools/list → 10 ツール並び (read 4 + write 6)
 // - tools/call (kintone-get-apps) → kintone fetch を Bearer + 正しいドメインで叩く
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -73,18 +73,27 @@ describe('handleMcp', () => {
     expect(json.result.capabilities).toBeDefined();
   });
 
-  it('tools/list は登録済 4 ツールを返す', async () => {
+  it('tools/list は read 4 + write 6 ツールを返す', async () => {
     const res = await handleMcp(mcpRequest({ jsonrpc: '2.0', method: 'tools/list', id: 2 }));
     const json = (await res.json()) as { result: { tools: Array<{ name: string }> } };
     const names = json.result.tools.map((t) => t.name);
     expect(names).toEqual(
       expect.arrayContaining([
+        // Read
         'kintone-get-apps',
         'kintone-get-app',
         'kintone-get-form-fields',
         'kintone-get-records',
+        // Write
+        'kintone-add-record',
+        'kintone-add-records',
+        'kintone-update-record',
+        'kintone-update-records',
+        'kintone-delete-records',
+        'kintone-add-record-comment',
       ]),
     );
+    expect(names).toHaveLength(10);
   });
 
   it('tools/call kintone-get-apps は URL のドメインに対して Bearer で叩く', async () => {
