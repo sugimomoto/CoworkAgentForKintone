@@ -36,13 +36,15 @@ export interface MessageListProps {
   onApproveTool?: (toolUseId: string) => void;
   /** 却下ボタン押下 (tool kind, pending-confirmation のみ) */
   onRejectTool?: (toolUseId: string) => void;
+  /** 失敗ツールの再試行依頼 (tool kind, error のみ) */
+  onRetryTool?: (toolUseId: string) => void;
 }
 
-export function MessageList({ messages, onApproveTool, onRejectTool }: MessageListProps): JSX.Element {
+export function MessageList({ messages, onApproveTool, onRejectTool, onRetryTool }: MessageListProps): JSX.Element {
   return (
     <div className="flex flex-1 flex-col gap-[14px] overflow-y-auto overscroll-contain px-[16px] py-[18px]">
       {messages.map((m) => {
-        const rendered = renderMessage(m, onApproveTool, onRejectTool);
+        const rendered = renderMessage(m, onApproveTool, onRejectTool, onRetryTool);
         if (!rendered) return null;
         return (
           <div key={m.id} data-msg data-msg-kind={m.kind}>
@@ -58,6 +60,7 @@ function renderMessage(
   m: ChatMessage,
   onApproveTool?: (id: string) => void,
   onRejectTool?: (id: string) => void,
+  onRetryTool?: (id: string) => void,
 ): JSX.Element | null {
   switch (m.kind) {
     case 'user':
@@ -72,6 +75,7 @@ function renderMessage(
           message={m}
           {...(onApproveTool ? { onApprove: onApproveTool } : {})}
           {...(onRejectTool ? { onReject: onRejectTool } : {})}
+          {...(onRetryTool ? { onRetry: onRetryTool } : {})}
         />
       );
     default:

@@ -130,4 +130,33 @@ describe('Composer', () => {
     render(<Composer onSubmit={vi.fn()} />);
     expect(screen.getByText(/⌘K/)).toBeInTheDocument();
   });
+
+  describe('running モード (Agent ターン進行中)', () => {
+    it('running=true で送信ボタンの代わりにキャンセルボタンを出す', () => {
+      render(<Composer onSubmit={vi.fn()} running onCancel={vi.fn()} />);
+      expect(screen.getByLabelText('キャンセル')).toBeInTheDocument();
+      expect(screen.queryByLabelText('送信')).toBeNull();
+    });
+
+    it('キャンセルクリック → onCancel が呼ばれる', () => {
+      const onCancel = vi.fn();
+      render(<Composer onSubmit={vi.fn()} running onCancel={onCancel} />);
+      fireEvent.click(screen.getByLabelText('キャンセル'));
+      expect(onCancel).toHaveBeenCalled();
+    });
+
+    it('running=true 時は textarea が disabled', () => {
+      render(<Composer onSubmit={vi.fn()} running />);
+      expect(screen.getByLabelText('メッセージ入力')).toBeDisabled();
+    });
+
+    it('running=true 時は Enter で送信されない', () => {
+      const onSubmit = vi.fn();
+      render(<Composer onSubmit={onSubmit} running />);
+      const input = screen.getByLabelText('メッセージ入力');
+      fireEvent.change(input, { target: { value: 'hi' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+  });
 });

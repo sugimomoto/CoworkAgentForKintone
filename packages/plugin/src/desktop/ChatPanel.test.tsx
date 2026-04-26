@@ -32,6 +32,7 @@ vi.mock('../core/managed-agents/events', async (importOriginal) => ({
   fetchAllEventsSince: vi.fn(),
   postUserMessage: vi.fn(),
   postToolConfirmation: vi.fn(),
+  postUserInterrupt: vi.fn(),
 }));
 // useUserBinding は副作用 (listVaults / listEnvironments) を持つため、ChatPanel の
 // テストでは明示的にモック化して bindingStatus / bind を直接コントロールする。
@@ -42,7 +43,12 @@ vi.mock('./hooks/useUserBinding', () => ({
 import { resolveDefaultAgent } from '../core/bootstrap/resolveAgent';
 import { resolveBootstrapEnvironment } from '../core/bootstrap/resolveEnvironment';
 import { createUserSession, listUserSessions } from '../core/bootstrap/resolveSession';
-import { fetchAllEventsSince, postToolConfirmation, postUserMessage } from '../core/managed-agents/events';
+import {
+  fetchAllEventsSince,
+  postToolConfirmation,
+  postUserInterrupt,
+  postUserMessage,
+} from '../core/managed-agents/events';
 import { useUserBinding } from './hooks/useUserBinding';
 
 const mockAgent = vi.mocked(resolveDefaultAgent);
@@ -52,6 +58,7 @@ const mockListSessions = vi.mocked(listUserSessions);
 const mockFetch = vi.mocked(fetchAllEventsSince);
 const mockPost = vi.mocked(postUserMessage);
 const mockPostToolConfirmation = vi.mocked(postToolConfirmation);
+const mockPostUserInterrupt = vi.mocked(postUserInterrupt);
 const mockUseUserBinding = vi.mocked(useUserBinding);
 
 const mockConnect = vi.fn().mockResolvedValue(undefined);
@@ -75,9 +82,11 @@ beforeEach(() => {
   mockFetch.mockReset();
   mockPost.mockReset();
   mockPostToolConfirmation.mockReset();
+  mockPostUserInterrupt.mockReset();
   mockFetch.mockResolvedValue([]);
   mockPost.mockResolvedValue(undefined);
   mockPostToolConfirmation.mockResolvedValue(undefined);
+  mockPostUserInterrupt.mockResolvedValue(undefined);
   mockListSessions.mockResolvedValue([]);
   mockConnect.mockReset();
   mockConnect.mockResolvedValue(undefined);
@@ -289,6 +298,154 @@ describe('ChatPanel', () => {
     expect(useChatStore.getState().sessionId).toBeNull();
     expect(useChatStore.getState().messages).toEqual([]);
     expect(useChatStore.getState().view).toBe('chat');
+  });
+
+  describe('F4-1 キャンセルボタン (Agent ターン中断)', () => {
+    it('isAgentRunning=true で送信ボタンの代わりにキャンセルボタンが出る', async () => {
+      setBootstrapOk();
+
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+      useChatStore.getState().setAgentRunning(true);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('キャンセル')).toBeInTheDocument();
+      });
+    });
+
+    it('キャンセルクリック → postUserInterrupt + isAgentRunning=false', async () => {
+      const user = userEvent.setup();
+      setBootstrapOk();
+
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+      useChatStore.getState().setSessionId('sess_1');
+      useChatStore.getState().setAgentRunning(true);
+
+      await user.click(await screen.findByLabelText('キャンセル'));
+
+      expect(mockPostUserInterrupt).toHaveBeenCalledWith('sess_1');
+      expect(useChatStore.getState().isAgentRunning).toBe(false);
+    });
+  });
+
+  describe('F3-1 API Key 認証エラー → 設定画面 CTA', () => {
+    it('status=error + auth キーワードで「プラグイン設定を開く」が出る', async () => {
+      setBootstrapOk();
+      const onSettingsClick = vi.fn();
+      render(<ChatPanel onSettingsClick={onSettingsClick} />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+      useChatStore.getState().setStatus('error', 'authentication_error: invalid api key');
+
+      const user = userEvent.setup();
+      const cta = await screen.findByRole('button', { name: 'プラグイン設定を開く' });
+      await user.click(cta);
+      expect(onSettingsClick).toHaveBeenCalled();
+    });
+
+    it('auth と無関係なエラーでは CTA は出ない', async () => {
+      setBootstrapOk();
+      render(<ChatPanel onSettingsClick={vi.fn()} />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+      useChatStore.getState().setStatus('error', 'failed to fetch');
+
+      await waitFor(() => expect(useChatStore.getState().error).toMatch(/failed/));
+      expect(screen.queryByRole('button', { name: 'プラグイン設定を開く' })).toBeNull();
+    });
+  });
+
+  describe('F3-2 OAuth 失効 → 再連携バナー (mid-session)', () => {
+    it('mid-session (session 有り) で bindingStatus=error なら再連携バナーが出る', async () => {
+      setBootstrapOk();
+      setBindingStatus('error', 'token expired');
+
+      // mid-session 状態を render 前にセット
+      useChatStore.getState().setSessionId('sess_1');
+      useChatStore.getState().addMessage({ id: 'm1', kind: 'user', text: 'x' });
+
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+      const banner = await screen.findByText(/連携が切れています/);
+      expect(banner).toBeInTheDocument();
+      // mid-session では Composer は表示され続ける (ConnectKintoneButton ではない)
+      expect(screen.queryByTestId('connect-kintone-error')).toBeNull();
+    });
+
+    it('初期未バインド (sessionId / messages なし) では再連携バナーは出ず ConnectKintoneButton 側で出る', async () => {
+      setBootstrapOk();
+      setBindingStatus('error', 'init failure');
+
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+      expect(screen.queryByText(/連携が切れています/)).toBeNull();
+      // ConnectKintoneButton 側のエラー表示は出る
+      expect(await screen.findByTestId('connect-kintone-error')).toBeInTheDocument();
+    });
+  });
+
+  describe('F3-4 session terminated → 新規セッションボタン', () => {
+    it('sessionTerminated=true でバナーと「新しいセッションを開始」ボタンが出る', async () => {
+      setBootstrapOk();
+
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+      useChatStore.getState().setSessionId('sess_1');
+      useChatStore.getState().setSessionTerminated(true);
+
+      const banner = await screen.findByText(/このセッションは終了しています/);
+      expect(banner).toBeInTheDocument();
+
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: '新しいセッションを開始' }));
+
+      expect(useChatStore.getState().sessionTerminated).toBe(false);
+      expect(useChatStore.getState().sessionId).toBeNull();
+    });
+
+    it('sessionTerminated=true 時は Composer が disabled', async () => {
+      setBootstrapOk();
+      setBindingStatus('bound');
+
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+      useChatStore.getState().setSessionTerminated(true);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('メッセージ入力')).toBeDisabled();
+      });
+    });
+  });
+
+  describe('F3-3 Worker 5xx → Retry ボタン (tool error)', () => {
+    it('error 状態の tool カードで「もう一度試す」をクリック → postUserMessage が呼ばれる', async () => {
+      const user = userEvent.setup();
+      setBootstrapOk();
+
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+      useChatStore.getState().setSessionId('sess_1');
+      useChatStore.getState().addMessage({
+        id: 'tu_err',
+        kind: 'tool',
+        name: 'kintone-add-record',
+        input: { app: '5' },
+        status: 'error',
+        errorText: 'Worker 503',
+      });
+
+      await user.click(await screen.findByRole('button', { name: 'もう一度試す' }));
+
+      expect(mockPost).toHaveBeenCalledWith('sess_1', expect.stringMatching(/再試行|もう一度|失敗したツール/));
+    });
   });
 
   describe('HITL 承認 UI', () => {

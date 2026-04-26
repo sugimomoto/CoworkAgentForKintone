@@ -186,6 +186,33 @@ describe('chatStore', () => {
     expect(state.sessionId).toBe('sess_1'); // 呼び出し側で切り替える
   });
 
+  describe('setAgentRunning / setSessionTerminated', () => {
+    it('初期値は false', () => {
+      expect(useChatStore.getState().isAgentRunning).toBe(false);
+      expect(useChatStore.getState().sessionTerminated).toBe(false);
+    });
+
+    it('setAgentRunning で更新できる', () => {
+      useChatStore.getState().setAgentRunning(true);
+      expect(useChatStore.getState().isAgentRunning).toBe(true);
+      useChatStore.getState().setAgentRunning(false);
+      expect(useChatStore.getState().isAgentRunning).toBe(false);
+    });
+
+    it('setSessionTerminated で更新できる', () => {
+      useChatStore.getState().setSessionTerminated(true);
+      expect(useChatStore.getState().sessionTerminated).toBe(true);
+    });
+
+    it('startNewConversation で両フラグが false にリセットされる', () => {
+      useChatStore.getState().setAgentRunning(true);
+      useChatStore.getState().setSessionTerminated(true);
+      useChatStore.getState().startNewConversation();
+      expect(useChatStore.getState().isAgentRunning).toBe(false);
+      expect(useChatStore.getState().sessionTerminated).toBe(false);
+    });
+  });
+
   describe('updateTool', () => {
     it('既存 tool message を id で部分更新する', () => {
       useChatStore.getState().addMessage({

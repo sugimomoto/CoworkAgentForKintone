@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 import type { ToolMessage } from '../MessageList';
 
 export interface ToolCardMessageProps {
@@ -6,6 +8,25 @@ export interface ToolCardMessageProps {
   onApprove?: (toolUseId: string) => void;
   /** 却下ボタン押下 (pending-confirmation のみ) */
   onReject?: (toolUseId: string) => void;
+  /** 失敗時の再試行依頼 (error のみ) */
+  onRetry?: (toolUseId: string) => void;
+}
+
+/** running 状態の経過秒数を 1s 刻みで返すフック */
+function useElapsedSeconds(active: boolean): number {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    if (!active) {
+      setSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const id = setInterval(() => {
+      setSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [active]);
+  return seconds;
 }
 
 const STATUS_STYLES: Record<ToolMessage['status'], { wrap: string; label: string; icon: string }> = {
@@ -42,9 +63,15 @@ export function ToolCardMessage({
   message,
   onApprove,
   onReject,
+  onRetry,
 }: ToolCardMessageProps): JSX.Element {
   const style = STATUS_STYLES[message.status];
   const summary = summarize(message.name, message.input);
+  const elapsed = useElapsedSeconds(message.status === 'running');
+  const statusText =
+    message.status === 'running' && elapsed > 0
+      ? `実行中… (${elapsed}s)`
+      : STATUS_TEXT[message.status];
 
   return (
     <div
@@ -52,11 +79,18 @@ export function ToolCardMessage({
       className={`flex flex-col gap-[6px] rounded-[6px] border px-[10px] py-[8px] text-[12px] ${style.wrap}`}
     >
       <div className="flex items-center gap-[6px]">
-        <span aria-hidden className={`text-[13px] ${style.label}`}>
-          {style.icon}
-        </span>
+        {message.status === 'running' ? (
+          <span
+            aria-hidden
+            className="inline-block h-[10px] w-[10px] animate-spin rounded-full border-2 border-text-muted/40 border-t-text-muted"
+          />
+        ) : (
+          <span aria-hidden className={`text-[13px] ${style.label}`}>
+            {style.icon}
+          </span>
+        )}
         <span className={`font-mono text-[12px] ${style.label}`}>{message.name}</span>
-        <span className={`ml-auto text-[11px] ${style.label}`}>{STATUS_TEXT[message.status]}</span>
+        <span className={`ml-auto text-[11px] ${style.label}`}>{statusText}</span>
       </div>
 
       {summary && <div className="text-[12px] text-text">{summary}</div>}
@@ -94,6 +128,18 @@ export function ToolCardMessage({
             className="rounded border border-amber-600 px-[10px] py-[4px] text-[12px] text-amber-800 hover:bg-amber-100"
           >
             却下
+          </button>
+        </div>
+      )}
+
+      {message.status === 'error' && onRetry && (
+        <div className="mt-[2px]">
+          <button
+            type="button"
+            onClick={() => onRetry(message.id)}
+            className="rounded border border-red-300 px-[10px] py-[4px] text-[12px] text-red-700 hover:bg-red-100"
+          >
+            もう一度試す
           </button>
         </div>
       )}

@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { fetchAllEventsSince, listEvents, postToolConfirmation, postUserMessage } from './events';
+import {
+  fetchAllEventsSince,
+  listEvents,
+  postToolConfirmation,
+  postUserInterrupt,
+  postUserMessage,
+} from './events';
 
 import type { ListResponse, SessionEvent } from './types';
 
@@ -179,6 +185,20 @@ describe('fetchAllEventsSince', () => {
 
     expect(result).toEqual([e1]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('postUserInterrupt', () => {
+  it('user.interrupt を POST する', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await postUserInterrupt('sess_1');
+
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('https://api.anthropic.com/v1/sessions/sess_1/events');
+    expect((init as RequestInit).method).toBe('POST');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body).toEqual({ events: [{ type: 'user.interrupt' }] });
   });
 });
 

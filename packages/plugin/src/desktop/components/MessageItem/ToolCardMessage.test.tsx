@@ -152,6 +152,43 @@ describe('ToolCardMessage', () => {
     });
   });
 
+  describe('running 状態', () => {
+    it('running 時はスピナー (animate-spin) が出る', () => {
+      const { container } = render(<ToolCardMessage message={make({ status: 'running' })} />);
+      expect(container.querySelector('.animate-spin')).toBeTruthy();
+    });
+
+    it('success 時はスピナーは出ない (チェックアイコンのみ)', () => {
+      const { container } = render(<ToolCardMessage message={make({ status: 'success' })} />);
+      expect(container.querySelector('.animate-spin')).toBeNull();
+    });
+  });
+
+  describe('error 時の retry ボタン', () => {
+    it('onRetry を渡すと「もう一度試す」ボタンが出る', () => {
+      const onRetry = vi.fn();
+      render(
+        <ToolCardMessage
+          message={make({ status: 'error', errorText: 'oops' })}
+          onRetry={onRetry}
+        />,
+      );
+      const btn = screen.getByRole('button', { name: 'もう一度試す' });
+      fireEvent.click(btn);
+      expect(onRetry).toHaveBeenCalledWith('tu_1');
+    });
+
+    it('onRetry を渡さなければボタンは出ない', () => {
+      render(<ToolCardMessage message={make({ status: 'error', errorText: 'oops' })} />);
+      expect(screen.queryByRole('button', { name: 'もう一度試す' })).toBeNull();
+    });
+
+    it('success 時は onRetry を渡しても出ない', () => {
+      render(<ToolCardMessage message={make({ status: 'success' })} onRetry={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: 'もう一度試す' })).toBeNull();
+    });
+  });
+
   describe('承認 / 却下ボタン', () => {
     it('承認クリック → onApprove(toolUseId) が呼ばれる', () => {
       const onApprove = vi.fn();

@@ -26,6 +26,8 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
   const mergeMessage = useChatStore((s) => s.mergeMessage);
   const removeMessage = useChatStore((s) => s.removeMessage);
   const updateTool = useChatStore((s) => s.updateTool);
+  const setAgentRunning = useChatStore((s) => s.setAgentRunning);
+  const setSessionTerminated = useChatStore((s) => s.setSessionTerminated);
   const lastEventIdRef = useRef<string | undefined>(undefined);
   const intervalIdxRef = useRef(0);
 
@@ -62,9 +64,18 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
             updateTool(r.toolUseId, r.patch);
           }
         }
+        // Agent ターン進行状態の追従
+        if (e.type === 'session.status_running') setAgentRunning(true);
+        if (e.type === 'session.status_terminated') {
+          setSessionTerminated(true);
+          // terminated は実質「もう動かない」状態なので running も明示的に下げる
+          setAgentRunning(false);
+        }
         lastEventIdRef.current = e.id;
         if (isTerminalEvent(e)) sawTerminal = true;
       }
+      // ターン終了 (end_turn / retries_exhausted) で running フラグを下げる
+      if (sawTerminal) setAgentRunning(false);
 
       // オプティミスティック thinking (ChatPanel が送信時に置いた pending- プレフィックス) は
       // **実際の agent.message** または **ターン終了** にだけ除去する。
@@ -106,5 +117,5 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
       cancelled = true;
       if (timeoutId !== null) clearTimeout(timeoutId);
     };
-  }, [sessionId, enabled, mergeMessage, removeMessage, updateTool]);
+  }, [sessionId, enabled, mergeMessage, removeMessage, updateTool, setAgentRunning, setSessionTerminated]);
 }

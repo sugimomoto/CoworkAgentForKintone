@@ -123,12 +123,18 @@ export function useSession(): UseSessionResult {
     return p;
   }, [setSessionId]);
 
+  const setAgentRunning = useChatStore((s) => s.setAgentRunning);
+  const setSessionTerminated = useChatStore((s) => s.setSessionTerminated);
+
   const selectSession = useCallback(
     (sessionId: string) => {
       resetConversation();
       setSessionId(sessionId);
+      // 切替先のセッション状態を最初は未知扱いにする (フラグが残ると古い banner が出続ける)
+      setAgentRunning(false);
+      setSessionTerminated(false);
     },
-    [resetConversation, setSessionId],
+    [resetConversation, setSessionId, setAgentRunning, setSessionTerminated],
   );
 
   const startNewConversation = useCallback(() => {

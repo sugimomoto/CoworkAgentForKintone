@@ -50,6 +50,10 @@ export interface ChatState {
   status: ChatStatus;
   /** status === 'error' のときのエラーメッセージ */
   error: string | null;
+  /** Agent ターン進行中フラグ (session.status_running 〜 status_idle/terminal) */
+  isAgentRunning: boolean;
+  /** Session が terminated (Anthropic 側で完全終了) になったかどうか */
+  sessionTerminated: boolean;
   /** 現在のパネル表示 (チャット or 履歴) */
   view: ChatView;
 
@@ -85,6 +89,10 @@ export interface ChatState {
   setBindingStatus: (status: BindingStatus, error?: string | null) => void;
   /** Status を設定。error 時のみ 2 番目の引数で詳細を渡す */
   setStatus: (status: ChatStatus, error?: string | null) => void;
+  /** Agent ターン進行中フラグの更新 */
+  setAgentRunning: (running: boolean) => void;
+  /** Session terminated フラグの更新 */
+  setSessionTerminated: (terminated: boolean) => void;
   /** 表示モードを切替 */
   setView: (view: ChatView) => void;
 
@@ -111,6 +119,8 @@ const INITIAL_STATE = {
   bindingError: null,
   status: 'idle' as ChatStatus,
   error: null,
+  isAgentRunning: false,
+  sessionTerminated: false,
   view: 'chat' as ChatView,
 };
 
@@ -171,11 +181,16 @@ export const useChatStore = create<ChatState>((set) => ({
 
   setStatus: (status, error = null) => set({ status, error: status === 'error' ? error : null }),
 
+  setAgentRunning: (running) => set({ isAgentRunning: running }),
+
+  setSessionTerminated: (terminated) => set({ sessionTerminated: terminated }),
+
   setView: (view) => set({ view }),
 
   reset: () => set({ ...INITIAL_STATE }),
 
   resetConversation: () => set({ messages: [] }),
 
-  startNewConversation: () => set({ messages: [], sessionId: null }),
+  startNewConversation: () =>
+    set({ messages: [], sessionId: null, isAgentRunning: false, sessionTerminated: false }),
 }));

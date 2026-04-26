@@ -6,9 +6,10 @@
 
 import { useCallback, useState } from 'react';
 
-import { postToolConfirmation, postUserMessage } from '../core/managed-agents/events';
+import { postToolConfirmation, postUserInterrupt, postUserMessage } from '../core/managed-agents/events';
 import { useChatStore } from '../store/chatStore';
 
+import { Banner } from './components/Banner';
 import { Composer } from './components/Composer';
 import { ConnectKintoneButton } from './components/ConnectKintoneButton';
 import { Header } from './components/Header';
@@ -36,6 +37,9 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   const setView = useChatStore((s) => s.setView);
   const addMessage = useChatStore((s) => s.addMessage);
   const updateTool = useChatStore((s) => s.updateTool);
+  const isAgentRunning = useChatStore((s) => s.isAgentRunning);
+  const setAgentRunning = useChatStore((s) => s.setAgentRunning);
+  const sessionTerminated = useChatStore((s) => s.sessionTerminated);
   const { ensureSession, selectSession, startNewConversation } = useSession();
   const { status: bindingStatus, error: bindingError, connect } = useUserBinding();
 
@@ -124,6 +128,32 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
     [sessionId, updateTool],
   );
 
+  const handleRetryTool = useCallback(
+    async (_toolUseId: string) => {
+      const sid = sessionId;
+      if (!sid) return;
+      // 失敗ツールを Agent に再試行依頼する: 同セッションへの新規ユーザメッセージで促す
+      try {
+        await postUserMessage(sid, '前回失敗したツール呼び出しをもう一度試してください。');
+      } catch {
+        // 握りつぶし
+      }
+    },
+    [sessionId],
+  );
+
+  const handleCancel = useCallback(async () => {
+    const sid = sessionId;
+    if (!sid) return;
+    // 楽観的に running フラグを下げる (続いて来る session.status_idle で確定する)
+    setAgentRunning(false);
+    try {
+      await postUserInterrupt(sid);
+    } catch {
+      // 失敗しても fall through。実際に止まらなかった場合 status_running が再来して true に戻る
+    }
+  }, [sessionId, setAgentRunning]);
+
   const handleHistorySelect = useCallback(
     (id: string) => {
       selectSession(id);
@@ -139,8 +169,15 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
     return bindingStatus === 'bound' ? '接続中' : '連携待ち';
   })();
 
+  /**
+   * 初期未バインド時は ConnectKintoneButton で大きく誘導する。
+   * 一度でも会話を始めたあとに失効した場合は、Composer は維持して上部に
+   * 軽い再連携バナーを出す (= 履歴を保ったまま復帰できる UX)。
+   */
+  const isMidSession = sessionId !== null || messages.length > 0;
   const showConnectButton =
     status === 'ready' &&
+    !isMidSession &&
     (bindingStatus === 'unbound' || bindingStatus === 'binding' || bindingStatus === 'error');
 
   return (
@@ -155,9 +192,34 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
       />
 
       {status === 'error' && error && (
-        <div className="border-b border-border bg-warn-soft px-[14px] py-[10px] text-[12px] text-warn">
+        <Banner
+          tone="warn"
+          {...(looksLikeAuthError(error) && onSettingsClick
+            ? { actionLabel: 'プラグイン設定を開く', onAction: handleSettingsClick }
+            : {})}
+        >
           ⚠ {error}
-        </div>
+        </Banner>
+      )}
+
+      {sessionTerminated && (
+        <Banner
+          testId="session-terminated"
+          actionLabel="新しいセッションを開始"
+          onAction={handleNewConversationClick}
+        >
+          このセッションは終了しています。
+        </Banner>
+      )}
+
+      {/*
+        OAuth 失効バナー: 初期未バインドは ConnectKintoneButton 側で表示されるので、
+        会話途中で失効した場合 (mid-session) のみ出す。
+      */}
+      {status === 'ready' && bindingStatus === 'error' && isMidSession && (
+        <Banner testId="oauth-rebind" actionLabel="再連携" onAction={handleConnect}>
+          kintone の連携が切れています。{bindingError ? `(${bindingError})` : ''}
+        </Banner>
       )}
 
       {view === 'history' && agentId ? (
@@ -171,6 +233,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
               messages={messages}
               onApproveTool={handleApproveTool}
               onRejectTool={handleRejectTool}
+              onRetryTool={handleRetryTool}
             />
           )}
           {showConnectButton ? (
@@ -180,10 +243,30 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
               onConnect={handleConnect}
             />
           ) : (
-            <Composer onSubmit={handleSubmit} disabled={status !== 'ready'} />
+            <Composer
+              onSubmit={handleSubmit}
+              disabled={status !== 'ready' || sessionTerminated}
+              running={isAgentRunning}
+              onCancel={handleCancel}
+            />
           )}
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * bootstrap エラー文言から「Anthropic API Key の問題」と推定できるか判定する。
+ * `401` / `403` は他の文脈の数字と衝突しないよう **HTTP \[401] のように接頭がある形** で照合。
+ */
+function looksLikeAuthError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes('authentication') ||
+    lower.includes('api key') ||
+    lower.includes('unauthorized') ||
+    lower.includes('invalid_api_key') ||
+    /\bhttp[\s\[]+40[13]\b/.test(lower)
   );
 }

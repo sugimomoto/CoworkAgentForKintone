@@ -11,6 +11,10 @@ export interface ComposerProps {
   disabled?: boolean;
   /** placeholder 文言。未指定なら既定 */
   placeholder?: string;
+  /** Agent ターン進行中。true の場合、送信ボタンの位置にキャンセルボタンを出す */
+  running?: boolean;
+  /** キャンセルボタン押下 (running=true のみ有効) */
+  onCancel?: () => void;
 }
 
 const DEFAULT_PLACEHOLDER = 'このアプリについて聞く / レコードを操作...';
@@ -19,6 +23,8 @@ export function Composer({
   onSubmit,
   disabled = false,
   placeholder = DEFAULT_PLACEHOLDER,
+  running = false,
+  onCancel,
 }: ComposerProps): JSX.Element {
   const [value, setValue] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -29,7 +35,7 @@ export function Composer({
   const composingRef = useRef(false);
 
   function submit(): void {
-    if (disabled) return;
+    if (disabled || running) return;
     const trimmed = value.trim();
     if (!trimmed) return;
     onSubmit(trimmed);
@@ -81,31 +87,44 @@ export function Composer({
             }, 0);
           }}
           placeholder={placeholder}
-          disabled={disabled}
+          disabled={disabled || running}
           aria-label="メッセージ入力"
           className="flex-1 resize-none bg-transparent text-[13px] leading-[1.5] text-text outline-none placeholder:text-subtle disabled:opacity-50"
         />
-        <button
-          type="submit"
-          aria-label="送信"
-          disabled={disabled || !value.trim()}
-          className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-[10px] bg-accent text-white shadow-[0_2px_8px_rgba(13,148,136,0.33)] disabled:opacity-50"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+        {running ? (
+          <button
+            type="button"
+            aria-label="キャンセル"
+            onClick={onCancel}
+            className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-[10px] bg-red-500 text-white shadow-[0_2px_8px_rgba(239,68,68,0.33)] hover:bg-red-600"
           >
-            <line x1="12" y1="19" x2="12" y2="5" />
-            <polyline points="5 12 12 5 19 12" />
-          </svg>
-        </button>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <rect x="6" y="6" width="12" height="12" rx="1" />
+            </svg>
+          </button>
+        ) : (
+          <button
+            type="submit"
+            aria-label="送信"
+            disabled={disabled || !value.trim()}
+            className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-[10px] bg-accent text-white shadow-[0_2px_8px_rgba(13,148,136,0.33)] disabled:opacity-50"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="12" y1="19" x2="12" y2="5" />
+              <polyline points="5 12 12 5 19 12" />
+            </svg>
+          </button>
+        )}
       </div>
       <div className="mt-[6px] px-[4px] text-[10px] text-subtle">
         ⌘K 呼び出し · Claude Managed Agents

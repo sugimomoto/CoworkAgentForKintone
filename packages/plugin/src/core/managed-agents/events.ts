@@ -33,6 +33,13 @@ export async function postUserMessage(
   });
 }
 
+/** Agent の進行中ターンを中断する (Anthropic 側で `user.interrupt` を送る) */
+export async function postUserInterrupt(sessionId: string): Promise<void> {
+  await apiRequest('POST', `/v1/sessions/${sessionId}/events`, {
+    events: [{ type: 'user.interrupt' }],
+  });
+}
+
 /**
  * `permission_policy: always_ask` のツール実行に対して許可 / 拒否を返す。
  * 拒否時は `denyMessage` を Agent に渡せる (任意)。
