@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '../../store/chatStore';
 
-import { useEventPoller } from './useEventPoller';
+import { isOAuthFailureText, useEventPoller } from './useEventPoller';
 
 import type { SessionEvent } from '../../core/managed-agents/types';
 
@@ -258,6 +258,92 @@ describe('useEventPoller', () => {
     // 10 秒以上進めれば 2 回目が呼ばれる (terminal でも完全停止しない)
     await vi.advanceTimersByTimeAsync(6_000);
     await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+  });
+
+  describe('isOAuthFailureText', () => {
+    it.each([
+      ['HTTP 401', '[HTTP 401] unauthorized'],
+      ['unauthorized', 'request was unauthorized'],
+      ['invalid_token', 'invalid_token error'],
+      ['token expired', 'OAuth token expired'],
+      ['kintone CB_AU01', 'kintone error: CB_AU01'],
+      ['kintone GAIA_IL01', 'GAIA_IL01: 認証に失敗しました'],
+    ])('%s パターンを認識する', (_label, text) => {
+      expect(isOAuthFailureText(text)).toBe(true);
+    });
+
+    it.each([
+      ['通常エラー', 'app not found'],
+      ['record id 401_record', 'record 401_record was deleted'],
+      ['空文字', ''],
+      ['undefined', undefined],
+    ])('%s は OAuth エラーと判定しない', (_label, text) => {
+      expect(isOAuthFailureText(text)).toBe(false);
+    });
+  });
+
+  describe('mid-session OAuth 失効自動検知', () => {
+    it('tool_result の errorText が 401 を示すなら bindingStatus=error に倒す', async () => {
+      vi.useFakeTimers();
+      // tool_use → tool_result(401) のシーケンス
+      mockFetch.mockResolvedValueOnce([
+        {
+          id: 'tu_1',
+          type: 'agent.mcp_tool_use',
+          name: 'kintone-get-records',
+          input: { app: '5' },
+          processed_at: '...',
+        } as unknown as SessionEvent,
+        {
+          id: 'evt_r1',
+          type: 'agent.mcp_tool_result',
+          mcp_tool_use_id: 'tu_1',
+          is_error: true,
+          content: [{ type: 'text', text: '[HTTP 401] unauthorized' }],
+          processed_at: '...',
+        } as unknown as SessionEvent,
+      ]);
+      mockFetch.mockResolvedValue([]);
+
+      // 既定 bound 状態
+      useChatStore.getState().setBindingStatus('bound');
+
+      renderHook(() => useEventPoller({ sessionId: 'sess_1', enabled: true }));
+
+      await vi.waitFor(() =>
+        expect(useChatStore.getState().bindingStatus).toBe('error'),
+      );
+      expect(useChatStore.getState().bindingError).toMatch(/認証/);
+    });
+
+    it('通常の tool error では bindingStatus は変えない', async () => {
+      vi.useFakeTimers();
+      mockFetch.mockResolvedValueOnce([
+        {
+          id: 'tu_2',
+          type: 'agent.mcp_tool_use',
+          name: 'kintone-get-records',
+          input: {},
+          processed_at: '...',
+        } as unknown as SessionEvent,
+        {
+          id: 'evt_r2',
+          type: 'agent.mcp_tool_result',
+          mcp_tool_use_id: 'tu_2',
+          is_error: true,
+          content: [{ type: 'text', text: 'app not found' }],
+          processed_at: '...',
+        } as unknown as SessionEvent,
+      ]);
+      mockFetch.mockResolvedValue([]);
+
+      useChatStore.getState().setBindingStatus('bound');
+      renderHook(() => useEventPoller({ sessionId: 'sess_1', enabled: true }));
+
+      // ポーリング 1 周回しても bound のまま
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(useChatStore.getState().bindingStatus).toBe('bound');
+    });
   });
 
   describe('Session archive 検知', () => {

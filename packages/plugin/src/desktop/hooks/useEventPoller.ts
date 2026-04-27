@@ -18,6 +18,24 @@ import { useChatStore } from '../../store/chatStore';
 
 import type { SessionEvent } from '../../core/managed-agents/types';
 
+/**
+ * tool_result の errorText が「kintone OAuth の失効」を示しているか判定する。
+ *
+ * Worker の /mcp が返す 401 / kintone REST API の認証エラー文言を拾う。
+ * 一般のツールエラー (バリデーション失敗等) と区別するため、十分特徴的なパターンに絞る。
+ */
+export function isOAuthFailureText(text: string | undefined): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  if (lower.includes('unauthorized')) return true;
+  if (lower.includes('invalid_token') || lower.includes('invalid token')) return true;
+  if (lower.includes('token expired') || lower.includes('expired token')) return true;
+  if (/\bhttp[\s\[]+401\b/.test(lower)) return true;
+  // kintone 側の代表的な認証エラーコード
+  if (lower.includes('cb_au01') || lower.includes('gaia_il01')) return true;
+  return false;
+}
+
 export interface UseEventPollerProps {
   sessionId: string | null;
   enabled: boolean;
@@ -29,6 +47,7 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
   const updateTool = useChatStore((s) => s.updateTool);
   const setAgentRunning = useChatStore((s) => s.setAgentRunning);
   const setSessionTerminated = useChatStore((s) => s.setSessionTerminated);
+  const setBindingStatus = useChatStore((s) => s.setBindingStatus);
   const lastEventIdRef = useRef<string | undefined>(undefined);
   const intervalIdxRef = useRef(0);
 
@@ -83,6 +102,15 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
             if (r.message.kind === 'agent') sawAgentMessage = true;
           } else {
             updateTool(r.toolUseId, r.patch);
+            // tool_result が OAuth 失効を示すなら bindingStatus を error に倒し、
+            // ChatPanel 側の「再連携」バナーを発火させる (mid-session 自動検知)
+            if (
+              r.patch.status === 'error' &&
+              isOAuthFailureText(r.patch.errorText) &&
+              useChatStore.getState().bindingStatus !== 'error'
+            ) {
+              setBindingStatus('error', 'kintone の認証が切れました');
+            }
           }
         }
         // Agent ターン進行状態の追従
@@ -138,5 +166,5 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
       cancelled = true;
       if (timeoutId !== null) clearTimeout(timeoutId);
     };
-  }, [sessionId, enabled, mergeMessage, removeMessage, updateTool, setAgentRunning, setSessionTerminated]);
+  }, [sessionId, enabled, mergeMessage, removeMessage, updateTool, setAgentRunning, setSessionTerminated, setBindingStatus]);
 }
