@@ -79,16 +79,19 @@ packages/plugin/
 │   │   ├── ChatPanel.tsx            # ルート (Header + MessageList + Composer | History)
 │   │   ├── HistoryView.tsx
 │   │   ├── components/
-│   │   │   ├── ConnectKintoneButton.tsx  # OAuth 連携トリガー
-│   │   │   ├── Composer.tsx              # メッセージ入力欄
+│   │   │   ├── Banner.tsx                # 上部通知 (auth エラー / OAuth 失効 / Session 終了)
+│   │   │   ├── ConnectKintoneButton.tsx  # OAuth 連携トリガー (初回バインド時)
+│   │   │   ├── Composer.tsx              # メッセージ入力欄 (auto-grow + キャンセル)
 │   │   │   ├── Header.tsx
-│   │   │   ├── MessageList.tsx
-│   │   │   ├── MessageItem/              # AgentMessage / UserMessage / ThinkingDots
+│   │   │   ├── MessageList.tsx           # tool / agent / user / thinking 振分け
+│   │   │   ├── MessageItem/              # AgentMessage (Markdown) / UserMessage / ThinkingDots / ToolCardMessage
 │   │   │   └── WelcomeMessage.tsx
 │   │   └── hooks/
 │   │       ├── useSession.ts             # Agent + Environment bootstrap
 │   │       ├── useUserBinding.ts         # OAuth flow + Vault Credential 解決
-│   │       ├── useEventPoller.ts         # Session events ポーリング
+│   │       ├── useEventPoller.ts         # Session events ポーリング + archive 検知 + OAuth 失効検知
+│   │       ├── useElapsedSeconds.ts      # ToolCardMessage の running 経過秒数
+│   │       ├── usePanelWidth.ts          # パネル幅 (320〜800px) を localStorage 永続化
 │   │       └── usePanelOpenState.ts
 │   ├── config/                      # プラグイン設定画面 (4 ステップウィザード)
 │   │   ├── index.tsx
@@ -161,14 +164,23 @@ packages/kintone-mcp/
 │   ├── _http.ts                     # jsonResponse / isString / maskToken
 │   └── tools/
 │       ├── factory.ts               # createTool / createToolCallback
-│       ├── index.ts                 # 4 ツール集約
+│       ├── index.ts                 # 10 ツール集約 + TOOL_NAMES export
 │       ├── get-app.ts
 │       ├── get-apps.ts
 │       ├── get-form-fields.ts
 │       ├── get-records.ts
+│       ├── add-record.ts            # 単件追加
+│       ├── add-records.ts           # 複数件追加 (max 100)
+│       ├── update-record.ts         # 単件更新 (id or updateKey 排他)
+│       ├── update-records.ts        # 複数件更新 (max 100)
+│       ├── delete-records.ts        # 複数件削除 (max 100、HITL `always_ask`)
+│       ├── add-record-comment.ts    # コメント追加 (mentions 対応)
 │       ├── types/                   # Tool / ToolConfig / ToolCallback
-│       └── utils/build-query.ts     # filters → kintone query 変換
-├── tests/                           # vitest (60 件)
+│       └── utils/
+│           ├── build-query.ts       # filters → kintone query 変換
+│           ├── schemas.ts           # appIdSchema / recordValueMapSchema / updateKeySchema 等
+│           └── validators.ts        # assertMaxBatch / assertNonEmpty / assertIdOrUpdateKey
+├── tests/                           # vitest (80 件)
 ├── package.json
 ├── tsconfig.json
 ├── vitest.config.ts

@@ -162,6 +162,8 @@ packages/plugin/
 
 - `mcp_servers: [{ type: 'url', name: 'kintone', url: '<worker>/mcp/<domain>' }]`
 - `tools: [{ type: 'agent_toolset_20260401', ... }, { type: 'mcp_toolset', mcp_server_name: 'kintone', ... }]`
+- `mcp_toolset.configs` は **配列形式** `[{name, enabled, permission_policy}]`。書き込み系は基本 `always_allow`、`kintone-delete-records` のみ `always_ask` (UI 承認 = HITL を発火させる)
+- `metadata.promptVersion` を持たせ、システムプロンプトを変更したら bump して **新 Agent を強制再作成** (旧 Agent は残置、自然消滅)
 
 ### 5.4 Environment 構成
 
@@ -192,6 +194,23 @@ packages/plugin/
 ```
 
 期限切れ時は Anthropic が refresh エンドポイントを自動で叩く (Plugin / Worker は介在しない)。
+
+### 5.6 Event interpreter (実 API 仕様への適応)
+
+[eventInterpreter.ts](../packages/plugin/src/core/managed-agents/eventInterpreter.ts) は session events を UI 用の操作 (`add` 新規 / `update-tool` 更新 / `null` 無視) に変換する。実機ログとの突合で判明した API 仕様への適応箇所:
+
+| 観測した実態 | interpreter の対応 |
+|---|---|
+| MCP ツールは `agent.mcp_tool_use` を発火 (組み込みツールの `agent.tool_use` とは別 type) | 両 type を **fall-through** で同一 case に |
+| MCP ツール結果のリンク id は **`mcp_tool_use_id`** (組み込みは `tool_use_id`) | event.type で参照フィールドを切替 |
+| 承認待ちは `session.status_idle.stop_reason.type === 'requires_action'` (docs の `tool_confirmation_required` ではない) | 両方を許容 |
+| Session archive (terminated 化) は **events ストリームに流れない** | [useEventPoller](../packages/plugin/src/desktop/hooks/useEventPoller.ts) が **`retrieveSession`** で `archived_at` / `status` を別途取得して検知 |
+
+### 5.7 Mid-session OAuth 失効の自動検知
+
+`useEventPoller` が tool_result の errorText を `isOAuthFailureText` で解析し、kintone 側の OAuth 認証エラーパターン (`CB_OA01` / `unauthorized` / `HTTP 401` / `Cannot access protected resource` 等) を検出すると **`bindingStatus` を `'error'` に倒す**。これにより mid-session で OAuth が失効した場合に自動で「再連携」バナーが立ち上がる (F3-2)。
+
+実在するエラーコード判定基準は [`isOAuthFailureText`](../packages/plugin/src/desktop/hooks/useEventPoller.ts) の正規表現を参照。ID 文字列 (`401_record`) や金額 (`1401`) を誤検知しないよう **語境界を細かく規定**している。
 
 ---
 
@@ -300,8 +319,8 @@ ConfigScreen → kintone.proxy() (admin が入力した API Token を直接 Auth
 
 | 範囲 | 件数 | 内容 |
 |---|---|---|
-| Worker (`packages/kintone-mcp`) | 60 | `_http` / `kintone` (Bearer 構築) / `mcp` (URL マッチ + JSON-RPC) / `credentials-upsert` / `oauth-callback` (XSS escape) / `tools/*` |
-| Plugin (`packages/plugin`) | 267 | `core/*` (utils / oauth / cloudflare / kintone / managed-agents / bootstrap) / `desktop/*` / `config/*` / `store/*` |
+| Worker (`packages/kintone-mcp`) | 80 | `_http` / `kintone` (Bearer 構築) / `mcp` (URL マッチ + JSON-RPC) / `credentials-upsert` / `oauth-callback` (XSS escape) / `tools/*` (10 ツール = read 4 + write 6) |
+| Plugin (`packages/plugin`) | 375+ | `core/*` (utils / oauth / cloudflare / kintone / managed-agents / bootstrap) / `desktop/*` (ChatPanel / ToolCardMessage / Banner / Composer / Markdown / hooks 群) / `config/*` / `store/*` |
 
 ### 9.2 E2E Tests (Playwright, 21 件)
 
