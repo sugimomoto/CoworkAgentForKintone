@@ -263,11 +263,17 @@ describe('useEventPoller', () => {
   describe('isOAuthFailureText', () => {
     it.each([
       ['HTTP 401', '[HTTP 401] unauthorized'],
+      ['kintone 401:', 'Tool error: kintone 401: {"code":"CB_OA01"}'],
+      ['(401)', 'failed (401)'],
+      ['Status: 401', 'Status: 401'],
       ['unauthorized', 'request was unauthorized'],
       ['invalid_token', 'invalid_token error'],
       ['token expired', 'OAuth token expired'],
+      ['kintone CB_OA01', 'kintone 401: {"code":"CB_OA01"}'],
+      ['kintone CB_OA02', 'CB_OA02: scope insufficient'],
       ['kintone CB_AU01', 'kintone error: CB_AU01'],
       ['kintone GAIA_IL01', 'GAIA_IL01: 認証に失敗しました'],
+      ['protected resource', 'Cannot access protected resource.'],
     ])('%s パターンを認識する', (_label, text) => {
       expect(isOAuthFailureText(text)).toBe(true);
     });
@@ -275,6 +281,7 @@ describe('useEventPoller', () => {
     it.each([
       ['通常エラー', 'app not found'],
       ['record id 401_record', 'record 401_record was deleted'],
+      ['金額 1401', 'amount: 1401 yen'],
       ['空文字', ''],
       ['undefined', undefined],
     ])('%s は OAuth エラーと判定しない', (_label, text) => {

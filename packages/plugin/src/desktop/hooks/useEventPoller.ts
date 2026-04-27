@@ -30,9 +30,15 @@ export function isOAuthFailureText(text: string | undefined): boolean {
   if (lower.includes('unauthorized')) return true;
   if (lower.includes('invalid_token') || lower.includes('invalid token')) return true;
   if (lower.includes('token expired') || lower.includes('expired token')) return true;
-  if (/\bhttp[\s\[]+401\b/.test(lower)) return true;
-  // kintone 側の代表的な認証エラーコード
+  // 401 をステータスコード文脈で検出 (record id "401_xxx" や金額 "1401" を弾く)
+  // 許容する形: "[HTTP 401]" "kintone 401:" "Status: 401" "(401)" "401 " "401:"
+  // = 直前が word-char でない && 直後が ":" / ")" / "]" / 空白 / 文末
+  if (/(?:^|[^a-z0-9_])401(?:[:)\]\s]|$)/.test(lower)) return true;
+  // kintone OAuth / Basic 認証 / ログイン関連のエラーコード
+  if (/\bcb_oa\d{2}\b/.test(lower)) return true; // CB_OA01 (token 無効) / CB_OA02 (scope 不足) など
   if (lower.includes('cb_au01') || lower.includes('gaia_il01')) return true;
+  // OAuth 仕様上の典型メッセージ
+  if (lower.includes('cannot access protected resource')) return true;
   return false;
 }
 
