@@ -203,3 +203,14 @@
 artifact 基盤側ではなく、Issue #9 (kintone カスタマイズ / 開発支援) のスコープ。
 本フェーズでは `kind: 'kintone-customize-js'` は placeholder のままにし、#9 着手時に
 enum 追加 + 「🚀 kintone へ適用」アクションを足す方針。
+
+### 13.9 仕様変更: Step 4「ダウンロード形式拡充」は #10 で対応
+
+`.docx / .pdf / .xlsx / .png` 等のバイナリ系出力は、Environment 内で Python 等を使った
+Agent 生成 → Files API ダウンロードの形になり、artifact (テキスト content) の延長では
+扱いきれない。Issue #10 (ドキュメント生成) のスコープに移管。
+
+### 13.10 Issue #14 完了 (close)
+
+artifact 生成基盤としての責務は本フェーズで全て完了。Step 2 編集 / Step 3 kintone 適用 /
+Step 4 バイナリ出力はそれぞれ「対応不要」「#9」「#10」へ整理。**Issue #14 を close**。
