@@ -114,7 +114,7 @@ export function Composer({
             type="button"
             aria-label="キャンセル"
             onClick={onCancel}
-            className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-[10px] bg-red-500 text-white shadow-[0_2px_8px_rgba(239,68,68,0.33)] hover:bg-red-600"
+            className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-[10px] bg-red-500 text-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:bg-red-600"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <rect x="6" y="6" width="12" height="12" rx="1" />
@@ -125,7 +125,7 @@ export function Composer({
             type="submit"
             aria-label="送信"
             disabled={disabled || !value.trim()}
-            className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-[10px] bg-accent text-white shadow-[0_2px_8px_rgba(13,148,136,0.33)] disabled:opacity-50"
+            className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-[10px] bg-accent text-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] disabled:opacity-50"
           >
             <svg
               width="14"

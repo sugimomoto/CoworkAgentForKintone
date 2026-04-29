@@ -7,7 +7,7 @@ export function AgentAvatar({ size = 22 }: { size?: number }): JSX.Element {
       style={{
         width: size,
         height: size,
-        background: 'linear-gradient(135deg, var(--cw-accent), rgba(13,148,136,0.55))',
+        background: 'var(--cw-accent)',
       }}
       aria-hidden="true"
     >

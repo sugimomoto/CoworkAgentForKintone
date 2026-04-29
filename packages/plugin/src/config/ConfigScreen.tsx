@@ -317,7 +317,7 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
           onClick={() => void handleCloudflareDeploy()}
           disabled={!canDeployCf}
           data-testid="cf-deploy-button"
-          className="mt-[12px] rounded-[8px] bg-accent px-[14px] py-[8px] text-[12px] font-semibold text-white shadow-[0_2px_8px_rgba(13,148,136,0.33)] disabled:opacity-50"
+          className="mt-[12px] rounded-[8px] bg-accent px-[14px] py-[8px] text-[12px] font-semibold text-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] disabled:opacity-50"
         >
           {cfDeploying ? 'デプロイ中…' : `Worker (${CLOUDFLARE_WORKER_SCRIPT_NAME}) をデプロイ`}
         </button>
@@ -442,7 +442,7 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
           href={cybozuAdminUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className={`mt-[6px] inline-block rounded-[8px] bg-accent px-[12px] py-[6px] text-[12px] font-medium text-white shadow-[0_2px_8px_rgba(13,148,136,0.33)] ${
+          className={`mt-[6px] inline-block rounded-[8px] bg-accent px-[12px] py-[6px] text-[12px] font-medium text-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${
             workerUrlValid ? '' : 'pointer-events-none opacity-50'
           }`}
         >
@@ -534,7 +534,7 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
           type="button"
           onClick={() => void handleSave()}
           disabled={!canSave}
-          className="rounded-[8px] bg-accent px-[14px] py-[8px] text-[13px] font-semibold text-white shadow-[0_2px_8px_rgba(13,148,136,0.33)] disabled:opacity-50"
+          className="rounded-[8px] bg-accent px-[14px] py-[8px] text-[13px] font-semibold text-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] disabled:opacity-50"
         >
           保存
         </button>

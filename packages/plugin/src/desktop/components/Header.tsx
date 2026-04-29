@@ -30,8 +30,8 @@ export function Header({
       {/* Avatar + status dot */}
       <div className="relative shrink-0">
         <div
-          className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] shadow-[0_4px_14px_rgba(13,148,136,0.25)]"
-          style={{ background: 'linear-gradient(135deg, var(--cw-accent), rgba(13,148,136,0.55))' }}
+          className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px]"
+          style={{ background: 'var(--cw-accent)' }}
           aria-hidden="true"
         >
           <StarIcon />

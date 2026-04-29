@@ -32,7 +32,7 @@ export function ConnectKintoneButton({
         <button
           type="button"
           onClick={onConnect}
-          className="mt-[8px] rounded-[8px] bg-accent px-[14px] py-[6px] text-[12px] font-medium text-white shadow-[0_2px_8px_rgba(13,148,136,0.33)]"
+          className="mt-[8px] rounded-[8px] bg-accent px-[14px] py-[6px] text-[12px] font-medium text-white shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
         >
           再試行
         </button>
@@ -55,7 +55,7 @@ export function ConnectKintoneButton({
         onClick={onConnect}
         disabled={isBinding}
         data-testid="connect-kintone-button"
-        className="flex items-center justify-center gap-[6px] rounded-[8px] bg-accent px-[14px] py-[8px] text-[13px] font-medium text-white shadow-[0_2px_8px_rgba(13,148,136,0.33)] disabled:opacity-50"
+        className="flex items-center justify-center gap-[6px] rounded-[8px] bg-accent px-[14px] py-[8px] text-[13px] font-medium text-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] disabled:opacity-50"
       >
         {isBinding ? (
           <>
