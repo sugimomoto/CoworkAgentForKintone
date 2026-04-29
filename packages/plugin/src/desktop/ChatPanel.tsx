@@ -190,7 +190,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   return (
     <div className="cowork-agent-root flex h-full flex-col bg-bg">
       <Header
-        agentName="Aoi"
+        agentName="Cowork Agent for kintone"
         status={statusLine}
         onHistoryClick={handleHistoryClick}
         onNewConversationClick={handleNewConversationClick}

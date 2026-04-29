@@ -3,7 +3,7 @@
 // デザイン仕様: docs/functional-design.md §5.3.2
 
 export interface HeaderProps {
-  /** Agent 表示名 (例: "Aoi") */
+  /** Agent 表示名 (例: "Cowork Agent for kintone") */
   agentName: string;
   /** Status 行のテキスト (例: "作業中 · kintone接続") */
   status: string;
@@ -43,10 +43,12 @@ export function Header({
       </div>
 
       {/* name / status */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col min-w-0">
         <div className="flex items-center gap-[6px]">
-          <span className="text-[14px] font-semibold text-text">{agentName}</span>
-          <span className="rounded-[4px] bg-accent-soft px-[6px] py-[1px] text-[10px] font-medium text-accent">
+          <span className="truncate text-[14px] font-semibold text-text" title={agentName}>
+            {agentName}
+          </span>
+          <span className="shrink-0 rounded-[4px] bg-accent-soft px-[6px] py-[1px] text-[10px] font-medium text-accent">
             AGENT
           </span>
         </div>
