@@ -4,6 +4,8 @@
 // `since` カーソルは Managed Agents API 未サポートのため、
 // クライアント側で「既知の最後のイベント ID」と突合して差分を抽出する。
 
+import { debug } from '../debug';
+
 import { apiRequest } from './client';
 
 import type { ListResponse, SessionEvent } from './types';
@@ -60,6 +62,41 @@ export async function postToolConfirmation(
   await apiRequest('POST', `/v1/sessions/${sessionId}/events`, {
     events: [event],
   });
+}
+
+/**
+ * Custom Tool (e.g. create_artifact) の結果を Agent に返す。
+ *
+ * `agent.custom_tool_use` を観測した plugin が、対応する `user.custom_tool_result` を
+ * 投げないと session.status_idle (stop_reason='custom_tool_use') のままターンが止まる。
+ * 内容は文字列 (JSON 文字列を推奨)。
+ */
+export async function postCustomToolResult(
+  sessionId: string,
+  toolUseId: string,
+  result: { ok: true; artifactId: string } | { ok: false; error: string },
+): Promise<void> {
+  // Anthropic Managed Agents API は content を **content block の配列**で要求する。
+  // 単純文字列を送ると `events.0.content: value must be an array` で 400 になる。
+  const text = result.ok
+    ? JSON.stringify({ ok: true, artifactId: result.artifactId })
+    : JSON.stringify({ ok: false, error: result.error });
+  const body = {
+    events: [
+      {
+        type: 'user.custom_tool_result',
+        custom_tool_use_id: toolUseId,
+        content: [{ type: 'text', text }],
+        is_error: !result.ok,
+      },
+    ],
+  };
+  debug('CustomTool', 'POST /events (user.custom_tool_result)', {
+    sessionId,
+    toolUseId,
+    ok: result.ok,
+  });
+  await apiRequest('POST', `/v1/sessions/${sessionId}/events`, body);
 }
 
 // ----- イベント取得 ---------------------------------------------------------

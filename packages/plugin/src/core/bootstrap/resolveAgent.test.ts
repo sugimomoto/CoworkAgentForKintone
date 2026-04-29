@@ -60,12 +60,18 @@ describe('resolveDefaultAgent', () => {
     expect(body.metadata).toEqual({
       source: 'cowork-agent-for-kintone',
       type: 'default',
-      promptVersion: 'v6',
+      promptVersion: 'v10',
     });
     // tools に agent_toolset_20260401 が含まれること (bash + write + read)
     expect(Array.isArray(body.tools)).toBe(true);
     expect(body.tools.length).toBeGreaterThan(0);
     expect(body.tools[0].type).toBe('agent_toolset_20260401');
+    // create_artifact Custom Tool が含まれること (workerUrl 無しでも常に登録)
+    const customTool = body.tools.find(
+      (t: { type?: string; name?: string }) => t.type === 'custom' && t.name === 'create_artifact',
+    );
+    expect(customTool).toBeTruthy();
+    expect(customTool.input_schema.required).toEqual(['id', 'kind', 'title', 'content']);
   });
 
   it('プラグイン外の Agent (source 違い) は無視する', async () => {
@@ -261,11 +267,11 @@ describe('resolveDefaultAgent', () => {
     it('workerUrl 指定が異なれば別の Agent として解決される (in-flight キャッシュも分離)', async () => {
       const a = makeAgent({
         id: 'agent_a',
-        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v6', workerUrl: 'https://a.example', kintoneDomain: 'a.cybozu.com' },
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v10', workerUrl: 'https://a.example', kintoneDomain: 'a.cybozu.com' },
       });
       const b = makeAgent({
         id: 'agent_b',
-        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v6', workerUrl: 'https://b.example', kintoneDomain: 'b.cybozu.com' },
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v10', workerUrl: 'https://b.example', kintoneDomain: 'b.cybozu.com' },
       });
 
       // a の解決: list で a が返る

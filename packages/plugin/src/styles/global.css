@@ -74,3 +74,126 @@
     transform: translateY(0);
   }
 }
+
+/* ターン完了マーカー (✓ 応答完了) のフェードイン */
+.cowork-agent-root .msg-completed {
+  animation: cw-msg-completed 280ms ease-out both;
+}
+
+@keyframes cw-msg-completed {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Pebble Sprout マスコットアニメーション
+ * docs/design_handoff_pebble_sprout/README.md を参照。
+ * State: idle / thinking / working / waiting / done で切替。
+ * ───────────────────────────────────────────────────────────────────── */
+
+/* idle */
+@keyframes ps-breathe {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
+}
+@keyframes ps-leaf-sway-l {
+  0%, 100% { transform: translate(50px, 28px) rotate(-14deg); }
+  50%      { transform: translate(50px, 28px) rotate(-20deg); }
+}
+@keyframes ps-leaf-sway-r {
+  0%, 100% { transform: translate(50px, 28px) rotate(14deg); }
+  50%      { transform: translate(50px, 28px) rotate(20deg); }
+}
+@keyframes ps-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95%, 97%      { transform: scaleY(0.05); }
+}
+
+/* thinking */
+@keyframes ps-leaf-jitter-l {
+  0%, 100% { transform: translate(50px, 28px) rotate(-12deg); }
+  25%      { transform: translate(50px, 28px) rotate(-22deg); }
+  75%      { transform: translate(50px, 28px) rotate(-8deg); }
+}
+@keyframes ps-leaf-jitter-r {
+  0%, 100% { transform: translate(50px, 28px) rotate(12deg); }
+  25%      { transform: translate(50px, 28px) rotate(8deg); }
+  75%      { transform: translate(50px, 28px) rotate(22deg); }
+}
+@keyframes ps-bubble-1 {
+  0%, 100% { opacity: 0; transform: translate(0, 4px) scale(0.5); }
+  30%, 60% { opacity: 1; transform: translate(0, 0) scale(1); }
+}
+@keyframes ps-bubble-2 {
+  0%, 25%, 100% { opacity: 0; transform: translate(0, 4px) scale(0.5); }
+  50%, 80%      { opacity: 1; transform: translate(0, 0) scale(1); }
+}
+@keyframes ps-bubble-3 {
+  0%, 50%, 100% { opacity: 0; transform: translate(0, 4px) scale(0.5); }
+  75%, 95%      { opacity: 1; transform: translate(0, 0) scale(1); }
+}
+
+/* working */
+@keyframes ps-toddle {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  25%      { transform: translateX(-1.5px) rotate(-2deg); }
+  75%      { transform: translateX(1.5px) rotate(2deg); }
+}
+@keyframes ps-scan {
+  0%   { opacity: 0.3; }
+  50%  { opacity: 1; }
+  100% { opacity: 0.3; }
+}
+@keyframes ps-scan-bar {
+  0%   { transform: translateX(-12px); opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateX(12px); opacity: 0; }
+}
+
+/* waiting */
+@keyframes ps-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.03); }
+}
+@keyframes ps-alert-blink {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+
+/* done */
+@keyframes ps-hop {
+  0%   { transform: translateY(0) scaleY(1); }
+  20%  { transform: translateY(2px) scaleY(0.92); }
+  50%  { transform: translateY(-8px) scaleY(1.05); }
+  80%  { transform: translateY(0) scaleY(0.96); }
+  100% { transform: translateY(0) scaleY(1); }
+}
+@keyframes ps-leaf-spread-l {
+  0%   { transform: translate(50px, 28px) rotate(-16deg); }
+  50%  { transform: translate(50px, 28px) rotate(-32deg); }
+  100% { transform: translate(50px, 28px) rotate(-22deg); }
+}
+@keyframes ps-leaf-spread-r {
+  0%   { transform: translate(50px, 28px) rotate(16deg); }
+  50%  { transform: translate(50px, 28px) rotate(32deg); }
+  100% { transform: translate(50px, 28px) rotate(22deg); }
+}
+@keyframes ps-sparkle {
+  0%, 100% { opacity: 0; transform: scale(0.4); }
+  50%      { opacity: 1; transform: scale(1); }
+}
+
+/* prefers-reduced-motion: 装飾アニメは a11y 上無効化する */
+@media (prefers-reduced-motion: reduce) {
+  .cowork-agent-root [data-ps-anim] {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -7,7 +7,9 @@ import { useCallback, useEffect, useState } from 'react';
 const STORAGE_KEY = 'cowork-agent.panel-width';
 export const PANEL_WIDTH_DEFAULT = 380;
 export const PANEL_WIDTH_MIN = 320;
-export const PANEL_WIDTH_MAX = 800;
+// Artifact ペイン (チャート・React コンポーネント) を広く使えるよう、
+// チャット単独のときの 800px から倍程度まで広げられるようにする。
+export const PANEL_WIDTH_MAX = 1600;
 
 function readStored(): number {
   if (typeof window === 'undefined') return PANEL_WIDTH_DEFAULT;

@@ -105,13 +105,13 @@ describe('App', () => {
       render(<App />);
       const handle = screen.getByTestId('cowork-agent-resize-handle');
 
-      // 大きく左にドラッグ → MAX(800) で止まる
-      fireEvent.mouseDown(handle, { clientX: 1000 });
+      // 大きく左にドラッグ → MAX(1600) で止まる
+      fireEvent.mouseDown(handle, { clientX: 2000 });
       fireEvent.mouseMove(window, { clientX: 0 });
       fireEvent.mouseUp(window);
 
       const panel = screen.getByTestId('cowork-agent-panel');
-      expect(panel.style.width).toBe('800px');
+      expect(panel.style.width).toBe('1600px');
     });
   });
 });

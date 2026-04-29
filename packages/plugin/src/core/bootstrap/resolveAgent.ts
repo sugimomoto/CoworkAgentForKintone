@@ -24,7 +24,7 @@ export const DEFAULT_AGENT_NAME = 'Cowork Agent - Default';
  * system プロンプトのリビジョン番号。プロンプト本文を変更したらこの値を上げる。
  * metadata に含めるので、旧プロンプトの Agent は別物として扱われ、新規 Agent が作成される。
  */
-export const DEFAULT_AGENT_PROMPT_VERSION = 'v6';
+export const DEFAULT_AGENT_PROMPT_VERSION = 'v10';
 
 /**
  * MCP toolset で公開するツール名一覧 (configs を per-tool で指定するため)。
@@ -79,10 +79,88 @@ export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   '  - 「全件削除」「全部更新」のような曖昧な指示は範囲を確認してから進めてください。',
   '  - フィールドコードや値型を間違えやすいので、迷ったら kintone-get-form-fields で型を確認してから書き込みツールを呼んでください。',
   '  - ツール呼出でエラーが返ったら、ユーザに分かりやすく状況を説明してください (例: 「レコードが見つかりません」「フィールド X は必須です」など)。',
+  '',
+  '【成果物 (Artifact) — 必ず守ること】',
+  '  - 以下のいずれかを返すときは、**必ず `create_artifact` ツールを呼び出して**ください。',
+  '    会話本文にコード・SVG タグ・図・表・長文を書かないこと:',
+  '      * コード (3 行以上)、kintone カスタマイズ JS、SQL、Python など',
+  '      * SVG タグ (`<svg>...</svg>`)',
+  '      * Mermaid 図 (graph / sequenceDiagram / erDiagram / gantt 等)',
+  '      * HTML プレビュー (`<div>` / `<table>` などのワイヤフレーム)',
+  '      * グラフ・チャート (React + Recharts)',
+  '      * CSV / TSV / JSON のデータ',
+  '      * 8 行以上の Markdown レポート / 議事録',
+  '  - 会話本文には「○○のアーティファクトを作成しました。右のペインをご覧ください」程度の短い案内だけにする。',
+  '  - **悪い例**: 会話に ```svg<svg>...</svg>``` をそのまま貼り付ける、SVG コードを Markdown で説明する',
+  '  - **良い例**: `create_artifact({id, kind:"svg", title, content:"<svg ...>...</svg>"})` を呼ぶ',
+  '  - id は内容を表す英小文字+ハイフン (例: "sales-report-2026q1")。同じ artifact を更新したいときは',
+  '    同じ id を渡してください (= バージョンアップ)。新しい artifact にしたいときは別 id にしてください。',
+  '  - kind の選び方:',
+  '      * markdown: 説明的な文書、レポート、議事録 (8 行以上の場合)',
+  '      * code:     コード片 (language で言語を指定)',
+  '      * json:     構造化データ',
+  '      * react:    グラフ・チャート・対話 UI を React コンポーネントで表現したいとき',
+  '      * mermaid:  フロー図 / ER 図 / シーケンス図 / ガントチャート (mermaid 記法)',
+  '      * svg:      静的な SVG 画像 / アイコン / イラスト',
+  '      * html:     HTML プレビュー (ワイヤフレーム / 単独で動く HTML ページ)',
+  '      * csv:      表形式データ。先頭行は見出しとしてください',
+  '  - kind=react の制約 (iframe sandbox 内で実行されます):',
+  '      * `export default function App() { ... }` の形で関数コンポーネントを default export する',
+  '      * 利用可能なグローバル: React (createElement / useState / useEffect 等), Recharts (チャート用)',
+  '      * 外部モジュールの import は書かない (esm.sh から事前ロード済みのものだけ使える)',
+  '      * Tailwind は使えません。inline style / 標準 CSS で書いてください',
+  '      * 親 DOM / kintone API には触れません (sandbox で完全に分離されています)',
+  '      * ResponsiveContainer を使うと親領域に合わせてサイズが決まります (推奨)',
+  '  - **重要 (全 kind 共通)**: content には **本体テキストだけ** を入れてください。',
+  '    - markdown のコードフェンス (```svg / ```html / ```mermaid 等) で囲まないこと',
+  '    - 言い訳・前置き・解説のテキストを混ぜないこと (それは会話側に書く)',
+  '  - kind=mermaid: graph TD / sequenceDiagram など mermaid 記法本体だけを content に入れる',
+  '  - kind=svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="...">...</svg>` の形。',
+  '    `<?xml ...?>` 宣言や `<!DOCTYPE>` は **入れない** (sandbox iframe の HTML body 内で描画されるため)',
+  '  - kind=html: `<html>` を含めても省略してもよい。sandbox で実行されるので外部 API には触れない',
+  '  - kind=csv: RFC 4180 形式 (カンマ区切り、必要に応じて "" でクォート)',
 ].join('\n');
 
 /** kintone MCP server の name (mcp_servers と mcp_toolset で参照される識別子) */
 export const KINTONE_MCP_SERVER_NAME = 'kintone';
+
+/**
+ * `create_artifact` Custom Tool 定義 (Anthropic Managed Agents 形式)。
+ * Plugin 側で `agent.custom_tool_use` を観測したら chatStore に Artifact を upsert し、
+ * `user.custom_tool_result` を返すことでターンを継続させる。
+ */
+export const CREATE_ARTIFACT_TOOL = {
+  type: 'custom',
+  name: 'create_artifact',
+  description:
+    '再利用可能な成果物 (レポート / コード / データ / グラフ) を作成・更新する。' +
+    'ユーザーがコピー・参照・保存したい内容はここに渡すこと。同じ id を再度渡すと更新になる。',
+  input_schema: {
+    type: 'object',
+    properties: {
+      id: {
+        type: 'string',
+        description: '安定識別子 (英小文字+ハイフン推奨)。同 id で再呼出すると更新扱い。',
+      },
+      kind: {
+        type: 'string',
+        enum: ['markdown', 'code', 'json', 'react', 'mermaid', 'svg', 'html', 'csv'],
+        description:
+          'markdown=レポート / code=コード片 / json=構造化データ / ' +
+          'react=React コンポーネント (Recharts 利用可) / mermaid=フロー/ER 図 / ' +
+          'svg=SVG 画像 / html=HTML プレビュー / csv=表形式データ',
+      },
+      title: { type: 'string', description: 'ユーザー向け表示名' },
+      language: {
+        type: 'string',
+        description: 'kind=code 時の言語ヒント (例: javascript, python, sql)',
+      },
+      content: { type: 'string', description: '本体テキスト' },
+      summary: { type: 'string', description: '1 行の要約 (任意)' },
+    },
+    required: ['id', 'kind', 'title', 'content'],
+  },
+} as const;
 
 /**
  * Default Agent に与える組込ツール構成。
@@ -98,6 +176,8 @@ function buildAgentTools(includeMcp: boolean): Array<Record<string, unknown>> {
         permission_policy: { type: 'always_allow' },
       },
     },
+    // Plugin 側で処理する Custom Tool (Anthropic 側の実行ではない)
+    CREATE_ARTIFACT_TOOL as unknown as Record<string, unknown>,
   ];
   if (includeMcp) {
     // Anthropic 側で MCP の write 系ツールが default_config の always_allow を伝播しない

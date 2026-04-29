@@ -162,6 +162,30 @@ export type SessionEvent =
       is_error?: boolean;
       processed_at: string;
     }
+  /**
+   * Custom Tool 呼出 (e.g. create_artifact)。Agent が plugin 側に処理を依頼する。
+   * `event.id` がそのまま custom_tool_use_id (= 結果返却時の参照キー) になる。
+   * Plugin は `user.custom_tool_result` を返さないとターンが止まる。
+   */
+  | {
+      type: 'agent.custom_tool_use';
+      id: string;
+      name: string;
+      input: unknown;
+      processed_at: string;
+    }
+  /**
+   * Plugin が返した Custom Tool 結果 (events stream に user 発信として記録される)。
+   * Replay 時にこれを観測したら同じ custom_tool_use_id への再送信を抑止する。
+   */
+  | {
+      type: 'user.custom_tool_result';
+      id: string;
+      custom_tool_use_id: string;
+      content?: unknown;
+      is_error?: boolean;
+      processed_at?: string;
+    }
   | {
       type: 'session.status_idle';
       id: string;

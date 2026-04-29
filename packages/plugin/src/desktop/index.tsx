@@ -24,8 +24,40 @@ function mountRoot(): HTMLElement {
   return root;
 }
 
+/**
+ * デバッグログを有効化する。`?coworkDebug=1` が URL にあるときだけ window フラグを立てる。
+ * `core/debug.ts` の info ログ (custom_tool 配線等) が console に流れるようになる。
+ */
+function exposeDebugFlag(): void {
+  if (typeof window === 'undefined') return;
+  if (window.location && window.location.search.includes('coworkDebug=1')) {
+    (window as unknown as { __coworkDebug?: boolean }).__coworkDebug = true;
+  }
+}
+
+/**
+ * E2E テスト用の最小 API。`?coworkE2e=1` が URL に含まれるときだけ window に露出する。
+ * 内部 store の setter を直接叩けるようにし、LLM 呼び出し抜きで artifact ペイン /
+ * レンダラの DOM 振る舞いを検証できるようにする。
+ */
+function exposeTestApiIfRequested(): void {
+  if (typeof window === 'undefined') return;
+  if (!window.location || !window.location.search.includes('coworkE2e=1')) return;
+  (window as unknown as { __coworkAgent?: unknown }).__coworkAgent = {
+    upsertArtifact: (input: Parameters<ReturnType<typeof useChatStore.getState>['upsertArtifact']>[0]) =>
+      useChatStore.getState().upsertArtifact(input),
+    setActiveArtifact: (id: string | null) =>
+      useChatStore.getState().setActiveArtifact(id),
+    clearArtifacts: () => useChatStore.getState().clearArtifacts(),
+    getActiveArtifactId: () => useChatStore.getState().activeArtifactId,
+    getArtifactCount: () => useChatStore.getState().artifacts.size,
+  };
+}
+
 (function (PLUGIN_ID: string | undefined) {
   if (typeof kintone === 'undefined' || !kintone) return;
+  exposeDebugFlag();
+  exposeTestApiIfRequested();
 
   if (PLUGIN_ID) {
     // Anthropic API 呼出を kintone.plugin.app.proxy 経由にルーティング (CORS 回避)。

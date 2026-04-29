@@ -2,11 +2,15 @@
 //
 // デザイン仕様: docs/functional-design.md §5.3.2
 
+import { PebbleSprout, type PebbleSproutState } from './PebbleSprout';
+
 export interface HeaderProps {
   /** Agent 表示名 (例: "Cowork Agent for kintone") */
   agentName: string;
   /** Status 行のテキスト (例: "作業中 · kintone接続") */
   status: string;
+  /** Pebble Sprout マスコットの状態 (省略時 'idle') */
+  agentState?: PebbleSproutState;
   /** 履歴アイコン押下時。未指定ならボタン非表示 */
   onHistoryClick?: () => void;
   /** 新規会話アイコン押下時。未指定ならボタン非表示 */
@@ -20,6 +24,7 @@ export interface HeaderProps {
 export function Header({
   agentName,
   status,
+  agentState = 'idle',
   onHistoryClick,
   onNewConversationClick,
   onSettingsClick,
@@ -29,13 +34,7 @@ export function Header({
     <header className="flex items-center gap-[10px] border-b border-border bg-panel px-[14px] py-[10px] backdrop-blur-[12px]">
       {/* Avatar + status dot */}
       <div className="relative shrink-0">
-        <div
-          className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px]"
-          style={{ background: 'var(--cw-accent)' }}
-          aria-hidden="true"
-        >
-          <StarIcon />
-        </div>
+        <PebbleSprout size={40} state={agentState} />
         <span
           className="absolute bottom-[-2px] right-[-2px] h-[11px] w-[11px] rounded-full bg-[#22c55e] ring-2 ring-[color:var(--cw-panel)]"
           aria-hidden="true"
@@ -108,14 +107,6 @@ const strokeAttrs = {
   strokeLinecap: 'round' as const,
   strokeLinejoin: 'round' as const,
 };
-
-function StarIcon(): JSX.Element {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" strokeWidth="1.8" color="white" {...strokeAttrs}>
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  );
-}
 
 function ClockIcon(): JSX.Element {
   return (

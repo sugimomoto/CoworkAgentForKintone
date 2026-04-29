@@ -71,11 +71,17 @@ describe('MessageList', () => {
       expect(screen.queryAllByRole('button', { name: 'もう一度試す' })).toHaveLength(1);
     });
 
-    it('agentRunning=true のときは retry ボタンを出さない (連打防止)', () => {
+    it('agentPhase=running のときは retry ボタンを出さない (連打防止)', () => {
       const messages: ChatMessage[] = [
         { id: 'tu_e', kind: 'tool', name: 'kintone-add-record', input: {}, status: 'error' },
       ];
-      render(<MessageList messages={messages} onRetryTool={() => undefined} agentRunning />);
+      render(
+        <MessageList
+          messages={messages}
+          onRetryTool={() => undefined}
+          agentPhase="running"
+        />,
+      );
       expect(screen.queryAllByRole('button', { name: 'もう一度試す' })).toHaveLength(0);
     });
 

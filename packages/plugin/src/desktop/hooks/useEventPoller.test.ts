@@ -12,6 +12,7 @@ vi.mock('../../core/managed-agents/events', async (importOriginal) => {
   return {
     ...actual,
     fetchAllEventsSince: vi.fn(),
+    postCustomToolResult: vi.fn(),
   };
 });
 vi.mock('../../core/managed-agents/resources', async (importOriginal) => {
@@ -22,16 +23,19 @@ vi.mock('../../core/managed-agents/resources', async (importOriginal) => {
   };
 });
 
-import { fetchAllEventsSince } from '../../core/managed-agents/events';
+import { fetchAllEventsSince, postCustomToolResult } from '../../core/managed-agents/events';
 import { retrieveSession } from '../../core/managed-agents/resources';
 import { makeSession } from '../../test/fixtures';
 
 const mockFetch = vi.mocked(fetchAllEventsSince);
+const mockPostCustomToolResult = vi.mocked(postCustomToolResult);
 const mockRetrieveSession = vi.mocked(retrieveSession);
 
 beforeEach(() => {
   useChatStore.getState().reset();
   mockFetch.mockReset();
+  mockPostCustomToolResult.mockReset();
+  mockPostCustomToolResult.mockResolvedValue(undefined);
   mockRetrieveSession.mockReset();
   // 既定: archive されていない通常 Session
   mockRetrieveSession.mockResolvedValue(makeSession({ id: 'sess_1', archived_at: null, status: 'idle' }));
@@ -383,21 +387,105 @@ describe('useEventPoller', () => {
       );
     });
 
-    it('一度 terminated になったら以降は retrieveSession を呼ばない (無駄打ち防止)', async () => {
-      vi.useFakeTimers();
-      mockFetch.mockResolvedValue([]);
-      mockRetrieveSession.mockResolvedValue(
-        makeSession({ id: 'sess_1', archived_at: '2026-04-26T14:00:00Z' }),
-      );
+  });
+});
 
-      renderHook(() => useEventPoller({ sessionId: 'sess_1', enabled: true }));
+describe('useEventPoller — custom_tool (create_artifact)', () => {
+  it('agent.custom_tool_use を受けたら upsertArtifact + pendingCustomToolUseIds に積む', async () => {
+    const events: SessionEvent[] = [
+      {
+        id: 'evt_ct_1',
+        type: 'agent.custom_tool_use',
+        name: 'create_artifact',
+        input: {
+          id: 'a-rep',
+          kind: 'markdown',
+          title: 'Q1 レポート',
+          content: '# Hello',
+        },
+        processed_at: '...',
+      } as unknown as SessionEvent,
+    ];
+    mockFetch.mockResolvedValueOnce(events).mockResolvedValue([]);
 
-      await vi.waitFor(() => expect(mockRetrieveSession).toHaveBeenCalledTimes(1));
-      await vi.waitFor(() => expect(useChatStore.getState().sessionTerminated).toBe(true));
+    renderHook(() => useEventPoller({ sessionId: 'sess_1', enabled: true }));
 
-      // 次のポーリング cycle まで進めても retrieveSession は再度呼ばれない
-      await vi.advanceTimersByTimeAsync(11_000);
-      expect(mockRetrieveSession).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(useChatStore.getState().artifacts.get('a-rep')?.content).toBe('# Hello');
     });
+    // POST は responder hook の責務に分離したので poller では呼ばない。
+    // poller は chatStore.pendingCustomToolUseIds に (event.id → artifact.id) を積む。
+    expect(useChatStore.getState().pendingCustomToolUseIds.get('evt_ct_1')).toBe('a-rep');
+    expect(mockPostCustomToolResult).not.toHaveBeenCalled();
+    // ArtifactRefMessage が会話に追加されている
+    const msgs = useChatStore.getState().messages;
+    expect(msgs.some((m) => m.kind === 'artifact-ref' && m.artifactId === 'a-rep')).toBe(true);
+  });
+
+  it('events 内に対応する user.custom_tool_result が既にあるなら pending に積まない (replay)', async () => {
+    const events: SessionEvent[] = [
+      {
+        id: 'evt_ct_a',
+        type: 'agent.custom_tool_use',
+        name: 'create_artifact',
+        input: { id: 'a-replay', kind: 'json', title: 'T', content: '{}' },
+        processed_at: '...',
+      } as unknown as SessionEvent,
+      {
+        id: 'evt_ct_b',
+        type: 'user.custom_tool_result',
+        custom_tool_use_id: 'evt_ct_a',
+        content: 'ok',
+        processed_at: '...',
+      } as unknown as SessionEvent,
+    ];
+    mockFetch.mockResolvedValueOnce(events).mockResolvedValue([]);
+
+    renderHook(() => useEventPoller({ sessionId: 'sess_1', enabled: true }));
+
+    await waitFor(() => {
+      expect(useChatStore.getState().artifacts.has('a-replay')).toBe(true);
+    });
+    expect(useChatStore.getState().pendingCustomToolUseIds.size).toBe(0);
+    expect(mockPostCustomToolResult).not.toHaveBeenCalled();
+  });
+
+  it('入力不正な custom_tool_use は警告メッセージを残し pending に積まない', async () => {
+    const events: SessionEvent[] = [
+      {
+        id: 'evt_ct_bad',
+        type: 'agent.custom_tool_use',
+        name: 'create_artifact',
+        input: { kind: 'markdown', title: 'T' }, // id / content 欠落
+        processed_at: '...',
+      } as unknown as SessionEvent,
+    ];
+    mockFetch.mockResolvedValueOnce(events).mockResolvedValue([]);
+
+    renderHook(() => useEventPoller({ sessionId: 'sess_1', enabled: true }));
+
+    await waitFor(() => {
+      expect(useChatStore.getState().messages).toHaveLength(1);
+    });
+    expect(useChatStore.getState().pendingCustomToolUseIds.size).toBe(0);
+  });
+});
+
+describe('useEventPoller — terminated session (continued)', () => {
+  it('一度 terminated になったら以降は retrieveSession を呼ばない (無駄打ち防止)', async () => {
+    vi.useFakeTimers();
+    mockFetch.mockResolvedValue([]);
+    mockRetrieveSession.mockResolvedValue(
+      makeSession({ id: 'sess_1', archived_at: '2026-04-26T14:00:00Z' }),
+    );
+
+    renderHook(() => useEventPoller({ sessionId: 'sess_1', enabled: true }));
+
+    await vi.waitFor(() => expect(mockRetrieveSession).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(useChatStore.getState().sessionTerminated).toBe(true));
+
+    // 次のポーリング cycle まで進めても retrieveSession は再度呼ばれない
+    await vi.advanceTimersByTimeAsync(11_000);
+    expect(mockRetrieveSession).toHaveBeenCalledTimes(1);
   });
 });

@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 
+import type { Artifact, CreateArtifactInput } from '../core/artifacts/types';
 import type { ChatMessage, ToolMessage } from '../desktop/components/MessageList';
 
 export type ChatStatus = 'idle' | 'bootstrapping' | 'ready' | 'error';
@@ -52,10 +53,29 @@ export interface ChatState {
   error: string | null;
   /** Agent ターン進行中フラグ (session.status_running 〜 status_idle/terminal) */
   isAgentRunning: boolean;
+  /**
+   * Agent ターンが running に入った時刻 (epoch ms)。idle に戻ると null。
+   * UI で「○秒待機中」の表示や「応答が遅い」バナーの判定に使う。
+   */
+  agentRunningSince: number | null;
   /** Session が terminated (Anthropic 側で完全終了) になったかどうか */
   sessionTerminated: boolean;
   /** 現在のパネル表示 (チャット or 履歴) */
   view: ChatView;
+  /**
+   * Agent が `create_artifact` ツールで生成した成果物。session スコープ。
+   * Map をそのまま使うので set 時は new Map(prev) で再生成する (Zustand の等値判定対策)
+   */
+  artifacts: Map<string, Artifact>;
+  /** ArtifactPane で表示中の Artifact ID。null なら ペイン非表示 */
+  activeArtifactId: string | null;
+  /**
+   * 未応答の `custom_tool_use_id → artifact.id` マップ。
+   * Agent が create_artifact を呼ぶと add され、Anthropic が user.custom_tool_result を
+   * 受領 (= events に echo back) したら delete される。
+   * useCustomToolResponder がこの Map を見て POST / リトライする。
+   */
+  pendingCustomToolUseIds: Map<string, string>;
 
   /** メッセージを末尾に追加 */
   addMessage: (msg: ChatMessage) => void;
@@ -96,6 +116,23 @@ export interface ChatState {
   /** 表示モードを切替 */
   setView: (view: ChatView) => void;
 
+  /**
+   * Artifact を新規追加 or 同 id 更新する。
+   * 同じ id が既にあれば content/title 等を上書きし、version を +1、updatedAt を現在時刻に。
+   * 戻り値は反映後の Artifact (呼出側で result 返却に使う)。
+   */
+  upsertArtifact: (input: CreateArtifactInput) => Artifact;
+  /** Artifact を削除 */
+  removeArtifact: (id: string) => void;
+  /** 全 Artifact を削除 */
+  clearArtifacts: () => void;
+  /** 表示中の Artifact ID を変更 (null で ペインを閉じる) */
+  setActiveArtifact: (id: string | null) => void;
+
+  /** 未応答 custom_tool_use を追跡 (responder hook が POST / リトライする) */
+  addPendingCustomToolUse: (toolUseId: string, artifactId: string) => void;
+  removePendingCustomToolUse: (toolUseId: string) => void;
+
   /** 全て初期化 (接続情報リセット等の後に呼ぶ) */
   reset: () => void;
   /** 会話履歴だけ初期化し、Session は保つ */
@@ -120,8 +157,12 @@ const INITIAL_STATE = {
   status: 'idle' as ChatStatus,
   error: null,
   isAgentRunning: false,
+  agentRunningSince: null as number | null,
   sessionTerminated: false,
   view: 'chat' as ChatView,
+  artifacts: new Map<string, Artifact>(),
+  activeArtifactId: null as string | null,
+  pendingCustomToolUseIds: new Map<string, string>(),
 };
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -181,16 +222,106 @@ export const useChatStore = create<ChatState>((set) => ({
 
   setStatus: (status, error = null) => set({ status, error: status === 'error' ? error : null }),
 
-  setAgentRunning: (running) => set({ isAgentRunning: running }),
+  setAgentRunning: (running) =>
+    set((s) => {
+      // false → true への遷移でだけ開始時刻を記録 (true → true では更新しない)。
+      // false に戻ったら null にリセット。
+      if (running && !s.isAgentRunning) {
+        return { isAgentRunning: true, agentRunningSince: Date.now() };
+      }
+      if (!running && s.isAgentRunning) {
+        return { isAgentRunning: false, agentRunningSince: null };
+      }
+      return { isAgentRunning: running };
+    }),
 
   setSessionTerminated: (terminated) => set({ sessionTerminated: terminated }),
 
   setView: (view) => set({ view }),
 
-  reset: () => set({ ...INITIAL_STATE }),
+  upsertArtifact: (input) => {
+    const now = Date.now();
+    let result!: Artifact;
+    set((s) => {
+      const existing = s.artifacts.get(input.id);
+      const next: Artifact = existing
+        ? {
+            ...existing,
+            kind: input.kind,
+            title: input.title,
+            content: input.content,
+            language: input.language,
+            summary: input.summary,
+            updatedAt: now,
+            version: existing.version + 1,
+          }
+        : {
+            id: input.id,
+            kind: input.kind,
+            title: input.title,
+            content: input.content,
+            language: input.language,
+            summary: input.summary,
+            createdAt: now,
+            updatedAt: now,
+            version: 1,
+          };
+      result = next;
+      const artifacts = new Map(s.artifacts);
+      artifacts.set(input.id, next);
+      return { artifacts };
+    });
+    return result;
+  },
+
+  removeArtifact: (id) =>
+    set((s) => {
+      if (!s.artifacts.has(id)) return s;
+      const artifacts = new Map(s.artifacts);
+      artifacts.delete(id);
+      const activeArtifactId = s.activeArtifactId === id ? null : s.activeArtifactId;
+      return { artifacts, activeArtifactId };
+    }),
+
+  clearArtifacts: () =>
+    set({ artifacts: new Map(), activeArtifactId: null, pendingCustomToolUseIds: new Map() }),
+
+  setActiveArtifact: (id) => set({ activeArtifactId: id }),
+
+  addPendingCustomToolUse: (toolUseId, artifactId) =>
+    set((s) => {
+      if (s.pendingCustomToolUseIds.get(toolUseId) === artifactId) return s;
+      const next = new Map(s.pendingCustomToolUseIds);
+      next.set(toolUseId, artifactId);
+      return { pendingCustomToolUseIds: next };
+    }),
+
+  removePendingCustomToolUse: (toolUseId) =>
+    set((s) => {
+      if (!s.pendingCustomToolUseIds.has(toolUseId)) return s;
+      const next = new Map(s.pendingCustomToolUseIds);
+      next.delete(toolUseId);
+      return { pendingCustomToolUseIds: next };
+    }),
+
+  reset: () =>
+    set({
+      ...INITIAL_STATE,
+      artifacts: new Map(),
+      pendingCustomToolUseIds: new Map(),
+    }),
 
   resetConversation: () => set({ messages: [] }),
 
   startNewConversation: () =>
-    set({ messages: [], sessionId: null, isAgentRunning: false, sessionTerminated: false }),
+    set({
+      messages: [],
+      sessionId: null,
+      isAgentRunning: false,
+      agentRunningSince: null,
+      sessionTerminated: false,
+      artifacts: new Map(),
+      activeArtifactId: null,
+      pendingCustomToolUseIds: new Map(),
+    }),
 }));

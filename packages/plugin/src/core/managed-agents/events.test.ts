@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   fetchAllEventsSince,
   listEvents,
+  postCustomToolResult,
   postToolConfirmation,
   postUserInterrupt,
   postUserMessage,
@@ -238,5 +239,38 @@ describe('postToolConfirmation', () => {
 
     const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
     expect(body.events[0]).not.toHaveProperty('deny_message');
+  });
+});
+
+describe('postCustomToolResult', () => {
+  it('成功結果は user.custom_tool_result + content (JSON 文字列) で送る', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await postCustomToolResult('sess_1', 'tu_99', { ok: true, artifactId: 'a1' });
+
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('https://api.anthropic.com/v1/sessions/sess_1/events');
+    expect((init as RequestInit).method).toBe('POST');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.events[0]).toEqual({
+      type: 'user.custom_tool_result',
+      custom_tool_use_id: 'tu_99',
+      content: [{ type: 'text', text: JSON.stringify({ ok: true, artifactId: 'a1' }) }],
+      is_error: false,
+    });
+  });
+
+  it('失敗結果は is_error=true で content にエラー文を含む', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await postCustomToolResult('sess_1', 'tu_99', { ok: false, error: 'invalid input' });
+
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.events[0]).toEqual({
+      type: 'user.custom_tool_result',
+      custom_tool_use_id: 'tu_99',
+      content: [{ type: 'text', text: JSON.stringify({ ok: false, error: 'invalid input' }) }],
+      is_error: true,
+    });
   });
 });

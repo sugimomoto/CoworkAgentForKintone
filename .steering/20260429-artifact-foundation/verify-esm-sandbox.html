@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>verify-esm-sandbox</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 16px; max-width: 720px; }
+    #status { padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; font-weight: 600; }
+    .pending { background: #fff3cd; color: #664d03; }
+    .ok { background: #d1e7dd; color: #0f5132; }
+    .ng { background: #f8d7da; color: #842029; }
+    iframe { width: 100%; height: 360px; border: 1px solid #ddd; border-radius: 6px; background: white; }
+    pre { background: #f6f8fa; padding: 8px; border-radius: 6px; font-size: 12px; max-height: 200px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>esm.sh + sandboxed iframe 検証</h1>
+  <p>このページを <strong>kintone 管理画面と同じブラウザのタブ</strong> (file:// でも OK) で開く。<br/>
+     iframe 内で React + Recharts を esm.sh からロードし、棒グラフを描画する。</p>
+  <div id="status" class="pending">⏳ 検証中...</div>
+  <iframe id="frame" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>
+  <h3>iframe からのメッセージ</h3>
+  <pre id="log"></pre>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const logEl = document.getElementById('log');
+    const frame = document.getElementById('frame');
+
+    const log = (msg) => { logEl.textContent += msg + '\n'; };
+
+    const userCode = `
+      function Demo() {
+        const data = [
+          { name: '1月', value: 400 },
+          { name: '2月', value: 300 },
+          { name: '3月', value: 600 },
+          { name: '4月', value: 800 },
+          { name: '5月', value: 500 },
+        ];
+        return React.createElement(Recharts.ResponsiveContainer, { width: '100%', height: 300 },
+          React.createElement(Recharts.BarChart, { data },
+            React.createElement(Recharts.CartesianGrid, { strokeDasharray: '3 3' }),
+            React.createElement(Recharts.XAxis, { dataKey: 'name' }),
+            React.createElement(Recharts.YAxis, null),
+            React.createElement(Recharts.Tooltip, null),
+            React.createElement(Recharts.Bar, { dataKey: 'value', fill: '#3b82f6' })
+          )
+        );
+      }
+    `;
+
+    const srcdoc = `<!doctype html>
+<html><head><meta charset="utf-8" />
+<style>html,body,#root{margin:0;padding:0;height:100%;font-family:system-ui,sans-serif}</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+  try {
+    const post = (type, payload) => parent.postMessage({ source: 'verify', type, payload }, '*');
+    post('start', 'loading deps');
+    const [React, ReactDOM, Recharts] = await Promise.all([
+      import('https://esm.sh/react@18.3.1'),
+      import('https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1'),
+      import('https://esm.sh/recharts@2.12.7?deps=react@18.3.1,react-dom@18.3.1'),
+    ]);
+    post('deps-loaded', { react: !!React.createElement, recharts: !!Recharts.BarChart });
+    window.React = React.default || React;
+    window.Recharts = Recharts;
+    ${userCode}
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(Demo));
+    post('rendered', 'ok');
+  } catch (err) {
+    parent.postMessage({ source: 'verify', type: 'error', payload: String(err && err.stack || err) }, '*');
+  }
+</` + `script>
+</body></html>`;
+
+    window.addEventListener('message', (ev) => {
+      if (!ev.data || ev.data.source !== 'verify') return;
+      log('[' + ev.data.type + '] ' + JSON.stringify(ev.data.payload));
+      if (ev.data.type === 'rendered') {
+        statusEl.className = 'ok';
+        statusEl.textContent = '✅ 成功: esm.sh + sandboxed iframe で React + Recharts が描画できました';
+      } else if (ev.data.type === 'error') {
+        statusEl.className = 'ng';
+        statusEl.textContent = '❌ 失敗: ' + ev.data.payload;
+      }
+    });
+
+    setTimeout(() => {
+      if (statusEl.classList.contains('pending')) {
+        statusEl.className = 'ng';
+        statusEl.textContent = '❌ タイムアウト (10s): iframe から応答が来ません。CSP / ネットワークを確認してください';
+      }
+    }, 10000);
+
+    frame.srcdoc = srcdoc;
+  </script>
+</body>
+</html>

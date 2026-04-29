@@ -11,6 +11,7 @@
 import { useEffect, useRef } from 'react';
 
 import { POLLING_INTERVAL_MS } from '../../core/constants';
+import { debug, warn } from '../../core/debug';
 import { interpretEvent, isTerminalEvent } from '../../core/managed-agents/eventInterpreter';
 import { fetchAllEventsSince } from '../../core/managed-agents/events';
 import { retrieveSession } from '../../core/managed-agents/resources';
@@ -51,6 +52,9 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
   const mergeMessage = useChatStore((s) => s.mergeMessage);
   const removeMessage = useChatStore((s) => s.removeMessage);
   const updateTool = useChatStore((s) => s.updateTool);
+  const upsertArtifact = useChatStore((s) => s.upsertArtifact);
+  const addPendingCustomToolUse = useChatStore((s) => s.addPendingCustomToolUse);
+  const removePendingCustomToolUse = useChatStore((s) => s.removePendingCustomToolUse);
   const setAgentRunning = useChatStore((s) => s.setAgentRunning);
   const setSessionTerminated = useChatStore((s) => s.setSessionTerminated);
   const setBindingStatus = useChatStore((s) => s.setBindingStatus);
@@ -73,8 +77,15 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
       let events: SessionEvent[] = [];
       try {
         events = await fetchAllEventsSince(sessionId, lastEventIdRef.current);
-      } catch {
-        // エラーは無視して次のインターバルで再試行 (今はログもしない)
+        if (events.length > 0) {
+          debug(
+            'Poller',
+            `fetched ${events.length} events`,
+            events.map((e) => e.type),
+          );
+        }
+      } catch (err) {
+        warn('Poller', 'fetchAllEventsSince failed', err);
       }
       if (cancelled) return;
 
@@ -91,6 +102,26 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
           } else if (session.status === 'terminated') {
             setSessionTerminated(true);
             setAgentRunning(false);
+          } else if (session.status === 'idle' && useChatStore.getState().isAgentRunning) {
+            // Anthropic 側が `idle` なのに、events stream に terminal stop_reason が
+            // 含まれない (もしくは未到達の) ケースの安全網。
+            // 「まだ進行中」とみなす条件:
+            //   - 承認待ちツール (pending-confirmation) がある
+            //   - オプティミスティック thinking (`pending-` プレフィックス) がある
+            //   - 未応答の custom_tool_use がある (create_artifact 応答中)
+            const stateNow = useChatStore.getState();
+            const inProgress =
+              stateNow.messages.some(
+                (m) => m.kind === 'tool' && m.status === 'pending-confirmation',
+              ) ||
+              stateNow.messages.some(
+                (m) => m.kind === 'thinking' && m.id.startsWith('pending-'),
+              ) ||
+              stateNow.pendingCustomToolUseIds.size > 0;
+            if (!inProgress) {
+              debug('Session', 'safety net: setAgentRunning(false)');
+              setAgentRunning(false);
+            }
           }
         } catch {
           // 取得失敗は次のインターバルで再試行
@@ -98,15 +129,28 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
         if (cancelled) return;
       }
 
+      // 今回のバッチに含まれる user.custom_tool_result から「応答済み」を確定して
+      // chatStore.pendingCustomToolUseIds から削除 (responder hook の再送ループを止める)。
+      const respondedIdsThisBatch = new Set<string>();
+      for (const e of events) {
+        if (e.type === 'user.custom_tool_result') {
+          const tuid = (e as { custom_tool_use_id?: string }).custom_tool_use_id;
+          if (tuid) {
+            respondedIdsThisBatch.add(tuid);
+            removePendingCustomToolUse(tuid);
+          }
+        }
+      }
+
       let sawTerminal = false;
       let sawAgentMessage = false;
       for (const e of events) {
-        const r = interpretEvent(e);
-        if (r) {
+        const effects = interpretEvent(e);
+        for (const r of effects) {
           if (r.kind === 'add') {
             mergeMessage(r.message);
             if (r.message.kind === 'agent') sawAgentMessage = true;
-          } else {
+          } else if (r.kind === 'update-tool') {
             updateTool(r.toolUseId, r.patch);
             // tool_result が OAuth 失効を示すなら bindingStatus を error に倒し、
             // ChatPanel 側の「再連携」バナーを発火させる (mid-session 自動検知)
@@ -116,6 +160,20 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
               useChatStore.getState().bindingStatus !== 'error'
             ) {
               setBindingStatus('error', 'kintone の認証が切れました');
+            }
+          } else if (r.kind === 'upsert-artifact') {
+            const artifact = upsertArtifact(r.input);
+            debug('CustomTool', 'agent.custom_tool_use observed', {
+              toolUseId: r.toolUseId,
+              artifactId: artifact.id,
+              kind: r.input.kind,
+            });
+            // 同じ batch 内に既に user.custom_tool_result があるなら replay = 応答済 →
+            // pending には登録しない。なければ pending に積んで responder hook に POST を任せる。
+            if (!respondedIdsThisBatch.has(r.toolUseId)) {
+              addPendingCustomToolUse(r.toolUseId, artifact.id);
+            } else {
+              debug('CustomTool', 'replay: skip POST for', r.toolUseId);
             }
           }
         }
@@ -129,7 +187,8 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
         lastEventIdRef.current = e.id;
         if (isTerminalEvent(e)) sawTerminal = true;
       }
-      // ターン終了 (end_turn / retries_exhausted) で running フラグを下げる
+      // ターン終了 (end_turn / retries_exhausted / max_tokens / error) で running フラグを下げる。
+      // (Custom Tool の `requires_action` は terminal ではないので isAgentRunning は維持される)
       if (sawTerminal) setAgentRunning(false);
 
       // オプティミスティック thinking (ChatPanel が送信時に置いた pending- プレフィックス) は
@@ -172,5 +231,17 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
       cancelled = true;
       if (timeoutId !== null) clearTimeout(timeoutId);
     };
-  }, [sessionId, enabled, mergeMessage, removeMessage, updateTool, setAgentRunning, setSessionTerminated, setBindingStatus]);
+  }, [
+    sessionId,
+    enabled,
+    mergeMessage,
+    removeMessage,
+    updateTool,
+    upsertArtifact,
+    addPendingCustomToolUse,
+    removePendingCustomToolUse,
+    setAgentRunning,
+    setSessionTerminated,
+    setBindingStatus,
+  ]);
 }

@@ -247,4 +247,89 @@ describe('chatStore', () => {
       expect(m.kind).toBe('agent');
     });
   });
+
+  describe('artifacts', () => {
+    it('初期値は空 Map / activeArtifactId=null', () => {
+      const s = useChatStore.getState();
+      expect(s.artifacts.size).toBe(0);
+      expect(s.activeArtifactId).toBeNull();
+    });
+
+    it('upsertArtifact で新規追加され version=1, createdAt/updatedAt が設定される', () => {
+      const a = useChatStore.getState().upsertArtifact({
+        id: 'a1',
+        kind: 'markdown',
+        title: 'T',
+        content: '# Hello',
+      });
+      expect(a.version).toBe(1);
+      expect(a.createdAt).toBeGreaterThan(0);
+      expect(a.updatedAt).toBe(a.createdAt);
+      expect(useChatStore.getState().artifacts.get('a1')?.content).toBe('# Hello');
+    });
+
+    it('同じ id で再 upsert すると content が更新され version が +1、createdAt は維持', () => {
+      const first = useChatStore.getState().upsertArtifact({
+        id: 'a1', kind: 'markdown', title: 'T', content: 'v1',
+      });
+      const second = useChatStore.getState().upsertArtifact({
+        id: 'a1', kind: 'markdown', title: 'T2', content: 'v2',
+      });
+      expect(second.version).toBe(2);
+      expect(second.createdAt).toBe(first.createdAt);
+      expect(second.title).toBe('T2');
+      expect(useChatStore.getState().artifacts.get('a1')?.content).toBe('v2');
+    });
+
+    it('upsertArtifact は毎回 Map インスタンスを再生成する (Zustand 等値判定対策)', () => {
+      const before = useChatStore.getState().artifacts;
+      useChatStore.getState().upsertArtifact({ id: 'a1', kind: 'json', title: 'T', content: '{}' });
+      const after = useChatStore.getState().artifacts;
+      expect(after).not.toBe(before);
+    });
+
+    it('removeArtifact で削除される。activeArtifactId が一致すれば null に戻す', () => {
+      useChatStore.getState().upsertArtifact({ id: 'a1', kind: 'markdown', title: 'T', content: 'x' });
+      useChatStore.getState().setActiveArtifact('a1');
+      useChatStore.getState().removeArtifact('a1');
+      const s = useChatStore.getState();
+      expect(s.artifacts.has('a1')).toBe(false);
+      expect(s.activeArtifactId).toBeNull();
+    });
+
+    it('removeArtifact で activeArtifactId が別の id ならそのまま', () => {
+      useChatStore.getState().upsertArtifact({ id: 'a1', kind: 'markdown', title: 'T', content: 'x' });
+      useChatStore.getState().upsertArtifact({ id: 'a2', kind: 'markdown', title: 'T', content: 'y' });
+      useChatStore.getState().setActiveArtifact('a2');
+      useChatStore.getState().removeArtifact('a1');
+      expect(useChatStore.getState().activeArtifactId).toBe('a2');
+    });
+
+    it('clearArtifacts で全削除 + activeArtifactId=null', () => {
+      useChatStore.getState().upsertArtifact({ id: 'a1', kind: 'markdown', title: 'T', content: 'x' });
+      useChatStore.getState().setActiveArtifact('a1');
+      useChatStore.getState().clearArtifacts();
+      const s = useChatStore.getState();
+      expect(s.artifacts.size).toBe(0);
+      expect(s.activeArtifactId).toBeNull();
+    });
+
+    it('startNewConversation で artifacts もクリアされる', () => {
+      useChatStore.getState().upsertArtifact({ id: 'a1', kind: 'markdown', title: 'T', content: 'x' });
+      useChatStore.getState().setActiveArtifact('a1');
+      useChatStore.getState().startNewConversation();
+      const s = useChatStore.getState();
+      expect(s.artifacts.size).toBe(0);
+      expect(s.activeArtifactId).toBeNull();
+    });
+
+    it('reset で artifacts もクリアされる', () => {
+      useChatStore.getState().upsertArtifact({ id: 'a1', kind: 'markdown', title: 'T', content: 'x' });
+      useChatStore.getState().setActiveArtifact('a1');
+      useChatStore.getState().reset();
+      const s = useChatStore.getState();
+      expect(s.artifacts.size).toBe(0);
+      expect(s.activeArtifactId).toBeNull();
+    });
+  });
 });

@@ -9,6 +9,7 @@ import { useCallback, useState } from 'react';
 import { postToolConfirmation, postUserInterrupt, postUserMessage } from '../core/managed-agents/events';
 import { useChatStore } from '../store/chatStore';
 
+import { ArtifactPane } from './components/ArtifactPane';
 import { Banner } from './components/Banner';
 import { Composer } from './components/Composer';
 import { ConnectKintoneButton } from './components/ConnectKintoneButton';
@@ -16,6 +17,9 @@ import { Header } from './components/Header';
 import { MessageList } from './components/MessageList';
 import { WelcomeMessage } from './components/WelcomeMessage';
 import { HistoryView } from './HistoryView';
+import { useAgentPhase } from './hooks/useAgentPhase';
+import { useCustomToolResponder } from './hooks/useCustomToolResponder';
+import { useElapsedSeconds } from './hooks/useElapsedSeconds';
 import { useEventPoller } from './hooks/useEventPoller';
 import { useSession } from './hooks/useSession';
 import { useUserBinding } from './hooks/useUserBinding';
@@ -31,6 +35,8 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   const messages = useChatStore((s) => s.messages);
   const sessionId = useChatStore((s) => s.sessionId);
   const agentId = useChatStore((s) => s.agentId);
+  const activeArtifactId = useChatStore((s) => s.activeArtifactId);
+  const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
   const status = useChatStore((s) => s.status);
   const error = useChatStore((s) => s.error);
   const view = useChatStore((s) => s.view);
@@ -47,12 +53,23 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   const [pendingText, setPendingText] = useState<string | null>(null);
 
   useEventPoller({ sessionId, enabled: status === 'ready' && sessionId !== null });
+  useCustomToolResponder({ sessionId, enabled: status === 'ready' && sessionId !== null });
+  const agentPhase = useAgentPhase();
+
+  // Agent ターン進行中の経過秒数。30 秒以上で「応答が遅い」バナーを出す目印。
+  const elapsedSeconds = useElapsedSeconds(isAgentRunning);
+  const SLOW_THRESHOLD_S = 30;
+  const isSlow = isAgentRunning && elapsedSeconds >= SLOW_THRESHOLD_S;
 
   const handleSubmit = useCallback(
     async (text: string) => {
       const userId = `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       addMessage({ id: userId, kind: 'user', text });
       addMessage({ id: `pending-thinking-${Date.now()}`, kind: 'thinking' });
+      // オプティミスティックに「Agent ターン進行中」へ遷移させる。
+      // (実際の session.status_running が来るまで待つと、その間に「応答完了」divider が
+      //  消えず一瞬残ってしまう)
+      setAgentRunning(true);
 
       // 未バインドなら一旦保留して連携ボタンへ誘導
       if (bindingStatus === 'unbound' || bindingStatus === 'error') {
@@ -67,7 +84,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
         // MVP: 失敗しても UI では握りつぶす
       }
     },
-    [addMessage, bindingStatus, ensureSession],
+    [addMessage, bindingStatus, ensureSession, setAgentRunning],
   );
 
   const handleConnect = useCallback(async () => {
@@ -176,6 +193,20 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
     return bindingStatus === 'bound' ? '接続中' : '連携待ち';
   })();
 
+  const agentState = ((): 'idle' | 'thinking' | 'working' | 'waiting' => {
+    const hasPendingTool = messages.some(
+      (m) => m.kind === 'tool' && m.status === 'pending-confirmation',
+    );
+    if (hasPendingTool) return 'waiting';
+    const hasRunningTool = messages.some((m) => m.kind === 'tool' && m.status === 'running');
+    if (hasRunningTool) return 'working';
+    if (isAgentRunning) {
+      const hasThinking = messages.some((m) => m.kind === 'thinking');
+      return hasThinking ? 'thinking' : 'working';
+    }
+    return 'idle';
+  })();
+
   /**
    * 初期未バインド時は ConnectKintoneButton で大きく誘導する。
    * 一度でも会話を始めたあとに失効した場合は、Composer は維持して上部に
@@ -192,6 +223,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
       <Header
         agentName="Cowork Agent for kintone"
         status={statusLine}
+        agentState={agentState}
         onHistoryClick={handleHistoryClick}
         onNewConversationClick={handleNewConversationClick}
         onSettingsClick={handleSettingsClick}
@@ -229,36 +261,65 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
         </Banner>
       )}
 
+      {/*
+        応答遅延バナー: Agent ターンが 30 秒以上続いているときに表示。
+        Anthropic 側の処理が長い (e.g. 大きな SVG 生成) ことがあるので、
+        ユーザーが「フリーズしたのか待つべきか」を判断できるようにする。
+      */}
+      {isSlow && (
+        <Banner
+          testId="slow-response"
+          actionLabel="中断"
+          onAction={handleCancel}
+        >
+          応答に時間がかかっています ({elapsedSeconds}秒経過)。
+          そのまま待つか、中断して新しいセッションで試してください。
+        </Banner>
+      )}
+
       {view === 'history' && agentId ? (
         <HistoryView agentId={agentId} onSelect={handleHistorySelect} />
       ) : (
-        <>
-          {messages.length === 0 && sessionId === null ? (
-            <WelcomeMessage />
-          ) : (
-            <MessageList
-              messages={messages}
-              onApproveTool={handleApproveTool}
-              onRejectTool={handleRejectTool}
-              onRetryTool={handleRetryTool}
-              agentRunning={isAgentRunning}
-            />
+        <div className="relative flex flex-1 overflow-hidden">
+          <div className="flex flex-1 flex-col overflow-hidden lg:min-w-[360px]">
+            {messages.length === 0 && sessionId === null ? (
+              <WelcomeMessage />
+            ) : (
+              <MessageList
+                messages={messages}
+                onApproveTool={handleApproveTool}
+                onRejectTool={handleRejectTool}
+                onRetryTool={handleRetryTool}
+                onOpenArtifact={setActiveArtifact}
+                agentPhase={agentPhase}
+              />
+            )}
+            {showConnectButton ? (
+              <ConnectKintoneButton
+                status={bindingStatus}
+                error={bindingError}
+                onConnect={handleConnect}
+              />
+            ) : (
+              <Composer
+                onSubmit={handleSubmit}
+                disabled={status !== 'ready' || sessionTerminated}
+                running={isAgentRunning}
+                onCancel={handleCancel}
+              />
+            )}
+          </div>
+          {activeArtifactId && (
+            // 広い時 (≥1024px): 横並び (チャットと artifact が flex-1 で 50/50 + min 幅保証)
+            // 狭い時: オーバーレイ表示
+            <div
+              data-artifact-pane-wrap
+              className="absolute inset-0 z-10 bg-white lg:static lg:z-auto lg:flex-1 lg:basis-[480px] lg:min-w-[480px]"
+            >
+              <ArtifactPane />
+            </div>
           )}
-          {showConnectButton ? (
-            <ConnectKintoneButton
-              status={bindingStatus}
-              error={bindingError}
-              onConnect={handleConnect}
-            />
-          ) : (
-            <Composer
-              onSubmit={handleSubmit}
-              disabled={status !== 'ready' || sessionTerminated}
-              running={isAgentRunning}
-              onCancel={handleCancel}
-            />
-          )}
-        </>
+        </div>
       )}
     </div>
   );
