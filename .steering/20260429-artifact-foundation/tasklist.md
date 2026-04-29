@@ -197,3 +197,9 @@
 オリジナル設計案の `textarea 直編集 → Agent に "これに変更して" 再依頼` 案 (案 A) は
 **実装しない**。会話で「色を緑に」等と書けば Agent が同 id で `create_artifact` を再呼出
 して version up する流れ (案 B) で実用十分。詳細は Issue #14 のコメントを参照。
+
+### 13.8 仕様変更: Step 3「kintone-customize-js を kintone へ適用」は #9 で対応
+
+artifact 基盤側ではなく、Issue #9 (kintone カスタマイズ / 開発支援) のスコープ。
+本フェーズでは `kind: 'kintone-customize-js'` は placeholder のままにし、#9 着手時に
+enum 追加 + 「🚀 kintone へ適用」アクションを足す方針。
