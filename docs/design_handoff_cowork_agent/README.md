@@ -1,4 +1,4 @@
-# Handoff: Cowork Agent for kintone — Chat Side Panel
+# Handoff: Cowork Agent for kintone — Chat Side Panel + Artifact Pane
 
 ## Overview
 
@@ -6,15 +6,11 @@
 AI コワーカーエージェントのチャット UI。Claude Managed Agents API をバックエンドとし、
 自然言語で kintone レコードの検索・集計・作成・更新・削除を実行する。
 
-本ハンドオフは MVP (フェーズ1) の **チャット UI コンポーネント本体** の仕様である。
-対象機能: F-01 チャット UI / F-07 HITL 承認 / F-08 非同期ジョブ進捗 / F-09 セッション継続 /
-シナリオ US-01 (自然言語での検索・集計)。
+本ハンドオフは MVP (フェーズ1) の以下を含む：
 
-> **関連ドキュメント** (齟齬がある場合はそちらを優先):
-> - [`docs/product-requirements.md`](../product-requirements.md) — プロダクト要求定義
-> - [`docs/functional-design.md`](../functional-design.md) — 機能設計 (アーキテクチャ、データモデル、Custom Tool の扱い、命名規則)
-> - [`docs/architecture.md`](../architecture.md) — 技術スタック、開発プロセス、制約
-> - [`docs/repository-structure.md`](../repository-structure.md) — リポジトリ構造
+- **チャット UI コンポーネント** (F-01 / F-07 HITL 承認 / F-08 非同期ジョブ進捗 / F-09 セッション継続)
+- **Artifact ペイン** (Claude Desktop 風の再利用可能な成果物ビューア)
+- シナリオ US-01 (自然言語での検索・集計)
 
 ---
 
@@ -25,365 +21,372 @@ AI コワーカーエージェントのチャット UI。Claude Managed Agents A
 
 タスクは「このデザインを **kintone プラグイン (JavaScript カスタマイズ) の実行環境で再現する** こと」。
 kintone プラグイン側のビルド設定・使用ライブラリ・既存パターンに沿って実装し直す。
-プロトタイプは React + Babel standalone で書かれており、本番実装も `docs/architecture.md` に従い
-**TypeScript + React 18 + Vite + Tailwind CSS** で構築する (プロジェクト全体の技術スタック統一のため)。
+プロトタイプは React + Babel standalone で書かれているが、プラグイン側が素の JS/TS + 任意の
+フレームワーク (React / Preact / lit / plain DOM など、バンドルサイズに応じて選択) で書かれるのが通常。
+
+---
+
+## Screenshots
+
+各アートボードの静止プレビュー。インタラクションを確認するときは
+`reference/Cowork Agent Chat Panel.html` を開いて design canvas からそれぞれを focus モードで
+開いてほしい。
+
+### Chat Panel — Rich variant
+
+| | |
+|---|---|
+| ![rich-inhost](screenshots/01-rich-inhost.png) | **01 · kintone レコード一覧 + サイドパネル**<br/>サイドパネル 380px が常駐した状態。ホスト側 (kintone) のヘッダー・アプリバー・テーブルとの色 / 余白の取り合いを確認する用。 |
+| ![rich-solo](screenshots/02-rich-solo.png) | **02 · チャット単体 (greeting → result)**<br/>greeting / user / thinking / tool call / progress / result カードを縦に並べた基本シナリオ US-01 の出力。 |
+| ![rich-hitl](screenshots/03-rich-hitl.png) | **03 · HITL 承認 (destructive plan)**<br/>破壊的操作 plan card の見た目。warn 系の border + glow、「承認して実行」ボタンの強調を確認。 |
+
+### Artifact Pane
+
+| | |
+|---|---|
+| ![artifact-host](screenshots/04-artifact-host.png) | **04 · Side-by-Side レイアウト (Chat 380 + Artifact)**<br/>kintone ホストと並んだ最終形。Artifact ペインのヘッダー (kind icon / title▾ / tab toggle / actions) を含む。 |
+| ![artifact-md](screenshots/05-artifact-md.png) | **05 · Markdown レンダラ**<br/>月次レポート。h1/h2/h3、表、blockquote、inline code の組版仕様。 |
+| ![artifact-html](screenshots/06-artifact-html.png) | **06 · HTML サンドボックス**<br/>`sandbox="allow-scripts"` の iframe で受注ダッシュボードをプレビュー。 |
+| ![artifact-mermaid](screenshots/07-artifact-mermaid.png) | **07 · Mermaid (ER 図)**<br/>SVG レンダラ。エンティティの ヘッダー / PK ◆ / FK ◇ / リレーション線の描画仕様。 |
+| ![artifact-apply](screenshots/09-artifact-apply.png) | **09 · kintone 適用モーダル**<br/>破壊的操作。アプリ選択 + プレビュー + 警告バナー + 「適用する」ボタン。 |
+
+> Bottom-sheet (狭幅) モードはスクリーンショット未収録。`reference/Cowork Agent Chat Panel.html`
+> の "Artifact — narrow" アートボードを focus で開いて確認すること。
 
 ## Fidelity
 
 **High-fidelity (hifi)**。色・タイポ・余白・アイコン・インタラクションはすべて最終形。
 ピクセル忠実度を保って再現すること。下記の Design Tokens に挙げた値は厳密値である。
 
+## Design Direction
+
+- **フラットデザイン**。グラデーション・大きな影・グロー効果は使わない。
+- アクセント色 (`accent`) はソリッドな単色で塗る。
+- 影は `0 1px 3px rgba(0,0,0,0.04)` 程度の控えめなもののみ。
+- 強調は色とウェイトで行う。装飾的な発光・ボカシは避ける。
+
 ---
 
 ## Target Variant
 
 プロトタイプには当初 3 variant (minimal / rich / terminal) があったが、**Rich variant のみ** を
-採用して進める。本ドキュメントは Rich variant についてのみ記述する。
+採用。本ドキュメントは Rich variant + Artifact Pane についてのみ記述する。
 
-参照ファイル: `reference/variant-rich.jsx`
+参照ファイル: `reference/variant-rich.jsx` / `reference/artifact.jsx` / `reference/data.jsx`
 
 ---
 
-## Screens / Views
+## Layout Modes
 
-チャットパネルは **固定幅 380px (推奨)** のサイドパネル内で縦方向にレイアウトされる。
-構造は上→下の 3 ブロック。
+パネルは表示モードに応じて 3 形態をとる：
 
-### 1. Header (固定 60px 前後)
+| モード | 条件 | レイアウト |
+|---|---|---|
+| **Chat Only** | Artifact 未生成 / 閉じている | 380px のチャット縦パネル |
+| **Side-by-Side (拡張)** | Artifact 生成済み + デスクトップ幅 | 左 380px Chat / 右 残り Artifact (合計 880px+ 推奨) |
+| **Bottom Sheet** | 狭い画面 (Artifact 生成済み) | チャット全画面 + 下から 80% スライドアップで Artifact |
+
+---
+
+## 1. Chat Panel (380px 固定幅)
+
+### 1a. Header (高さ約60px)
 
 | 要素 | 詳細 |
 |---|---|
-| Avatar | 34×34px, `border-radius: 10px`, 背景はアクセント色からの135°リニアグラデーション (`accent` → `accent+40 (lighten)`), 中央に 18×18 の星型アイコン (stroke 1.8), 白または濃茶のアイコン色 (背景の明度で分岐), `box-shadow: 0 4px 14px accent40` |
-| Status dot | Avatar 右下に 11×11px の緑 (`#22c55e`) 丸, パネル背景色で 2px ボーダー |
-| Agent name | "Aoi" (14px / weight 600, `color: text`) |
-| AGENT badge | name の右, 10px / weight 500, アクセント色文字, `accent+1a (10% alpha)` 背景, 4px radius, padding 1/6px |
-| Status line | 11px / `muted` 色, 9×9 時計アイコン + "作業中 · kintone接続" |
-| Icon buttons | タスク / 設定 / 閉じる。30×30, 透明背景, `muted` 色, 8px radius, アイコン 12-14px stroke 1.5-1.6 |
-| 背景 | `c.panel` (半透明白 / 黒), `backdrop-filter: blur(12px)`, 下に 1px ボーダー |
+| Avatar | 34×34, `border-radius: 10px`, 背景は **アクセント色のソリッド** (フラット), 中央 18×18 星型アイコン (stroke 1.8), アイコン色は背景明度で `#fff` か `#231200` |
+| Status dot | Avatar 右下 11×11 緑 (`#22c55e`), パネル背景色で 2px ボーダー |
+| Agent name | "Aoi" (13.5px / w600 / `c.text`) |
+| AGENT badge | name の右, 10px / w500, アクセント文字, `accent+1a` 背景, 4px radius |
+| Status line | 11px / `muted`, 9×9 時計アイコン + "作業中 · kintone接続" |
+| Icon buttons | 30×30 透過, ホバー時 `cardHi`, タスク / 設定 / 閉じる の 3 つ |
+| Border bottom | 1px / `c.border` |
+| Background | `c.panel` + `backdrop-filter: blur(12px)` |
 
-### 2. Chat scroll area (flex: 1, 縦スクロール)
+### 1b. Chat Scroll (flex: 1, overflow-y auto)
 
-`padding: 18px 16px` (airy密度のとき。compact=14px, comfortable=18px), `gap: 18px` (同上),
-メッセージは以下のカードタイプの縦積み:
+- padding: density に応じて 14/18/22 px (compact/comfortable/airy)
+- gap: 同上 (10/14/18 px)
+- 各メッセージは `slideUp 0.28s ease-out` でフェードイン
 
-#### 2a. Greeting (初回のみ)
-- タイトル "こんにちは。今日はどんな作業をお手伝いしましょうか？" 16px / weight 600 / letter-spacing -0.3 / line-height 1.4
-- サブ文言 "アプリ検索、集計、レコード操作まで。思いついたことを話しかけてください。" 12px / `muted`
-- Suggestion chips 3つ。左寄せ, 12.5px, 背景 `c.card`, 1px border `c.cardBorder`, radius 10px, padding 10/12, 先頭に 20×20 矢印アイコン (`accentSoft` 背景)
+### 1c. Composer (固定下)
 
-#### 2b. User message
-- `align-self: flex-end`, max-width 85%
-- 背景 `c.user` (accent+14 alpha = 8%), border 1px `c.userBorder` (accent+40 alpha = 25%)
-- border-radius `16px 16px 4px 16px` (右下角だけ小さく=発話の尻尾)
-- padding 10/14, 13px, line-height 1.5
-
-#### 2c. Agent bubble / thinking
-- 左寄せ, 8px gap で 22×22 アバター円 (Headerと同じグラデ) + 本文
-- Thinking: 12px / `muted` + アクセント色の "..." 3 ドットアニメ
-
-#### 2d. Tool call card
-- 背景 `c.cardHi` (accent を 6% 乗せた半透明), border `c.cardBorder`
-- radius 10, padding 8/11, 左に 20×20 チェックアイコン (`c.okSoft` 背景, `c.ok` 色)
-- モノスペース小文字のツール名 (10.5px, accent, weight 600) + ラベル (12px weight 500)
-- 11px `muted` で detail, 続けて items を `accentSoft` 背景の小ピルで表示
-
-#### 2e. Plan card (HITL)
-- 最上位コンテナ: `c.card` 背景, radius 14, border 1px
-- **Destructive時**: border `c.warn + 55`, `box-shadow: 0 0 0 4px c.warn15, 0 4px 20px c.warn20` (グロー)
-- ヘッダー帯: padding 10/14, 背景 `warnSoft` (destructive) / `accentSoft` (read-only), 下1px border
-  - 14×14 アイコン (三角警告 or リスト), 12.5px weight 600 タイトル, 右端に "要承認" / "読取" ラベル
-- 本体: padding 14, `<ol>` でステップ列挙
-  - 各ステップ: 22×22 番号チップ (モノスペース 10px, `accentSoft` 背景, `accent` 文字) + `op` (9.5px upper, letter-spacing 0.6, `muted`) + `text` (12.5px)
-- 見積行: 上に 1px dashed border, 時計アイコン + 11px `muted` テキスト
-- **Destructive時** のみ 3 ボタン横並び (gap 6, marginTop 12):
-  - **承認して実行** — flex:1, padding 9/12, 12.5px weight 600, 背景 `c.warn`, 白文字, radius 8
-  - **修正** / **キャンセル** — 背景 transparent, 1px `c.border`, `muted` 文字, radius 8
-
-#### 2f. Progress card
-- `c.card` 背景, 1px border, radius 12, padding 13
-- 上段: 22×22 スピナー (2px `accentSoft` リング, トップだけ accent, 0.9s 回転) + タイトル(12.5 w600) + サブ(10.5 muted) + 大きい % (16px w700, accent, tabular-nums)
-- プログレスバー: 高さ 6, radius 3, 背景 `accentSoft`, 内側バーは `linear-gradient(90deg, accent, accent+40)` + シマーアニメ
-- Substeps: 縦並び 5px gap, 13×13 円 (済: `c.ok` 塗り + 白チェック / 未: 1.5px border), 11.5px テキスト
-
-#### 2g. Result card
-- `c.card`, 1px border, radius 14, `box-shadow: 0 4px 20px rgba(0,0,0,0.04)`
-- ヘッダー: padding 12/14, `linear-gradient(135deg, accentSoft, transparent)` 背景, 1px border 下
-  - 13.5px w600 letter-spacing -0.2 タイトル, 11px muted サブ
-- Rows: 各 padding 7/0, 下1px border (最後以外)
-  - 上段 flex: 20×20 頭文字アバター (HSL 色を index*62°で回す), 12.5px w500 名前, 10.5 subtle 件数, 右端 12.5 w600 tabular-nums 金額 (万円区切り + 10px "万")
-  - 下段 `margin-left: 28` ミニバー (高さ3, gradient)
-- フッター: `c.cardHi` 背景, followup ピルボタン 5/11, radius 999, 矢印アイコン+11pxテキスト
-
-### 3. Composer (下部固定)
-
-- padding 10/14/14, 上 1px border, 背景 `c.panel`, blur 12
-- 入力ラッパー: flex, 1px border, radius 14, padding 8/8/8/14, 背景 `c.card`,
-  `box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 0 0 1px accentSoft inset`
-- `<input>`: placeholder "このアプリについて聞く / レコードを操作..."
-- 右に 添付アイコンボタン (30×30) + **送信ボタン** 32×32 radius 10, accent グラデ背景, 白矢印, `box-shadow: 0 2px 8px accent55`
-- 下に 10px subtle ヒント行: `⌘K 呼び出し · Claude Managed Agents`
+- padding `10px 14px 14px`, border-top 1px, `c.panel` + blur
+- 入力欄: 1px border, radius 14, padding `8 8 8 14`, `c.card` 背景, `c.accentSoft` の inset shadow
+- 添付ボタン (30×30 透過) + 送信ボタン (32×32, **アクセントソリッド**, radius 10)
+- 下部ヒント: 10px / `subtle`, `⌘K 呼び出し · Claude Managed Agents`
 
 ---
 
-## Interactions & Behavior
+## 2. Message Types
 
-### シナリオ US-01 の自動再生 (参照)
-`reference/data.jsx` の `SCENARIO.script` が初期メッセージ `user → thinking → tool → tool → agent → plan(read-only) → progress → result` の順で並んでいる。プロトタイプでは 600ms スタートで、kind に応じたディレイ (tool 650 / plan 950 / progress 1200 / 他 800ms) で追加表示。本番では実際のエージェントイベント (Managed Agents Session の `GET /v1/sessions/{id}/events` ポーリングで取得) に差し替える。
+すべて `RichMessage` で kind 分岐。
 
-### HITL 承認フロー (F-07)
-破壊的操作 (update_records / delete_records) は必ず:
-1. Agent が `plan` (destructive=true) カードを発話
-2. UI は影響範囲 (対象アプリ / フィールド / レコード件数 / 可逆性) を明示
-3. ユーザーが **承認して実行** / **修正** / **キャンセル** のどれかを押すまで Agent は破壊的操作を実行しない
-4. 承認後は `progress` カードに遷移
+### 2a. greeting
+- 16px w600 hello + 12px muted サブ
+- Suggestion ボタン3つ縦並び: padding `10 12`, `c.card`, 1px border, radius 10, 左に 20×20 矢印アイコン (`accentSoft` 背景)
 
-> 実装上、Agent は `user.message` で明示的に「実行して」と返信を受け取ってから破壊的操作を実行する。プラグインは承認ボタン押下で「承認」を表す `user.message` を Managed Agents に POST する。
+### 2b. user
+- align right, max 85%, padding `10 14`
+- 背景 `c.user` (= `accent+14`), 1px border `accent+40`
+- radius `16 16 4 16`
 
-### 非同期ジョブ進捗 (F-08)
-- 長時間処理は Progress カードで表示
-- ユーザーがチャットパネルを閉じても、ジョブは継続
-- 再度開いたときに復元表示する。状態はサーバー (Managed Agents Session) が持つ
+### 2c. agent / thinking
+- 22×22 アバター (アクセントソリッド円) + 本文
+- thinking は 5×5 ドットが 0.15s ずつ blink
 
-### セッション継続 (F-09)
-- ユーザー単位で単一セッションを保持 (アプリ横断)
-- `app.record.index.show` で毎回、metadata (`source=cowork-agent-for-kintone`, `kintoneUserCode`, `kintoneDomain`) で Session をクライアント側フィルタして復元
-- 会話履歴の取得は `GET /v1/sessions/{id}/events?order=asc&limit=100&page=<cursor>` で行う (kintone.proxy は SSE 非対応のためポーリング方式)
-- プラグイン側には Session ID を永続化しない (metadata から都度解決)
+### 2d. tool call
+- 1px border `cardBorder`, radius 10, padding `8 11`
+- 左 20×20 チェックマーク (`okSoft` 背景, `c.ok` 色)
+- 右に tool name (mono 10.5 / accent / w600) + label (12 / w500) + detail (11 / muted)
+- items は `accentSoft` 背景の chip (10px, padding `1 6`, radius 4)
 
-### アニメーション
-- Thinking dots: 3 つのドットが順次 fade (0.4s 間隔)
-- Progress spinner: 0.9s linear infinite rotate
-- Progress bar shimmer: バー内側に `::before` で白い光スイープ (2s linear infinite)
-- 新着メッセージ: `opacity 0 → 1`, `translateY 4px → 0`, 200ms (参照CSS `.msg-in`)
+### 2e. plan card
+- 1px border, radius 14, `c.card`
+- destructive=true: border `c.warn+55`, `box-shadow: 0 0 0 4px warn15, 0 4px 20px warn20`
+- ヘッダー: padding `10 14`, 背景 `accentSoft` or `warnSoft`, 12.5px w600 タイトル + 10px 要承認バッジ
+- ステップ: 22×22 番号バッジ + OP ラベル (9.5 mono 700 muted upper) + テキスト
+- 推定時間: 1px dashed border 上, 11px muted + 時計アイコン
+- destructive ボタン: 「承認して実行」(warn 背景 / 白文字) + 「修正」「キャンセル」(透過)
 
-### ホバー / フォーカス状態
-- Suggestion chip, followup pill, icon button: hover で border を accent に, 背景を `accentSoft` に
-- 入力: focus 時に ラッパー border を `accent`, inset shadow を `accent+33` に強化
+### 2f. progress card
+- 22×22 スピナー + タイトル + サブ + 大きい % (16 w700 accent)
+- プログレスバー: 高さ 6, radius 3, `accentSoft` 背景, **アクセントソリッド** 内側バー + シマーアニメ
+- substeps: 13×13 円 (済: `c.ok` 塗り + 白チェック / 未: 1.5px border)
 
----
+### 2g. result card
+- 1px border, radius 14, `box-shadow: 0 4px 20px rgba(0,0,0,0.04)`
+- ヘッダー: padding `12 14`, **`accentSoft` ソリッド背景** (フラット), 1px border 下
+- 各 row: 20×20 イニシャル円 + 名前 + 件数 + 金額 (tabular-nums)
+- 横棒グラフ: 高さ 3, **アクセントソリッド** バー
+- followup chips: radius 999, `c.card` 背景, 1px border, 11px
 
-## State Management
-
-### 必要なステート (概念)
-```
-session: {
-  sessionId: string,                 // Managed Agents のセッション ID
-  userId: string,                    // kintone ログインユーザー
-  messages: Message[],               // 会話履歴
-  runningJob: JobProgress | null,    // アクティブな非同期ジョブ
-  pendingApproval: PlanCard | null,  // ユーザー承認待ち
-}
-
-Message: {
-  kind: 'user' | 'agent' | 'thinking' | 'tool' | 'plan' | 'progress' | 'result',
-  ... kind 依存のフィールド (data.jsx 参照)
-}
-```
-
-### イベント
-- **ユーザー送信** → `user` メッセージを UI に即追加 → `POST /v1/sessions/{id}/events` (`user.message`) → **ポーリング** (`GET /v1/sessions/{id}/events?order=asc&page=<cursor>`) で `agent.thinking` / `agent.tool_use` / `agent.message` / `agent.custom_tool_result` 等のイベントを差分取得 → UI 側で `tool` / `agent` / `plan` / `progress` / `result` カードに変換
-- **承認ボタン押下** → `POST /v1/sessions/{id}/events` に「承認します」という `user.message` を POST → Agent が破壊的操作スクリプトを実行 → `progress` カードに遷移
-- **パネル開閉** → localStorage に `isOpen` のみ保存 (認証情報や会話データは保存禁止)。`app.record.index.show` で復元
-
-### ポーリング戦略
-- 初期: 2 秒間隔
-- バックオフ: `session.status_idle` かつ新規イベントなしで 2s → 3s → 5s → 10s と段階的に延長
-- タスク完了 (`session.status_idle` + `stop_reason.type === "end_turn"`) でポーリング停止
-- パネルを閉じたらポーリング停止 (再表示時に最新状態を再取得)
-
-### データ取得
-- **kintone 側**: Managed Agents Environment にプリインストールされた Python ヘルパーライブラリ (`cowork-agent-kintone`) が、Vault から注入された環境変数 (`KINTONE_LOGIN` / `KINTONE_PASSWORD` / `KINTONE_DOMAIN`) を用いて Basic 認証で REST API を呼び出す。Agent は `agent_toolset_20260401` の `bash` + `write` でスクリプトを組み立てて実行する。フロントエンドは直接 kintone API を叩かない
-- **Anthropic 側**: プラグインは **kintone Proxy 設定** に登録された Anthropic API Key を `kintone.plugin.app.proxy` 経由で利用する。API Key はブラウザ JS から直接参照不可 (`kintone.plugin.app.getConfig` では取得しない)
+### 2h. artifact card (新規)
+- 1px border `cardBorder` (open 中は `accent+66`), radius 12
+- 36×36 kind アイコン (mono 12 / kind 別色 + `+1a` 背景)
+- 9px upper "📄 ARTIFACT · {KIND}" ラベル
+- 13px w600 title + 11px muted summary
+- 右に「開く →」ピル (`cardHi` 背景) または「表示中」(accent+18 背景)
 
 ---
 
-## Design Tokens
+## 3. Artifact Pane
 
-### アクセント色 (確定)
-- **`#0d9488`** (Teal) — Rich variant のプライマリアクセント。全 CTA / リンク / プログレスバー / グラデに使用
+### 3a. Header (高さ 50px)
 
-### Light theme (既定)
-| トークン | 値 | 用途 |
-|---|---|---|
-| `bg` | `#faf8f3` | パネル背景 (ウォームオフホワイト) |
-| `panel` | `rgba(255,255,255,0.85)` | Header / Composer の半透明レイヤー |
-| `border` | `rgba(35,18,0,0.10)` | 一般 1px ボーダー |
-| `text` | `#231200` | 主要テキスト (濃茶) |
-| `muted` | `#6b5f4a` | 補助テキスト |
-| `subtle` | `#a89d85` | さらに弱い (ヒント、メタ) |
-| `card` | `#ffffff` | カード背景 |
-| `cardBorder` | `rgba(35,18,0,0.08)` | カードの薄ボーダー |
-| `cardHi` | `rgba(255,191,0,0.06)` | ホバー / tool カード背景 (薄アンバー) |
-| `accent` | `#0d9488` | プライマリアクセント |
-| `accentSoft` | `#0d94881a` | accent 10% alpha — バッジ / プログレスレール |
-| `user` | `#0d948814` | user バブル背景 |
-| `userBorder` | `#0d948840` | user バブル ボーダー |
-| `warn` | `#b45309` | 破壊的操作アクセント (アンバー濃) |
-| `warnSoft` | `#fef3c7` | 破壊的 Plan ヘッダー帯 |
-| `ok` | `#8a6400` | 完了チェック (kintone アンバーの濃色) |
-| `okSoft` | `#fff4c9` | tool call アイコン背景 |
-
-### Dark theme
-| トークン | 値 |
+| 要素 | 詳細 |
 |---|---|
-| `bg` | `#1a160f` |
-| `panel` | `rgba(34,28,19,0.75)` |
-| `border` | `rgba(255,191,0,0.12)` |
-| `text` | `#ede4d0` |
-| `muted` | `#a89d85` |
-| `subtle` | `#6b6353` |
-| `card` | `rgba(42,34,23,0.85)` |
-| `cardBorder` | `rgba(255,191,0,0.12)` |
-| `cardHi` | `rgba(255,191,0,0.05)` |
-| `warn` | `#f59e0b` |
-| `warnSoft` | `#f59e0b22` |
-| `ok` | `#ffbf00` |
-| `okSoft` | `#ffbf0022` |
+| Kind icon | 26×26, radius 6, `accentSoft` 背景, accent 色, mono 10 w700 |
+| Title button | クリックでドロップダウン: 13 w600 title + ▾ + サブ "{kind label} · 更新 14:32" |
+| Tab toggle | 「プレビュー / ソース」セグメント, padding `4 10`, 10.5 w600, アクティブは `c.card` 背景 + 微影 |
+| Action icons | 28×28, ホバー時 `cardHi`: コピー / DL / (HTML時) 新タブ / **kintone適用** (accent ホバー色) / 区切り / 閉じる |
+| Border bottom | 1px `c.border` |
+| Background | `c.panel` + blur |
 
-### 注記: 色選定の根拠
-- ベース背景 `#faf8f3` / テキスト `#231200` はホスト kintone のダークチョコヘッダー + ウォームオフホワイトの配色に合わせている
-- 警告・OK 系のオレンジ/アンバー系は kintone ブランドのアンバー `#ffbf00` 周辺でまとめ、プライマリアクセントのティールが視覚的に主張するようにコントラストを設計した
+#### History dropdown (タイトル▾)
+- 絶対配置 (top: 100%, left: 0), margin-top 6
+- min-width 280, 1px border, radius 10, `box-shadow: 0 8px 24px rgba(0,0,0,0.12)`
+- ヘッダー: 10px upper "このセッションのアーティファクト · {n}"
+- 各 item: padding `10 12`, 22×22 kind アイコン + title (12.5 / w500) + summary (10.5 muted)
+- 現在選択は `cardHi` 背景, 末尾に時刻
 
-### タイポグラフィ
-- ベースフォント: `-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif` (継承想定)
-- モノスペース: `"JetBrains Mono", "SF Mono", Consolas, monospace` — tool 名 / 番号チップ / kbd のみ
-- サイズスケール (px): `9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 16`
-- 行高: テキスト 1.5-1.6, 見出し 1.25-1.4
-- weight: 500 (通常), 600 (強調), 700 (数字ハイライト)
+### 3b. Body (flex: 1, overflow-y auto)
+
+#### Markdown
+- padding `24 28`, 13.5px / line-height 1.7
+- h1: 22 w700, h2: 16 w700 + 1px border-bottom, h3: 13.5 w600
+- table: 12.5px, header `rgba(0,0,0,0.03)` 背景 + 1.5px border-bottom
+- blockquote: left 3px border, padding `10 14`, `rgba(0,0,0,0.025)` 背景
+- inline code: mono 11.5, `rgba(0,0,0,0.06)` 背景, padding `1 5`
+
+#### HTML
+- iframe `sandbox="allow-scripts"`, 100% / 100%, border none, `#fff` 背景
+- 親の overflow auto, `#fafafa` 背景でiframe を浮かす
+
+#### Mermaid
+- padding 24, viewBox 620×360, max-width 620
+- 各エンティティ: 180px幅, 1px border, radius 6, ヘッダー `accentSoft`
+- フィールドは mono 9.5; PK は ◆ + accent / FK は ◇
+- リレーション: アクセント色 1.4px 線 + ◆ (start) と crowsfoot (end) marker
+
+### 3c. Footer (フッターコメント欄)
+
+- padding `10 14`, border-top 1px, `c.panel`
+- ピル形 input (radius 999, padding `6 6 6 14`, `c.card` 背景, 1px border)
+- 左: 13×13 吹き出しアイコン (muted), 中央: placeholder "変更を依頼…（例: 「合計を強調して」）"
+- 右: 26×26 円形送信ボタン (アクセントソリッド)
+- 下に 10px subtle: "このアーティファクトに対する変更依頼はチャットに送信されます"
+- **編集 UI は持たない**。入力はそのままチャットに新規ターンとして流れる
+
+---
+
+## 4. kintone 適用モーダル
+
+破壊的操作扱い。Apply ボタン押下時に表示。
+
+- 背景オーバーレイ: `rgba(20, 14, 5, 0.45)`
+- モーダル本体: max-width 460, `c.card`, radius 14, 1px border, `box-shadow: 0 20px 60px rgba(0,0,0,0.25)`
+- ヘッダー: 32×32 アクセントアイコン + 14 w600 タイトル "kintoneへ適用" + 11.5 muted "「{title}」を {target} としてアップロード" + 閉じるボタン
+- ボディ:
+  - "適用先アプリ" (10.5 upper subtle)
+  - アプリリスト: 各 padding `10 12`, radius 8, 28×28 アプリアイコン (アプリ色 +22 背景), 名前 + ID (mono), 右に 16×16 ラジオ (選択時 5px solid accent border)
+  - "プレビュー" + content の先頭 240 文字 (mono 10.5, max-height 110, scroll)
+  - 警告バナー: `#fef9e7` 背景, `#fcd34d55` border, ⚠️ アイコン + "既存のカスタマイズ設定が上書きされます"
+- フッター: padding `12 18`, `c.cardHi` 背景, 「キャンセル」(透過 + border) + 右寄せ「適用する」(アクセントソリッド + 微影)
+
+---
+
+## 5. State Management
+
+### 5a. Chat
+- `messages: Message[]` — kind ベースのユニオン (greeting, user, thinking, agent, tool, plan, progress, result, artifact-card)
+- `approved: boolean` — destructive plan 承認状態
+- スクリプト再生中は setTimeout で逐次 push, thinking → 次メッセージで差し替え
+
+### 5b. Artifact
+- `artifacts: Map<id, Artifact>` — セッション全 Artifact
+- `currentId: string | null` — 表示中
+- `tab: 'preview' | 'source'`
+- `menuOpen: boolean` — 履歴ドロップダウン
+- `applyModalOpen: boolean`
+
+### 5c. Artifact 型
+```ts
+type Artifact = {
+  id: string;
+  kind: 'markdown' | 'html' | 'mermaid' | 'code' | 'svg' | 'kintone-customize-js' | 'csv' | 'json';
+  title: string;
+  summary: string;
+  language?: string; // code 時の言語
+  content: string;
+  updatedAt: string;
+};
+```
+
+### 5d. Custom Tool 連携
+Anthropic Managed Agents の **Custom Tool `create_artifact`** を Plugin 側で実装：
+1. Agent が `create_artifact({id, kind, title, summary, content})` を呼ぶ
+2. `agent.custom_tool_use` イベントで `artifacts` Map に保存 (同じ id なら更新)
+3. `user.custom_tool_result` で `{ok: true}` 即返却
+4. チャットに artifact-card を push
+5. 初回生成時は自動で右ペインを開く
+
+---
+
+## 6. Animations
+
+- `slideUp 0.28s ease-out`: メッセージ入場
+- `blink 1.2s infinite`: thinking ドット (3個, 0.15s 遅延)
+- `shimmer 1.6s infinite linear`: progress バーの内側
+- `spin 0.9s linear infinite`: progress スピナー
+- アバター下の status pulse は `pulse-ring 1.8s` (リング拡大消失)
+- ドロップダウン / モーダル: スナップ表示 (アニメ無し)。必要なら 0.15s fade のみ
+
+---
+
+## 7. Design Tokens
+
+### Colors (Light Theme)
+```
+bg:          #faf8f3
+panel:       rgba(255,255,255,0.85)
+border:      rgba(35,18,0,0.10)
+text:        #231200
+muted:       #6b5f4a
+subtle:      #a89d85
+card:        #ffffff
+cardBorder:  rgba(35,18,0,0.08)
+cardHi:      rgba(255,191,0,0.06)
+accent:      #0d9488 (デフォルト, Tweaks で変更可)
+accentSoft:  accent + 1a (10% alpha)
+user:        accent + 14
+userBorder:  accent + 40
+warn:        #b45309
+warnSoft:    #fef3c7
+ok:          #8a6400
+okSoft:      #fff4c9
+```
+
+### Colors (Dark Theme)
+```
+bg:          #1a160f
+panel:       rgba(34,28,19,0.75)
+text:        #ede4d0
+muted:       #a89d85
+card:        rgba(42,34,23,0.85)
+warn:        #f59e0b
+ok:          #ffbf00
+```
+
+### Typography
+```
+Sans:  'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', sans-serif
+Mono:  'JetBrains Mono', 'SF Mono', Menlo, monospace
+```
+- Body: 13px / 1.5
+- Tabular numerals (`font-variant-numeric: tabular-nums`) は金額・件数・% に必須
 
 ### Spacing
-- メッセージ間 gap: `compact 10 / comfortable 14 / airy 18` (density tweak)
-- カード内 padding: 8-14px
-- セクション内の縦方向 rhythm は 4px グリッド
+- density compact: 10
+- density comfortable: 14 (default)
+- density airy: 18
 
 ### Radius
-- 小: 4, 6, 8 (badge / button / icon)
-- 中: 10, 12 (card / input)
-- 大: 14 (primary card, plan, result, composer wrapper)
-- バブル: `16/16/4/16` (user), `16/16/16/4` (agent — プロトタイプでは未使用)
-- 丸: 999 (pill), 50% (avatar / status dot)
+- 円: 50%
+- 標準: 6, 8, 10, 12, 14
+- ピル: 999
 
 ### Shadow
-- カード: `0 2px 12px rgba(0,0,0,0.04)` (通常), `0 4px 20px rgba(0,0,0,0.04)` (result)
-- Destructive plan: `0 0 0 4px #b4530915, 0 4px 20px #b4530920`
-- Avatar: `0 4px 14px <accent>40`
-- 送信ボタン: `0 2px 8px <accent>55`
-- Composer inset: `0 1px 3px rgba(0,0,0,0.04), 0 0 0 1px <accentSoft> inset`
-
-### Density levels (Tweak で切替)
-| | Compact | Comfortable | Airy |
-|---|---|---|---|
-| 縦 gap | 10 | 14 | 18 |
-| scroll padding top | 14 | 18 | 22 |
+- Card: `0 1px 3px rgba(0,0,0,0.04)`
+- Card (強調): `0 4px 20px rgba(0,0,0,0.04)`
+- Modal: `0 20px 60px rgba(0,0,0,0.25)`
+- Dropdown: `0 8px 24px rgba(0,0,0,0.12)`
+- Plan (destructive): `0 0 0 4px warn15, 0 4px 20px warn20`
 
 ---
 
-## Assets
+## 8. Tweakables (任意)
 
-- **アイコン**: すべてインライン SVG (外部ライブラリ依存なし)。stroke ベース, `stroke-width: 1.5-1.8`, `stroke-linecap: round`, `stroke-linejoin: round`
-- **フォント**: システムフォント + 日本語ゴシック。必要に応じて JetBrains Mono を CDN で。kintone プラグイン配布時はフォントの同梱は避け、システムに任せる
-- **画像**: なし
-- **ロゴ**: Header のアバターのみ (星/コンパス型 SVG)
+実装側で表示密度・テーマ・アクセント色を切り替え可能にしておく：
 
----
-
-## Implementation Notes (kintone プラグイン向け)
-
-### プラグイン最終出力構造 (cli-kintone plugin pack 後)
-```
-plugin.zip
-├── manifest.json
-├── html/
-│   └── config.html              # 管理者設定画面 (Anthropic API Key のみ)
-├── js/
-│   ├── desktop.js               # Vite でバンドル済み (React + 依存)。app.record.index.show で side panel を挿入
-│   └── config.js                # 設定画面ロジック (バンドル済み)
-├── css/
-│   ├── desktop.css              # Tailwind ビルド出力 (スコープ済み)
-│   └── config.css
-└── image/
-    └── icon.png
-```
-
-ソース構造はモノレポ `packages/plugin/src/` 配下。詳細は `docs/repository-structure.md` §3 を参照。
-
-### 挿入フック
 ```js
-kintone.events.on('app.record.index.show', (event) => {
-  mountChatPanel(event.appId);
-});
+const TWEAKS = {
+  accent_rich: '#0d9488',  // teal default — 他: #059669, #d97706, #ffbf00, #231200
+  theme: 'light',          // light | dark
+  density: 'comfortable',  // compact | comfortable | airy
+};
 ```
 
-### 推奨実装方針
-- **フレームワーク**: `docs/architecture.md` に従い **TypeScript + React 18 + Vite + Tailwind CSS**。kintone プラグイン用に Vite でバンドルし、`cli-kintone plugin pack` で zip 化
-- **スタイル**: デザイントークンを Tailwind の `theme.extend` に登録 + CSS カスタムプロパティ (`--cw-accent: #0d9488` 等) でランタイム切替可能にし、light/dark は `[data-theme]` で切替
-- **DOM挿入**: `document.createElement` で `#cw-agent-root` を作り、kintone のレコード一覧 DOM に append (`kintone.app.getHeaderMenuSpaceElement()` or 右端固定 div)。React は `createRoot` でこの要素にマウント
-- **スコープ**: プラグインのルート要素に `.cowork-agent-root` クラスを付与し、Tailwind の CSS が kintone 本体 UI に漏れないようスコープ
-- **Z-index**: kintone 既存 UI を邪魔しない 100 前後。モーダルは 1000+
-- **Scroll lock**: パネル内スクロールが親に bubble しないよう `overscroll-behavior: contain`
-- **バンドルサイズ**: React を採用するが、本番ビルド時は Vite の Tree Shaking と動的 import で最適化。プラグイン zip 30MB 制限に対して十分に収まる想定
+---
 
-### Managed Agents 連携
-- **kintone 操作は Environment 側で完結** (真のバックグラウンド実行を実現するため)
-- Agent の tools は `agent_toolset_20260401` (`bash` + `write` + `read`) のみを使用。「Custom Tool」 (クライアント側実行) は MVP では使用しない
-- Environment にプリインストールされる Python ヘルパーライブラリ `cowork-agent-kintone` が以下のメソッドを提供:
-  - `Client()` (環境変数から認証情報自動取得)
-  - `get_apps` / `get_app_schema` / `get_form_layout`
-  - `get_records` (カーソル対応、10,000 件超は自動継続)
-  - `add_records` / `update_records` / `delete_records` (100 件超は自動分割)
-  - `bulk_request` (最大 20 操作のアトミック実行)
-- Vault は kintone ユーザー単位で作成し、`KINTONE_LOGIN` / `KINTONE_PASSWORD` / `KINTONE_DOMAIN` を保管 → Session 作成時に Environment の環境変数として自動注入される
-- Environment の outbound 許可 (`allowed_hosts`): `<kintoneDomain>` を動的に設定 (`*.cybozu.com` / `*.kintone.com` / カスタムドメイン)
+## 9. Files (reference)
 
-### 管理者プラグイン設定画面 (別スクリーン)
-- **Anthropic API Key のみ** を入力 (kintone Proxy 設定に保存され、ブラウザ JS から参照不可)
-- プラグイン設定領域 (`kintone.plugin.app.setConfig`) には一切の永続データを保存しない
-- Agent / Environment / Vault / Session は Managed Agents の metadata で動的参照
-
-### ユーザー初回バインディングダイアログ (チャット起動時、UI 内モーダル)
-- **各 kintone ユーザー自身** が自分の kintone ログイン ID / パスワードを入力
-- 入力情報は Managed Agents Vault に直接 push し、Environment を同時に自動作成
-- プラグイン設定には保存しない (管理者設定画面ではなく、ユーザー各自の初回利用時に表示)
-
-### API Key 未設定時の UX
-- チャットパネルは「管理者が Anthropic API Key を設定してください」という旨のエラーメッセージを表示 (PRD 受け入れ条件)
+- `reference/Cowork Agent Chat Panel.html` — 全アートボードを並べた design canvas (エントリポイント)
+- `reference/variant-rich.jsx` — Rich variant のチャット本体 + メッセージ kind 別レンダラ
+- `reference/artifact.jsx` — Artifact ペイン + Markdown/HTML/Mermaid レンダラ + 適用モーダル + チャットカード
+- `reference/data.jsx` — シナリオデータ (`SCENARIO`) + Artifact サンプル (`ARTIFACTS`)
+- `reference/styles.css` — 共有トークン + アニメーション + Markdown スタイル
+- `reference/design-canvas.jsx` — プレビュー用 canvas (実装時は不要)
 
 ---
 
-## Files
+## 10. 実装順序の推奨
 
-### `reference/` に同梱
-| ファイル | 役割 |
-|---|---|
-| `Cowork Agent Chat Panel.html` | 全体プロトタイプ (design canvas + 3 アートボード) |
-| `variant-rich.jsx` | **メイン参照**。Rich variant の全コンポーネント実装 |
-| `data.jsx` | シナリオ (US-01 + HITL) のダミーデータ。メッセージ種別と形状のスキーマも兼ねる |
-| `design-canvas.jsx` | プロトタイプを並べるキャンバス (本番実装には不要) |
-| `styles.css` | 共有アニメーション (.msg-in, .dot, .shimmer 等)。本番 CSS に移植する |
-
-### 本番で新規に必要 (詳細は `docs/repository-structure.md` 参照)
-
-モノレポ `packages/plugin/` 配下:
-- `manifest.json` (プラグイン定義、Proxy 設定要件含む)
-- `src/desktop/` (チャット UI: ChatPanel / MessageList / ApprovalCard / ProgressCard / ResultCard / CredentialDialog 等)
-- `src/config/` (管理者設定画面: Anthropic API Key 入力)
-- `src/core/managed-agents/` (HTTP クライアント、リソース解決、ポーリング)
-- `src/core/kintone/` (kintone API ラッパ、ユーザー情報取得)
-- `src/core/bootstrap/` (Default Agent / Environment / Vault の metadata 動的解決・作成)
-- `src/store/` (Zustand ストア)
-
-別リポジトリ扱いとなる Python ヘルパーライブラリは `packages/kintone-helper/` として同リポジトリに含めるが、PyPI へ独立公開される
+1. **Step 1 (S/M)** — Foundation: チャット骨格 + greeting/user/agent + composer
+2. **Step 2 (M)** — メッセージ kind 拡張: tool / plan / progress / result + アニメーション
+3. **Step 3 (M)** — Artifact 基盤: Custom Tool ハンドラ + Artifact Map + チャットカード + ペイン chrome
+4. **Step 4 (M)** — レンダラ: markdown → html (sandbox iframe) → mermaid (動的 import 推奨)
+5. **Step 5 (S)** — kintone 適用モーダル (破壊的操作扱い、アプリ選択 + 警告 + 適用)
+6. **Step 6 (S)** — Bottom-sheet モード (狭幅対応) + 履歴ドロップダウン
 
 ---
 
-## 受け入れ条件のリマインド (PRD 7.)
+## 11. 注意点
 
-- [ ] レコード一覧画面のサイドパネルにチャット UI が表示される
-- [ ] チャットで依頼した検索・集計処理の結果が表示される (`result` カード)
-- [ ] 破壊的操作は `plan(destructive=true)` を提示し、明示的な承認後のみ実行される
-- [ ] バックグラウンド実行中のタスクが `progress` カードで進捗確認できる
-- [ ] チャット UI を閉じて再度開いても同一セッションの会話履歴が継続する (metadata から Session 再解決)
-- [ ] プラグイン設定画面で Anthropic API Key を設定できる (Proxy 設定経由)
-- [ ] ユーザー初回バインディングダイアログで Vault 用の kintone ログイン情報 (ID / パスワード) を登録できる
-- [ ] Environment 内のヘルパーライブラリから Basic 認証経由で kintone REST API にアクセスできる
-- [ ] Anthropic API Key 未設定時に適切なエラーメッセージが表示される
+1. **Custom Tool は client-side 実行** — Anthropic 側の computer-use とは別。`user.custom_tool_result` で「保存しました」と即返す軽量実装で OK
+2. **HTML iframe は `sandbox="allow-scripts"` 必須** — kintone 環境のスタイル干渉防止 + 同一オリジン外し
+3. **Bundle size** — mermaid (~600KB) と shiki (~150KB) は **動的 import** で初期ロードを汚さない
+4. **ID 衝突** — Agent が同じ id で再呼出 → 更新扱い。新規にしたいときは別 id にする運用ルールをシステムプロンプトに明記
+5. **Session 復元** — ページリロード時は events stream から `agent.custom_tool_use` を replay して artifact を再構築。`user.custom_tool_result` の再送信は不要
+6. **編集 UI は実装しない** — Artifact フッターのコメント欄はチャットに新ターンとして流すのみ。差分表示や textarea 編集は MVP スコープ外
+7. **フラットデザイン徹底** — グラデーション・大きな影は使わない。アクセントはソリッド単色

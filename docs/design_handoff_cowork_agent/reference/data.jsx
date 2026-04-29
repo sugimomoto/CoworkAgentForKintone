@@ -116,4 +116,131 @@ const SCENARIO = {
   },
 };
 
+// ────────────────────────────────────────────────────────
+// Artifact samples — 再利用可能な成果物のショーケース
+// ────────────────────────────────────────────────────────
+const ARTIFACTS = {
+  // 1) Markdown レポート
+  monthlyReport: {
+    id: 'monthly-report-2026-04',
+    kind: 'markdown',
+    title: '2026年4月 受注レポート',
+    summary: '受注総額・担当者別ランキング・前月比をまとめました',
+    updatedAt: '14:32',
+    content: `# 2026年4月 受注レポート
+
+## サマリー
+
+- **受注総額**: ¥187,400,000（前月比 **+18.2%**）
+- **受注件数**: 18件
+- **平均単価**: ¥10,411,000
+- **トップ担当**: 田中 美咲（5件 / ¥62,300,000）
+
+## 担当者別ランキング
+
+| 順位 | 担当者 | 件数 | 受注金額 |
+|---|---|---|---|
+| 1 | 田中 美咲 | 5 | ¥62,300,000 |
+| 2 | 佐藤 健一 | 4 | ¥48,100,000 |
+| 3 | 鈴木 葵 | 3 | ¥31,800,000 |
+| 4 | 山田 拓也 | 3 | ¥27,400,000 |
+| 5 | 中村 玲奈 | 2 | ¥12,300,000 |
+
+## ハイライト
+
+> 日立コンサル契約 (¥22,400,000) が単月最大案件。継続契約の延長交渉が奏功。
+
+## 来月の見込み
+
+- パイプライン: ¥240,000,000（提案中フェーズ）
+- 確度Aの案件: 6件 / ¥98,000,000
+- 要フォロー: 楽天追加開発、キヤノンシステム更改
+
+---
+
+*このレポートは自動生成されました。kintone「案件管理」アプリの 2026-04-01 〜 2026-04-30 のレコードを集計しています。*`,
+  },
+
+  // 2) HTML ワイヤフレーム (sandbox preview)
+  wireframe: {
+    id: 'settings-wireframe-v1',
+    kind: 'html',
+    title: '設定画面ワイヤフレーム',
+    summary: 'プラグイン設定UIの初稿',
+    updatedAt: '14:18',
+    content: `<!doctype html>
+<html><head><style>
+body { font-family: -apple-system, sans-serif; background: #f5f5f5; margin: 0; padding: 24px; color: #333; }
+.card { background: #fff; border-radius: 8px; padding: 20px; max-width: 480px; margin: 0 auto; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+h1 { font-size: 18px; margin: 0 0 4px; }
+.sub { color: #888; font-size: 12px; margin-bottom: 20px; }
+.row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
+.row:last-child { border: none; }
+.label { font-size: 13px; }
+.hint { font-size: 11px; color: #888; }
+.toggle { width: 36px; height: 20px; background: #4f46e5; border-radius: 10px; position: relative; }
+.toggle::after { content: ''; position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+.toggle.off { background: #ccc; }
+.toggle.off::after { right: auto; left: 2px; }
+select { padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
+.btn { background: #4f46e5; color: #fff; border: none; padding: 9px 18px; border-radius: 4px; font-size: 13px; cursor: pointer; margin-top: 16px; }
+</style></head>
+<body>
+  <div class="card">
+    <h1>カスタマイズ設定</h1>
+    <div class="sub">アプリ「案件管理」のカスタマイズオプション</div>
+    <div class="row">
+      <div><div class="label">ステータス自動色付け</div><div class="hint">完了行を緑、要対応行を赤で表示</div></div>
+      <div class="toggle"></div>
+    </div>
+    <div class="row">
+      <div><div class="label">通知</div><div class="hint">レコード追加時に Slack へ通知</div></div>
+      <div class="toggle off"></div>
+    </div>
+    <div class="row">
+      <div><div class="label">表示密度</div></div>
+      <select><option>標準</option><option>コンパクト</option></select>
+    </div>
+    <button class="btn">変更を保存</button>
+  </div>
+</body></html>`,
+  },
+
+  // 3) Mermaid 図
+  diagram: {
+    id: 'app-relations-er',
+    kind: 'mermaid',
+    title: 'アプリ間参照関係',
+    summary: '案件管理 ↔ 顧客マスタ ↔ 活動履歴 のER図',
+    updatedAt: '14:08',
+    content: `erDiagram
+    顧客マスタ ||--o{ 案件管理 : "顧客ID"
+    案件管理 ||--o{ 活動履歴 : "案件ID"
+    顧客マスタ ||--o{ 活動履歴 : "顧客ID"
+    顧客マスタ {
+        string 顧客ID PK
+        string 会社名
+        string 業種
+        string 担当者
+    }
+    案件管理 {
+        string 案件ID PK
+        string 顧客ID FK
+        string 案件名
+        number 受注金額
+        string ステータス
+        date 受注日
+    }
+    活動履歴 {
+        string 活動ID PK
+        string 案件ID FK
+        string 顧客ID FK
+        date 日時
+        string 種別
+        text 内容
+    }`,
+  },
+};
+
 window.SCENARIO = SCENARIO;
+window.ARTIFACTS = ARTIFACTS;

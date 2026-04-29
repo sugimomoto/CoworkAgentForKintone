@@ -3,17 +3,51 @@
 // treatment for HITL plans and results. Feels "AI-native" but still
 // business-appropriate.
 
-function VariantRich({ accent = '#6366f1', dark = false, density = 'comfortable' }) {
-  const [messages, setMessages] = React.useState([
-    { kind: 'greeting' },
-    SCENARIO.script[0],
-    SCENARIO.script[1],
-  ]);
+function VariantRich({ accent = '#6366f1', dark = false, density = 'comfortable', artifactsEnabled = false, initialArtifactId = null }) {
+  // Build messages: if artifacts enabled, append artifact creation cards after the result
+  const buildInitialMessages = () => {
+    const base = [
+      { kind: 'greeting' },
+      SCENARIO.script[0],
+      SCENARIO.script[1],
+    ];
+    return base;
+  };
+  const [messages, setMessages] = React.useState(buildInitialMessages);
   const [approved, setApproved] = React.useState(false);
+  const [artifactOpenId, setArtifactOpenId] = React.useState(initialArtifactId);
   const scrollRef = React.useRef(null);
 
+  // ordered list of all artifacts in this session (for dropdown)
+  const sessionArtifacts = [ARTIFACTS.monthlyReport, ARTIFACTS.wireframe, ARTIFACTS.diagram];
+
   React.useEffect(() => {
-    const remaining = SCENARIO.script.slice(2);
+    const remaining = [...SCENARIO.script.slice(2)];
+    if (artifactsEnabled) {
+      // Insert artifact creation cards into the script
+      remaining.push({
+        kind: 'artifact-card',
+        artifactId: ARTIFACTS.monthlyReport.id,
+        artifactKind: ARTIFACTS.monthlyReport.kind,
+        artifactTitle: ARTIFACTS.monthlyReport.title,
+        artifactSummary: ARTIFACTS.monthlyReport.summary,
+      });
+      remaining.push({ kind: 'agent', text: 'ER図と設定画面のワイヤフレームも作成しました。右ペインで切り替えできます。' });
+      remaining.push({
+        kind: 'artifact-card',
+        artifactId: ARTIFACTS.diagram.id,
+        artifactKind: ARTIFACTS.diagram.kind,
+        artifactTitle: ARTIFACTS.diagram.title,
+        artifactSummary: ARTIFACTS.diagram.summary,
+      });
+      remaining.push({
+        kind: 'artifact-card',
+        artifactId: ARTIFACTS.wireframe.id,
+        artifactKind: ARTIFACTS.wireframe.kind,
+        artifactTitle: ARTIFACTS.wireframe.title,
+        artifactSummary: ARTIFACTS.wireframe.summary,
+      });
+    }
     const timers = [];
     let delay = 600;
     remaining.forEach((m, i) => {
@@ -24,9 +58,12 @@ function VariantRich({ accent = '#6366f1', dark = false, density = 'comfortable'
           }
           return [...prev, m];
         });
+        if (m.kind === 'artifact-card' && !artifactOpenId) {
+          setArtifactOpenId(m.artifactId);
+        }
       }, delay);
       timers.push(t);
-      delay += m.kind === 'tool' ? 650 : m.kind === 'plan' ? 950 : m.kind === 'progress' ? 1200 : 800;
+      delay += m.kind === 'tool' ? 650 : m.kind === 'plan' ? 950 : m.kind === 'progress' ? 1200 : m.kind === 'artifact-card' ? 700 : 800;
     });
     return () => timers.forEach(clearTimeout);
   }, []);
@@ -37,10 +74,13 @@ function VariantRich({ accent = '#6366f1', dark = false, density = 'comfortable'
 
   const c = richColors(dark, accent);
   const pad = density === 'compact' ? 10 : density === 'airy' ? 18 : 14;
+  const artifactOpen = artifactsEnabled && !!artifactOpenId;
 
-  return (
+  const chatPane = (
     <div className="panel" style={{
-      width: '100%', height: '100%',
+      width: artifactOpen ? 380 : '100%',
+      flex: artifactOpen ? '0 0 380px' : '1 1 auto',
+      height: '100%',
       display: 'flex', flexDirection: 'column',
       background: c.bg, color: c.text, fontSize: 13,
       position: 'relative',
@@ -52,11 +92,40 @@ function VariantRich({ accent = '#6366f1', dark = false, density = 'comfortable'
         display: 'flex', flexDirection: 'column', gap: pad,
         position: 'relative', zIndex: 1,
       }}>
-        {messages.map((m, i) => (
-          <RichMessage key={i} m={m} c={c} accent={accent} onApprove={() => setApproved(true)} approved={approved} />
-        ))}
+        {messages.map((m, i) => {
+          if (m.kind === 'artifact-card') {
+            return (
+              <ArtifactChatCard
+                key={i}
+                m={m}
+                c={c}
+                accent={accent}
+                isOpen={artifactOpenId === m.artifactId}
+                onOpen={() => setArtifactOpenId(m.artifactId)}
+              />
+            );
+          }
+          return <RichMessage key={i} m={m} c={c} accent={accent} onApprove={() => setApproved(true)} approved={approved} />;
+        })}
       </div>
       <RichComposer c={c} accent={accent} />
+    </div>
+  );
+
+  if (!artifactsEnabled) return chatPane;
+
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'row' }}>
+      {chatPane}
+      <ArtifactPane
+        open={artifactOpen}
+        artifacts={sessionArtifacts}
+        currentId={artifactOpenId}
+        onSelect={setArtifactOpenId}
+        onClose={() => setArtifactOpenId(null)}
+        accent={accent}
+        c={c}
+      />
     </div>
   );
 }
@@ -102,10 +171,9 @@ function RichHeader({ c, accent }) {
       <div style={{ position: 'relative' }}>
         <div style={{
           width: 34, height: 34, borderRadius: 10,
-          background: `linear-gradient(135deg, ${accent}, ${shift(accent, 40)})`,
+          background: accent,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: c.onAccent || '#fff', fontWeight: 700, fontSize: 14,
-          boxShadow: `0 4px 14px ${accent}40`,
         }}>
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M10 2v3M10 15v3M3 10h3M14 10h3M5 5l2 2M13 13l2 2M5 15l2-2M13 7l2-2"/>
@@ -196,7 +264,7 @@ function AgentBubble({ c, accent, children }) {
     <div className="msg-in" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', maxWidth: '92%' }}>
       <div style={{
         flex: '0 0 22px', width: 22, height: 22, borderRadius: '50%',
-        background: `linear-gradient(135deg, ${accent}, ${shift(accent, 40)})`,
+        background: accent,
         marginTop: 1,
       }} />
       <div style={{ flex: 1 }}>{children}</div>
@@ -381,7 +449,7 @@ function RichProgress({ m, c, accent }) {
         height: 6, borderRadius: 3, background: c.accentSoft, overflow: 'hidden',
         marginBottom: 11, position: 'relative',
       }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg, ${accent}, ${shift(accent, 40)})`, transition: 'width .3s', position: 'relative' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: accent, transition: 'width .3s', position: 'relative' }}>
           <div className="shimmer" style={{ position: 'absolute', inset: 0 }} />
         </div>
       </div>
@@ -415,7 +483,7 @@ function RichResult({ m, c, accent }) {
     }}>
       <div style={{
         padding: '12px 14px',
-        background: `linear-gradient(135deg, ${c.accentSoft}, transparent)`,
+        background: c.accentSoft,
         borderBottom: `1px solid ${c.border}`,
       }}>
         <div style={{ fontSize: 13.5, fontWeight: 600, color: c.text, letterSpacing: -0.2 }}>{m.title}</div>
@@ -439,7 +507,7 @@ function RichResult({ m, c, accent }) {
               </span>
             </div>
             <div style={{ height: 3, background: c.border, borderRadius: 2, overflow: 'hidden', marginLeft: 28 }}>
-              <div style={{ width: `${(r.total / max) * 100}%`, height: '100%', background: `linear-gradient(90deg, ${accent}, ${shift(accent, 30)})` }} />
+              <div style={{ width: `${(r.total / max) * 100}%`, height: '100%', background: accent }} />
             </div>
           </div>
         ))}
@@ -486,10 +554,9 @@ function RichComposer({ c, accent }) {
         </button>
         <button style={{
           width: 32, height: 32, borderRadius: 10, border: 'none',
-          background: `linear-gradient(135deg, ${accent}, ${shift(accent, 30)})`,
+          background: accent,
           color: c.onAccent || '#fff', cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: `0 2px 8px ${accent}55`,
         }}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 7h9M7 3l4 4-4 4"/></svg>
         </button>

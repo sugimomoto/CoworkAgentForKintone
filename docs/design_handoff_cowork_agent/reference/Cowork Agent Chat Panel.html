@@ -52,7 +52,7 @@
     }
     .host-app-icon {
       width: 32px; height: 32px; border-radius: 6px;
-      background: linear-gradient(135deg, #ffd451, #ffbf00);
+      background: #ffbf00;
       display: flex; align-items: center; justify-content: center;
       color: #231200; font-size: 15px; font-weight: 700;
     }
@@ -183,6 +183,7 @@
 
   <script type="text/babel" src="design-canvas.jsx"></script>
   <script type="text/babel" src="data.jsx"></script>
+  <script type="text/babel" src="artifact.jsx"></script>
   <script type="text/babel" src="variant-rich.jsx"></script>
 
   <script type="text/babel">
@@ -265,10 +266,33 @@
     }
 
     // Side-panel wrapper that sets CSS var for panel width
-    function SidePanel({ children }) {
+    function SidePanel({ children, wide }) {
       return (
-        <div className="host-sidepanel">
+        <div className="host-sidepanel" style={wide ? { width: 880 } : undefined}>
           {children}
+        </div>
+      );
+    }
+
+    // Bottom-sheet wrapper for narrow viewport — Artifact pane slides up
+    // covering 80% of the panel from the bottom.
+    function BottomSheetFrame({ children, sheet }) {
+      return (
+        <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#faf8f3' }}>
+          <div style={{ position: 'absolute', inset: 0 }}>{children}</div>
+          <div style={{
+            position: 'absolute', left: 0, right: 0, bottom: 0,
+            height: '82%', background: '#faf8f3',
+            borderTopLeftRadius: 18, borderTopRightRadius: 18,
+            boxShadow: '0 -12px 40px rgba(0,0,0,0.18)',
+            border: '1px solid rgba(35,18,0,0.10)', borderBottom: 'none',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 4px' }}>
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(35,18,0,0.18)' }} />
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>{sheet}</div>
+          </div>
         </div>
       );
     }
@@ -497,6 +521,84 @@
               </DCArtboard>
               <DCPostIt top={40} left={-180} rotate={-3} width={160}>
                 破壊的操作は必ず影響範囲カード→承認ボタンの2ステップ。
+              </DCPostIt>
+            </DCSection>
+
+            <DCSection id="artifact" title="Artifact ペイン"
+              subtitle="Claude Desktop 風の再利用可能な成果物ビューア — チャット ↔ Artifact の二段構成">
+              <DCArtboard id="artifact-host" label="ホスト統合 · 拡張パネル (880px)" width={1600} height={840}>
+                <MockKintoneHost compact>
+                  <SidePanel wide>
+                    <VariantRich accent={tweaks.accent_rich} dark={dark} density={tweaks.density}
+                      artifactsEnabled initialArtifactId={ARTIFACTS.monthlyReport.id} />
+                  </SidePanel>
+                </MockKintoneHost>
+              </DCArtboard>
+
+              <DCArtboard id="artifact-md" label="Markdown レポート" width={900} height={780}>
+                <div style={{ width: '100%', height: '100%', background: '#f0eee9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 860, height: 720, overflow: 'hidden', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.06)', display: 'flex' }}>
+                    <VariantRich accent={tweaks.accent_rich} dark={dark} density={tweaks.density}
+                      artifactsEnabled initialArtifactId={ARTIFACTS.monthlyReport.id} />
+                  </div>
+                </div>
+              </DCArtboard>
+
+              <DCArtboard id="artifact-html" label="HTML プレビュー (sandbox)" width={900} height={780}>
+                <div style={{ width: '100%', height: '100%', background: '#f0eee9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 860, height: 720, overflow: 'hidden', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.06)', display: 'flex' }}>
+                    <VariantRich accent={tweaks.accent_rich} dark={dark} density={tweaks.density}
+                      artifactsEnabled initialArtifactId={ARTIFACTS.wireframe.id} />
+                  </div>
+                </div>
+              </DCArtboard>
+
+              <DCArtboard id="artifact-mermaid" label="Mermaid ER 図" width={900} height={780}>
+                <div style={{ width: '100%', height: '100%', background: '#f0eee9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 860, height: 720, overflow: 'hidden', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.06)', display: 'flex' }}>
+                    <VariantRich accent={tweaks.accent_rich} dark={dark} density={tweaks.density}
+                      artifactsEnabled initialArtifactId={ARTIFACTS.diagram.id} />
+                  </div>
+                </div>
+              </DCArtboard>
+
+              <DCArtboard id="artifact-narrow" label="狭幅 · ボトムシート (380px)" width={420} height={780}>
+                <div style={{ width: '100%', height: '100%', background: '#f0eee9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 380, height: 720, overflow: 'hidden', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                    <BottomSheetFrame
+                      sheet={
+                        <ArtifactSoloPreview
+                          artifact={ARTIFACTS.monthlyReport}
+                          accent={tweaks.accent_rich} dark={dark}
+                        />
+                      }
+                    >
+                      <VariantRich accent={tweaks.accent_rich} dark={dark} density={tweaks.density} />
+                    </BottomSheetFrame>
+                  </div>
+                </div>
+              </DCArtboard>
+
+              <DCArtboard id="artifact-apply" label="kintone 適用モーダル" width={900} height={780}>
+                <div style={{ width: '100%', height: '100%', background: '#f0eee9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 860, height: 720, overflow: 'hidden', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.06)', display: 'flex', position: 'relative' }}>
+                    <VariantRich accent={tweaks.accent_rich} dark={dark} density={tweaks.density}
+                      artifactsEnabled initialArtifactId={ARTIFACTS.wireframe.id} />
+                    <ApplyModal
+                      artifact={ARTIFACTS.wireframe}
+                      accent={tweaks.accent_rich}
+                      c={richColors(dark, tweaks.accent_rich)}
+                      onClose={() => {}}
+                    />
+                  </div>
+                </div>
+              </DCArtboard>
+
+              <DCPostIt top={40} left={-200} rotate={-2} width={180}>
+                Artifact カード → クリックで右ペイン展開。タイトル横の ▾ で履歴切替。
+              </DCPostIt>
+              <DCPostIt top={520} left={-200} rotate={2} width={180}>
+                編集はせず、フッターのコメント欄から Agent に変更を依頼する。
               </DCPostIt>
             </DCSection>
           </DesignCanvas>
