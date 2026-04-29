@@ -191,3 +191,9 @@
 - E2E: **15 passed** (約 27 秒、LLM 課金ゼロ)
 - ビルド: OK / promptVersion: **v10**
 - 実機検証: kintone v92 で全 kind 動作確認済
+
+### 13.7 仕様変更: Step 2「編集 → 再依頼フロー」は対応不要
+
+オリジナル設計案の `textarea 直編集 → Agent に "これに変更して" 再依頼` 案 (案 A) は
+**実装しない**。会話で「色を緑に」等と書けば Agent が同 id で `create_artifact` を再呼出
+して version up する流れ (案 B) で実用十分。詳細は Issue #14 のコメントを参照。
