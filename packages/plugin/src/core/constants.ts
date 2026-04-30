@@ -38,7 +38,7 @@ export const AGENT_TYPE = {
 
 /** kintone OAuth scope のデフォルト推奨。ConfigScreen 初期値 + connect 時 fallback。 */
 export const DEFAULT_KINTONE_OAUTH_SCOPE =
-  'k:app_record:read k:app_record:write k:app_settings:read k:file:read';
+  'k:app_record:read k:app_record:write k:app_settings:read k:file:read k:file:write';
 
 /** Cloudflare Workers script 名 (固定)。Worker URL の subdomain にも使われる。 */
 export const CLOUDFLARE_WORKER_SCRIPT_NAME = 'cowork-agent-kintone-mcp';
