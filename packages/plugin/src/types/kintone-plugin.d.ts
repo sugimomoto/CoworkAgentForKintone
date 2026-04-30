@@ -75,6 +75,11 @@ declare global {
 
   interface KintoneGlobal {
     getLoginUser(): KintoneLoginUser;
+    /**
+     * CSRF token (REST API 直叩き時に __REQUEST_TOKEN__ として form-data に積む).
+     * 公式: https://cybozu.dev/ja/kintone/docs/js-api/other/get-request-token/
+     */
+    getRequestToken(): string;
     app: KintoneApp;
     events: KintoneEvents;
     plugin: KintonePlugin;

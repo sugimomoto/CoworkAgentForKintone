@@ -24,7 +24,7 @@ export const DEFAULT_AGENT_NAME = 'Cowork Agent - Default';
  * system プロンプトのリビジョン番号。プロンプト本文を変更したらこの値を上げる。
  * metadata に含めるので、旧プロンプトの Agent は別物として扱われ、新規 Agent が作成される。
  */
-export const DEFAULT_AGENT_PROMPT_VERSION = 'v12';
+export const DEFAULT_AGENT_PROMPT_VERSION = 'v13';
 
 /**
  * MCP toolset で公開するツール名一覧 (configs を per-tool で指定するため)。
@@ -134,6 +134,18 @@ export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   '    対象 FILE フィールドに `[{"fileKey": "<提示された fileKey>"}]` の形で渡してください。',
   '    `kintone-upload-file` ツールを再度呼ぶ必要はありません (二重アップロードになります)。',
   '  - 添付ファイルがない通常の会話と同じガイドライン (kintone-* ツール / artifact 生成等) も引き続き適用してください。',
+  '',
+  '【kintone FILE フィールド (添付ファイル) を扱う際の注意】',
+  '  - **fileKey は 2 種類あり相互利用不可**:',
+  '      * UUID 形式 (例: `c15b3870-7505-4ab6-9d8d-b9bdbc74f5d6`): `kintone-upload-file` の応答 / プラグインからの【kintone に保存済】セクションで提示される。',
+  '        → レコードの FILE フィールドに紐付ける用 (`kintone-add-record` / `kintone-update-record`)',
+  '      * 49 桁 hex 形式 (例: `201202061155587E339F9067544F1A92C743460E3D12B3297`): `kintone-get-record(s)` のレスポンスに含まれる。',
+  '        → ファイルの中身をダウンロードする用 (`kintone-download-file`)',
+  '      * 用途を間違えると "invalid fileKey" 系のエラーになります。',
+  '  - **既存添付ファイルを残す場合は全 fileKey を指定** (差分追加ではなく全置換):',
+  '      `kintone-update-record` で FILE フィールドに渡した `value: [{fileKey: ...}, ...]` の配列が新しい全添付ファイルになります。',
+  '      既存ファイルを残したい場合は、まず `kintone-get-record` で既存 fileKey 一覧を取得し、それに新規 fileKey を追加した配列を渡してください。',
+  '      新規 fileKey だけを渡すと既存ファイルは削除されます (silent な事故になりやすいので必ず確認)。',
 ].join('\n');
 
 /** kintone MCP server の name (mcp_servers と mcp_toolset で参照される識別子) */

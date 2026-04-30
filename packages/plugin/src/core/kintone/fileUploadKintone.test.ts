@@ -7,6 +7,8 @@ let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
+  // kintone global を mock (getRequestToken のみ利用)
+  vi.stubGlobal('kintone', { getRequestToken: () => 'csrf-token-xyz' });
 });
 
 afterEach(() => {
@@ -39,8 +41,25 @@ describe('uploadFileToKintone', () => {
     const f = form.get('file');
     expect(f).toBeInstanceOf(File);
     expect((f as File).name).toBe('a.txt');
+    // 公式準拠: __REQUEST_TOKEN__ が form-data に積まれる
+    expect(form.get('__REQUEST_TOKEN__')).toBe('csrf-token-xyz');
 
     expect(result).toEqual({ fileKey: 'fk-1' });
+  });
+
+  it('kintone global が無い環境では __REQUEST_TOKEN__ なしで送る (テスト等の互換)', async () => {
+    vi.unstubAllGlobals();
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockResolvedValue(jsonResponse({ fileKey: 'fk-2' }));
+
+    const file = new File(['x'], 'x.txt');
+    await uploadFileToKintone(file);
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    const form = init.body as FormData;
+    expect(form.get('__REQUEST_TOKEN__')).toBeNull();
+    expect(form.get('file')).toBeInstanceOf(File);
   });
 
   it('4xx は status と本文を含む例外', async () => {
