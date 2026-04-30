@@ -118,3 +118,73 @@ export async function kintoneRequest(
   if (response.status === 204) return {};
   return response.json();
 }
+
+/**
+ * 添付ファイルアップロード (`POST /k/v1/file.json`, multipart/form-data, field=`file`)。
+ * fetch が FormData の Content-Type / boundary を自動付与する。Authorization のみ明示。
+ */
+export async function kintoneUploadFile(
+  creds: KintoneCreds,
+  filename: string,
+  bytes: Uint8Array,
+  contentType?: string,
+): Promise<{ fileKey: string }> {
+  const url = `https://${creds.domain}/k/v1/file.json`;
+  const form = new FormData();
+  // Uint8Array<ArrayBufferLike> を BlobPart に渡すと TS が SharedArrayBuffer の可能性で
+  // 怒るが、Workers ランタイムでは常に ArrayBuffer。安全にスライスして渡す。
+  const ab = bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
+  const blob = new Blob([ab], contentType ? { type: contentType } : undefined);
+  form.append('file', blob, filename);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'User-Agent':
+        'cowork-agent-kintone-mcp/0.1.0 (+https://github.com/sugimomoto/CoworkAgentForKintone)',
+      Authorization: `Bearer ${creds.bearer}`,
+    },
+    body: form,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new KintoneApiError(response.status, text, parseKintoneError(text));
+  }
+  return (await response.json()) as { fileKey: string };
+}
+
+/**
+ * 添付ファイルダウンロード (`GET /k/v1/file.json?fileKey=...`)。
+ * バイナリを Uint8Array で返す。`Content-Type` ヘッダがあれば一緒に返す。
+ */
+export async function kintoneDownloadFile(
+  creds: KintoneCreds,
+  fileKey: string,
+): Promise<{ bytes: Uint8Array; contentType: string | null; size: number }> {
+  const url = buildUrl(creds.domain, '/k/v1/file.json', { fileKey });
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'User-Agent':
+        'cowork-agent-kintone-mcp/0.1.0 (+https://github.com/sugimomoto/CoworkAgentForKintone)',
+      Authorization: `Bearer ${creds.bearer}`,
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new KintoneApiError(response.status, text, parseKintoneError(text));
+  }
+
+  const buf = await response.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  return {
+    bytes,
+    contentType: response.headers.get('content-type'),
+    size: bytes.byteLength,
+  };
+}

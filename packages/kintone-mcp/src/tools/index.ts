@@ -5,6 +5,7 @@ import { addRecordComment } from './add-record-comment';
 import { addRecords } from './add-records';
 import { bulkRequest } from './bulk-request';
 import { deleteRecords } from './delete-records';
+import { downloadFile } from './download-file';
 import { getApp } from './get-app';
 import { getApps } from './get-apps';
 import { getFormFields } from './get-form-fields';
@@ -13,6 +14,7 @@ import { getRecordComments } from './get-record-comments';
 import { getRecords } from './get-records';
 import { updateRecord } from './update-record';
 import { updateRecords } from './update-records';
+import { uploadFile } from './upload-file';
 
 import type { Tool } from './types/tool';
 
@@ -37,6 +39,9 @@ export const tools: Array<Tool<any>> = [
   addRecordComment,
   // Bulk
   bulkRequest,
+  // File
+  uploadFile,
+  downloadFile,
 ];
 
 /** 全ツール名 (Anthropic Agent の mcp_toolset.configs に渡す用) */

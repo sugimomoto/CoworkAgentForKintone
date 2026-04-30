@@ -4,7 +4,7 @@
 // - URL 形式違反 → 404
 // - Bearer 無し → 401
 // - 正規 URL + Bearer + initialize → serverInfo
-// - tools/list → 13 ツール並び (read 6 + write 6 + bulk 1)
+// - tools/list → 15 ツール並び (read 6 + write 6 + bulk 1 + file 2)
 // - tools/call (kintone-get-apps) → kintone fetch を Bearer + 正しいドメインで叩く
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -73,7 +73,7 @@ describe('handleMcp', () => {
     expect(json.result.capabilities).toBeDefined();
   });
 
-  it('tools/list は read 6 + write 6 + bulk 1 ツールを返す', async () => {
+  it('tools/list は read 6 + write 6 + bulk 1 + file 2 ツールを返す', async () => {
     const res = await handleMcp(mcpRequest({ jsonrpc: '2.0', method: 'tools/list', id: 2 }));
     const json = (await res.json()) as { result: { tools: Array<{ name: string }> } };
     const names = json.result.tools.map((t) => t.name);
@@ -95,9 +95,12 @@ describe('handleMcp', () => {
         'kintone-add-record-comment',
         // Bulk
         'kintone-bulk-request',
+        // File
+        'kintone-upload-file',
+        'kintone-download-file',
       ]),
     );
-    expect(names).toHaveLength(13);
+    expect(names).toHaveLength(15);
   });
 
   it('tools/call kintone-get-apps は URL のドメインに対して Bearer で叩く', async () => {
