@@ -44,6 +44,7 @@ function exposeTestApiIfRequested(): void {
   if (typeof window === 'undefined') return;
   if (!window.location || !window.location.search.includes('coworkE2e=1')) return;
   (window as unknown as { __coworkAgent?: unknown }).__coworkAgent = {
+    // Artifact 系
     upsertArtifact: (input: Parameters<ReturnType<typeof useChatStore.getState>['upsertArtifact']>[0]) =>
       useChatStore.getState().upsertArtifact(input),
     setActiveArtifact: (id: string | null) =>
@@ -51,6 +52,18 @@ function exposeTestApiIfRequested(): void {
     clearArtifacts: () => useChatStore.getState().clearArtifacts(),
     getActiveArtifactId: () => useChatStore.getState().activeArtifactId,
     getArtifactCount: () => useChatStore.getState().artifacts.size,
+    // Attachment 系
+    addAttachedFile: (
+      input: Parameters<ReturnType<typeof useChatStore.getState>['addAttachedFile']>[0],
+    ) => useChatStore.getState().addAttachedFile(input),
+    updateAttachedFile: (
+      localId: string,
+      patch: Parameters<ReturnType<typeof useChatStore.getState>['updateAttachedFile']>[1],
+    ) => useChatStore.getState().updateAttachedFile(localId, patch),
+    removeAttachedFile: (localId: string) =>
+      useChatStore.getState().removeAttachedFile(localId),
+    clearAttachedFiles: () => useChatStore.getState().clearAttachedFiles(),
+    getAttachedFiles: () => useChatStore.getState().attachedFiles,
   };
 }
 

@@ -332,4 +332,94 @@ describe('chatStore', () => {
       expect(s.activeArtifactId).toBeNull();
     });
   });
+
+  describe('attachedFiles', () => {
+    it('初期値は空配列', () => {
+      expect(useChatStore.getState().attachedFiles).toEqual([]);
+    });
+
+    it('addAttachedFile で末尾に追加される', () => {
+      useChatStore.getState().addAttachedFile({
+        localId: 'f1',
+        filename: 'a.csv',
+        size: 100,
+        mimeType: 'text/csv',
+        kind: 'text',
+        status: 'reading',
+      });
+      const list = useChatStore.getState().attachedFiles;
+      expect(list).toHaveLength(1);
+      expect(list[0]?.localId).toBe('f1');
+    });
+
+    it('updateAttachedFile で部分更新される', () => {
+      useChatStore.getState().addAttachedFile({
+        localId: 'f1',
+        filename: 'a.csv',
+        size: 100,
+        mimeType: 'text/csv',
+        kind: 'text',
+        status: 'reading',
+      });
+      useChatStore.getState().updateAttachedFile('f1', {
+        status: 'ready',
+        content: 'a,b\n1,2',
+      });
+      const f = useChatStore.getState().attachedFiles[0]!;
+      expect(f.status).toBe('ready');
+      expect(f.content).toBe('a,b\n1,2');
+      expect(f.filename).toBe('a.csv'); // 未指定フィールドは保持
+    });
+
+    it('updateAttachedFile で該当無し → no-op', () => {
+      useChatStore.getState().addAttachedFile({
+        localId: 'f1',
+        filename: 'a.csv',
+        size: 1,
+        mimeType: 'text/csv',
+        kind: 'text',
+        status: 'reading',
+      });
+      useChatStore.getState().updateAttachedFile('ghost', { status: 'ready' });
+      expect(useChatStore.getState().attachedFiles).toHaveLength(1);
+      expect(useChatStore.getState().attachedFiles[0]?.status).toBe('reading');
+    });
+
+    it('removeAttachedFile で削除される', () => {
+      useChatStore.getState().addAttachedFile({
+        localId: 'f1', filename: 'a', size: 1, mimeType: 't', kind: 'text', status: 'ready',
+      });
+      useChatStore.getState().addAttachedFile({
+        localId: 'f2', filename: 'b', size: 1, mimeType: 't', kind: 'text', status: 'ready',
+      });
+      useChatStore.getState().removeAttachedFile('f1');
+      const list = useChatStore.getState().attachedFiles;
+      expect(list).toHaveLength(1);
+      expect(list[0]?.localId).toBe('f2');
+    });
+
+    it('clearAttachedFiles で空に戻る', () => {
+      useChatStore.getState().addAttachedFile({
+        localId: 'f1', filename: 'a', size: 1, mimeType: 't', kind: 'text', status: 'ready',
+      });
+      useChatStore.getState().clearAttachedFiles();
+      expect(useChatStore.getState().attachedFiles).toEqual([]);
+    });
+
+    it('startNewConversation で attachedFiles もクリアされる', () => {
+      useChatStore.getState().addAttachedFile({
+        localId: 'f1', filename: 'a', size: 1, mimeType: 't', kind: 'text', status: 'ready',
+      });
+      useChatStore.getState().startNewConversation();
+      expect(useChatStore.getState().attachedFiles).toEqual([]);
+    });
+
+    it('reset で attachedFiles もクリアされる', () => {
+      useChatStore.getState().addAttachedFile({
+        localId: 'f1', filename: 'a', size: 1, mimeType: 't', kind: 'text', status: 'ready',
+      });
+      useChatStore.getState().reset();
+      expect(useChatStore.getState().attachedFiles).toEqual([]);
+    });
+  });
 });

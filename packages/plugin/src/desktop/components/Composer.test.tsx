@@ -159,4 +159,100 @@ describe('Composer', () => {
       expect(onSubmit).not.toHaveBeenCalled();
     });
   });
+
+  describe('添付機能', () => {
+    it('📎 ボタンが描画される', () => {
+      render(<Composer onSubmit={vi.fn()} attachedFiles={[]} onAttach={vi.fn()} />);
+      expect(screen.getByLabelText('ファイルを添付')).toBeInTheDocument();
+    });
+
+    it('attachedFiles が空でない時 placeholder が「添付について聞く / 指示を入力...」', () => {
+      render(
+        <Composer
+          onSubmit={vi.fn()}
+          attachedFiles={[
+            {
+              localId: 'f1',
+              filename: 'a.csv',
+              size: 100,
+              mimeType: 'text/csv',
+              kind: 'text',
+              status: 'ready',
+            },
+          ]}
+          onAttach={vi.fn()}
+          onRemoveAttachment={vi.fn()}
+        />,
+      );
+      expect(screen.getByPlaceholderText(/添付について/)).toBeInTheDocument();
+    });
+
+    it('reading 状態のチップがあると送信ボタンは disabled', () => {
+      render(
+        <Composer
+          onSubmit={vi.fn()}
+          attachedFiles={[
+            {
+              localId: 'f1',
+              filename: 'a.csv',
+              size: 100,
+              mimeType: 'text/csv',
+              kind: 'text',
+              status: 'reading',
+            },
+          ]}
+          onAttach={vi.fn()}
+          onRemoveAttachment={vi.fn()}
+        />,
+      );
+      // value 空でも disabled なのは元から (空 = no submit) なので、入力後 reading で disabled をチェック
+      const input = screen.getByLabelText('メッセージ入力');
+      fireEvent.change(input, { target: { value: 'hi' } });
+      expect(screen.getByLabelText('送信')).toBeDisabled();
+    });
+
+    it('error 状態のチップがあっても送信は可能 (= 入力テキストがあれば送信ボタン enable)', () => {
+      render(
+        <Composer
+          onSubmit={vi.fn()}
+          attachedFiles={[
+            {
+              localId: 'f1',
+              filename: 'over.pdf',
+              size: 99,
+              mimeType: 'application/pdf',
+              kind: 'document',
+              status: 'error',
+              errorText: 'サイズ超過',
+            },
+          ]}
+          onAttach={vi.fn()}
+          onRemoveAttachment={vi.fn()}
+        />,
+      );
+      const input = screen.getByLabelText('メッセージ入力');
+      fireEvent.change(input, { target: { value: 'hi' } });
+      // error チップは送信時にスキップされるだけで、送信自体は妨げない
+      expect(screen.getByLabelText('送信')).not.toBeDisabled();
+    });
+
+    it('📎 ボタンクリックで隠し input の click() が起動する', () => {
+      const onAttach = vi.fn();
+      render(<Composer onSubmit={vi.fn()} attachedFiles={[]} onAttach={onAttach} />);
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const clickSpy = vi.spyOn(input, 'click');
+      fireEvent.click(screen.getByLabelText('ファイルを添付'));
+      expect(clickSpy).toHaveBeenCalled();
+    });
+
+    it('input change で onAttach が呼ばれる', () => {
+      const onAttach = vi.fn();
+      render(<Composer onSubmit={vi.fn()} attachedFiles={[]} onAttach={onAttach} />);
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(['hi'], 'a.txt', { type: 'text/plain' });
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      fireEvent.change(input);
+      expect(onAttach).toHaveBeenCalled();
+    });
+  });
 });

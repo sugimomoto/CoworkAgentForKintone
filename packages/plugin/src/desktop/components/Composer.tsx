@@ -1,6 +1,7 @@
 // Cowork Agent for kintone — Composer (チャット入力部)
 //
 // デザイン仕様: docs/functional-design.md §5.3.3
+//                docs/design_handoff_attachments/README.md (添付対応)
 
 import {
   useEffect,
@@ -9,6 +10,13 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
+
+import { ACCEPT_ATTRIBUTE } from '../../core/files/types';
+
+import { AttachmentChipRow } from './AttachmentChipRow';
+import { PAPERCLIP_ICON } from './attachmentAssets';
+
+import type { AttachedFile } from '../../core/files/types';
 
 export interface ComposerProps {
   /** ユーザーがメッセージを送信したときのハンドラ */
@@ -21,19 +29,36 @@ export interface ComposerProps {
   running?: boolean;
   /** キャンセルボタン押下 (running=true のみ有効) */
   onCancel?: () => void;
+  /** 添付ファイル一覧 (chatStore 由来) */
+  attachedFiles?: AttachedFile[];
+  /** 📎 ボタンでファイルが選択された時 */
+  onAttach?: (files: FileList) => void;
+  /** チップ ✕ ボタン */
+  onRemoveAttachment?: (localId: string) => void;
 }
 
 const DEFAULT_PLACEHOLDER = 'このアプリについて聞く / レコードを操作...';
+const ATTACHED_PLACEHOLDER = '添付について聞く / 指示を入力...';
 
 export function Composer({
   onSubmit,
   disabled = false,
-  placeholder = DEFAULT_PLACEHOLDER,
+  placeholder,
   running = false,
   onCancel,
+  attachedFiles = [],
+  onAttach,
+  onRemoveAttachment,
 }: ComposerProps): JSX.Element {
   const [value, setValue] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const hasAttachments = attachedFiles.length > 0;
+  const effectivePlaceholder =
+    placeholder ?? (hasAttachments ? ATTACHED_PLACEHOLDER : DEFAULT_PLACEHOLDER);
+  // reading 状態のチップがある間は送信できない (= まだ content が無い)
+  const hasReading = attachedFiles.some((f) => f.status === 'reading');
 
   // 入力に応じて textarea を auto-grow する (1〜MAX_ROWS 行)。
   // scrollHeight ベースで height を都度書き換える。値が空に戻ったら 1 行へ縮める。
@@ -82,12 +107,58 @@ export function Composer({
     submit();
   }
 
+  function handleAttachClick(): void {
+    fileInputRef.current?.click();
+  }
+
+  function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>): void {
+    const files = e.target.files;
+    if (files && files.length > 0 && onAttach) {
+      onAttach(files);
+    }
+    // 同じファイルを再選択できるよう値をリセット
+    e.target.value = '';
+  }
+
   return (
     <form
       onSubmit={handleFormSubmit}
       className="border-t border-border bg-panel px-[14px] pt-[10px] pb-[14px] backdrop-blur-[12px]"
     >
-      <div className="flex items-end gap-[6px] rounded-[14px] border border-card-border bg-card p-[8px] pl-[14px] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_0_0_1px_var(--cw-accent-soft)_inset]">
+      <div
+        className={`flex flex-col rounded-[14px] border border-card-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04),0_0_0_1px_var(--cw-accent-soft)_inset] ${hasAttachments ? 'pb-[8px]' : ''}`}
+      >
+        {/* 添付チップ列 (添付ありの時だけ表示) */}
+        {hasAttachments && (
+          <AttachmentChipRow
+            files={attachedFiles}
+            onRemove={(id) => onRemoveAttachment?.(id)}
+          />
+        )}
+        <div className="flex items-end gap-[6px] p-[8px] pl-[14px]">
+          {/* 📎 ボタン */}
+          {onAttach && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={ACCEPT_ATTRIBUTE}
+                onChange={handleFileInputChange}
+                className="hidden"
+                aria-hidden="true"
+              />
+              <button
+                type="button"
+                onClick={handleAttachClick}
+                aria-label="ファイルを添付"
+                disabled={disabled || running}
+                className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-transparent text-muted hover:bg-card-hi disabled:opacity-50"
+              >
+                {PAPERCLIP_ICON}
+              </button>
+            </>
+          )}
         <textarea
           ref={inputRef}
           rows={1}
@@ -104,7 +175,7 @@ export function Composer({
               composingRef.current = false;
             }, 0);
           }}
-          placeholder={placeholder}
+          placeholder={effectivePlaceholder}
           disabled={disabled || running}
           aria-label="メッセージ入力"
           className="flex-1 resize-none bg-transparent text-[13px] leading-[1.5] text-text outline-none placeholder:text-subtle disabled:opacity-50"
@@ -124,7 +195,7 @@ export function Composer({
           <button
             type="submit"
             aria-label="送信"
-            disabled={disabled || !value.trim()}
+            disabled={disabled || !value.trim() || hasReading}
             className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-[10px] bg-accent text-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] disabled:opacity-50"
           >
             <svg
@@ -143,6 +214,7 @@ export function Composer({
             </svg>
           </button>
         )}
+        </div>
       </div>
       <div className="mt-[6px] px-[4px] text-[10px] text-subtle">
         ⌘K 呼び出し · Claude Managed Agents

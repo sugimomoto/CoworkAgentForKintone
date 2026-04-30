@@ -42,7 +42,13 @@ export interface ArtifactRefChatMessage {
 }
 
 export type ChatMessage =
-  | { id: string; kind: 'user'; text: string }
+  | {
+      id: string;
+      kind: 'user';
+      text: string;
+      /** 送信時に添付したファイル一覧 (バブル上部にラベル表示用) */
+      attachments?: Array<{ filename: string; kind: import('../../core/files/types').AttachmentKind }>;
+    }
   | { id: string; kind: 'agent'; text: string }
   | { id: string; kind: 'thinking' }
   | ToolMessage
@@ -150,7 +156,7 @@ function renderMessage(
 ): JSX.Element | null {
   switch (m.kind) {
     case 'user':
-      return <UserMessage text={m.text} />;
+      return <UserMessage text={m.text} {...(m.attachments ? { attachments: m.attachments } : {})} />;
     case 'agent':
       return <AgentMessage text={m.text} />;
     case 'thinking':

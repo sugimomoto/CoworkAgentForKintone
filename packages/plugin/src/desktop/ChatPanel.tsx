@@ -17,10 +17,13 @@ import { Header } from './components/Header';
 import { MessageList } from './components/MessageList';
 import { WelcomeMessage } from './components/WelcomeMessage';
 import { HistoryView } from './HistoryView';
+import { buildUserMessageContent } from '../core/files/messageContent';
+
 import { useAgentPhase } from './hooks/useAgentPhase';
 import { useCustomToolResponder } from './hooks/useCustomToolResponder';
 import { useElapsedSeconds } from './hooks/useElapsedSeconds';
 import { useEventPoller } from './hooks/useEventPoller';
+import { useFileAttacher } from './hooks/useFileAttacher';
 import { useSession } from './hooks/useSession';
 import { useUserBinding } from './hooks/useUserBinding';
 
@@ -37,6 +40,10 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   const agentId = useChatStore((s) => s.agentId);
   const activeArtifactId = useChatStore((s) => s.activeArtifactId);
   const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
+  const attachedFiles = useChatStore((s) => s.attachedFiles);
+  const removeAttachedFile = useChatStore((s) => s.removeAttachedFile);
+  const clearAttachedFiles = useChatStore((s) => s.clearAttachedFiles);
+  const { attach } = useFileAttacher();
   const status = useChatStore((s) => s.status);
   const error = useChatStore((s) => s.error);
   const view = useChatStore((s) => s.view);
@@ -64,14 +71,31 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   const handleSubmit = useCallback(
     async (text: string) => {
       const userId = `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      addMessage({ id: userId, kind: 'user', text });
+      // 添付スナップショット (ready のみ送信に乗せる)
+      const filesSnapshot = useChatStore
+        .getState()
+        .attachedFiles.filter((f) => f.status === 'ready');
+
+      // UI 用に user メッセージへ添付ラベル情報を残す
+      addMessage({
+        id: userId,
+        kind: 'user',
+        text,
+        ...(filesSnapshot.length > 0
+          ? {
+              attachments: filesSnapshot.map((f) => ({
+                filename: f.filename,
+                kind: f.kind,
+              })),
+            }
+          : {}),
+      });
       addMessage({ id: `pending-thinking-${Date.now()}`, kind: 'thinking' });
-      // オプティミスティックに「Agent ターン進行中」へ遷移させる。
-      // (実際の session.status_running が来るまで待つと、その間に「応答完了」divider が
-      //  消えず一瞬残ってしまう)
       setAgentRunning(true);
 
-      // 未バインドなら一旦保留して連携ボタンへ誘導
+      // 送信完了前に attachedFiles をクリア (再送信防止)
+      clearAttachedFiles();
+
       if (bindingStatus === 'unbound' || bindingStatus === 'error') {
         setPendingText(text);
         return;
@@ -79,12 +103,18 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
 
       try {
         const sid = await ensureSession();
-        await postUserMessage(sid, text);
+        // 添付があれば content block 配列、なければ string を送信
+        if (filesSnapshot.length > 0) {
+          const content = buildUserMessageContent(text, filesSnapshot);
+          await postUserMessage(sid, content);
+        } else {
+          await postUserMessage(sid, text);
+        }
       } catch {
         // MVP: 失敗しても UI では握りつぶす
       }
     },
-    [addMessage, bindingStatus, ensureSession, setAgentRunning],
+    [addMessage, bindingStatus, ensureSession, setAgentRunning, clearAttachedFiles],
   );
 
   const handleConnect = useCallback(async () => {
@@ -306,6 +336,9 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
                 disabled={status !== 'ready' || sessionTerminated}
                 running={isAgentRunning}
                 onCancel={handleCancel}
+                attachedFiles={attachedFiles}
+                onAttach={attach}
+                onRemoveAttachment={removeAttachedFile}
               />
             )}
           </div>

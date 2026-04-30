@@ -15,4 +15,25 @@ describe('UserMessage', () => {
     const el = screen.getByText(/line1/);
     expect(el.textContent).toContain('line2');
   });
+
+  describe('添付ラベル', () => {
+    it('attachments 無しなら何も追加表示しない', () => {
+      render(<UserMessage text="hi" />);
+      expect(screen.queryByText('a.csv')).toBeNull();
+    });
+
+    it('attachments がある時、ファイル名がラベルとして並ぶ', () => {
+      render(
+        <UserMessage
+          text="登録して"
+          attachments={[
+            { filename: 'customers.csv', kind: 'text' },
+            { filename: 'photo.png', kind: 'image' },
+          ]}
+        />,
+      );
+      expect(screen.getByText('customers.csv')).toBeInTheDocument();
+      expect(screen.getByText('photo.png')).toBeInTheDocument();
+    });
+  });
 });

@@ -24,7 +24,7 @@ export const DEFAULT_AGENT_NAME = 'Cowork Agent - Default';
  * system プロンプトのリビジョン番号。プロンプト本文を変更したらこの値を上げる。
  * metadata に含めるので、旧プロンプトの Agent は別物として扱われ、新規 Agent が作成される。
  */
-export const DEFAULT_AGENT_PROMPT_VERSION = 'v10';
+export const DEFAULT_AGENT_PROMPT_VERSION = 'v11';
 
 /**
  * MCP toolset で公開するツール名一覧 (configs を per-tool で指定するため)。
@@ -119,6 +119,16 @@ export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   '    `<?xml ...?>` 宣言や `<!DOCTYPE>` は **入れない** (sandbox iframe の HTML body 内で描画されるため)',
   '  - kind=html: `<html>` を含めても省略してもよい。sandbox で実行されるので外部 API には触れない',
   '  - kind=csv: RFC 4180 形式 (カンマ区切り、必要に応じて "" でクォート)',
+  '',
+  '【ファイル添付】',
+  '  - ユーザーは PDF / 画像 / テキスト系ファイル (CSV / Markdown / JSON / TXT) を',
+  '    メッセージに添付できます。content block (text / document / image) として渡されます。',
+  '  - **CSV を添付された場合**: 1 行目は通常見出し。kintone への登録依頼なら',
+  '    必ず先に kintone-get-form-fields でフィールド型を確認した上で kintone-add-records を呼んでください。',
+  '    100 件超は 100 件ずつのバッチに分割します。',
+  '  - **画像を添付された場合**: 画像内容を読み取り (シーン解析 / OCR)、必要に応じて kintone レコードに反映します。',
+  '  - **PDF を添付された場合**: 内容を要約・抽出します。長文時は重要箇所を引用しつつまとめます。',
+  '  - 添付ファイルがない通常の会話と同じガイドライン (kintone-* ツール / artifact 生成等) も引き続き適用してください。',
 ].join('\n');
 
 /** kintone MCP server の name (mcp_servers と mcp_toolset で参照される識別子) */

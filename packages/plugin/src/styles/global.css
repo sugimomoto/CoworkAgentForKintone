@@ -75,6 +75,17 @@
   }
 }
 
+/* 添付チップ (reading 状態) のスピナー */
+.cowork-agent-root .msg-attach-spinner {
+  animation: attach-spin 0.9s linear infinite;
+}
+
+@keyframes attach-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ターン完了マーカー (✓ 応答完了) のフェードイン */
 .cowork-agent-root .msg-completed {
   animation: cw-msg-completed 280ms ease-out both;

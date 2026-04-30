@@ -6,6 +6,7 @@
 import { create } from 'zustand';
 
 import type { Artifact, CreateArtifactInput } from '../core/artifacts/types';
+import type { AttachedFile } from '../core/files/types';
 import type { ChatMessage, ToolMessage } from '../desktop/components/MessageList';
 
 export type ChatStatus = 'idle' | 'bootstrapping' | 'ready' | 'error';
@@ -76,6 +77,11 @@ export interface ChatState {
    * useCustomToolResponder がこの Map を見て POST / リトライする。
    */
   pendingCustomToolUseIds: Map<string, string>;
+  /**
+   * Composer から添付されたファイル一覧 (送信前)。
+   * 送信完了 / 新規セッション開始 / reset でクリア。
+   */
+  attachedFiles: AttachedFile[];
 
   /** メッセージを末尾に追加 */
   addMessage: (msg: ChatMessage) => void;
@@ -133,6 +139,15 @@ export interface ChatState {
   addPendingCustomToolUse: (toolUseId: string, artifactId: string) => void;
   removePendingCustomToolUse: (toolUseId: string) => void;
 
+  /** 添付ファイルを追加 (末尾) */
+  addAttachedFile: (file: AttachedFile) => void;
+  /** 部分更新 (status / errorText / content など)。該当 localId が無ければ no-op */
+  updateAttachedFile: (localId: string, patch: Partial<Omit<AttachedFile, 'localId'>>) => void;
+  /** 1 件削除 */
+  removeAttachedFile: (localId: string) => void;
+  /** 全削除 */
+  clearAttachedFiles: () => void;
+
   /** 全て初期化 (接続情報リセット等の後に呼ぶ) */
   reset: () => void;
   /** 会話履歴だけ初期化し、Session は保つ */
@@ -163,6 +178,7 @@ const INITIAL_STATE = {
   artifacts: new Map<string, Artifact>(),
   activeArtifactId: null as string | null,
   pendingCustomToolUseIds: new Map<string, string>(),
+  attachedFiles: [] as AttachedFile[],
 };
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -304,11 +320,28 @@ export const useChatStore = create<ChatState>((set) => ({
       return { pendingCustomToolUseIds: next };
     }),
 
+  addAttachedFile: (file) => set((s) => ({ attachedFiles: [...s.attachedFiles, file] })),
+
+  updateAttachedFile: (localId, patch) =>
+    set((s) => {
+      const idx = s.attachedFiles.findIndex((f) => f.localId === localId);
+      if (idx < 0) return s;
+      const next = s.attachedFiles.slice();
+      next[idx] = { ...next[idx]!, ...patch };
+      return { attachedFiles: next };
+    }),
+
+  removeAttachedFile: (localId) =>
+    set((s) => ({ attachedFiles: s.attachedFiles.filter((f) => f.localId !== localId) })),
+
+  clearAttachedFiles: () => set({ attachedFiles: [] }),
+
   reset: () =>
     set({
       ...INITIAL_STATE,
       artifacts: new Map(),
       pendingCustomToolUseIds: new Map(),
+      attachedFiles: [],
     }),
 
   resetConversation: () => set({ messages: [] }),
@@ -323,5 +356,6 @@ export const useChatStore = create<ChatState>((set) => ({
       artifacts: new Map(),
       activeArtifactId: null,
       pendingCustomToolUseIds: new Map(),
+      attachedFiles: [],
     }),
 }));
