@@ -17,6 +17,14 @@ export type AttachmentKind = 'text' | 'document' | 'image';
  */
 export type AttachedFileStatus = 'pending' | 'reading' | 'ready' | 'error';
 
+/**
+ * kintone への parallel upload (Issue #27) の進行状態。
+ * - uploading: in-flight
+ * - uploaded:  fileKey を取得済 (kintoneFileKey に保存)
+ * - failed:    失敗 (best-effort なので UI で警告は出さない)
+ */
+export type KintoneUploadStatus = 'uploading' | 'uploaded' | 'failed';
+
 export interface AttachedFile {
   /** UI / 削除キー用 (chatStore 内のユニーク ID) */
   localId: string;
@@ -34,6 +42,13 @@ export interface AttachedFile {
    * - kind=document/image → base64 文字列 (`data:` prefix 無し)
    */
   content?: string;
+  /**
+   * kintone /k/v1/file.json に保存できた場合の fileKey (Issue #27)。
+   * 値がセットされていれば送信時にメタ block として Agent に渡される。
+   */
+  kintoneFileKey?: string;
+  /** kintone upload の進行状態 (best-effort, UI / debug 用) */
+  kintoneUpload?: KintoneUploadStatus;
 }
 
 /** 拡張子 → kind / MIME マップ (本フェーズでサポートする 10 種) */

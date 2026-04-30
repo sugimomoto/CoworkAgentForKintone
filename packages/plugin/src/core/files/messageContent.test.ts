@@ -5,7 +5,7 @@ import { buildUserMessageContent } from './messageContent';
 import type { AttachedFile } from './types';
 
 function ready(input: Partial<AttachedFile>): AttachedFile {
-  return {
+  const base: AttachedFile = {
     localId: input.localId ?? 'l',
     filename: input.filename ?? 'a.csv',
     size: input.size ?? 100,
@@ -14,6 +14,9 @@ function ready(input: Partial<AttachedFile>): AttachedFile {
     status: 'ready',
     content: input.content ?? '',
   };
+  if (input.kintoneFileKey !== undefined) base.kintoneFileKey = input.kintoneFileKey;
+  if (input.kintoneUpload !== undefined) base.kintoneUpload = input.kintoneUpload;
+  return base;
 }
 
 describe('buildUserMessageContent', () => {
@@ -119,5 +122,63 @@ describe('buildUserMessageContent', () => {
     expect(buildUserMessageContent('hi', [noContent])).toEqual([
       { type: 'text', text: 'hi' },
     ]);
+  });
+
+  describe('kintoneFileKey 付きファイル (#27)', () => {
+    it('fileKey ありのファイルがあれば fileKey 一覧 text block が user text の前に追加される', () => {
+      const pdf = ready({
+        filename: 'scan.pdf',
+        mimeType: 'application/pdf',
+        kind: 'document',
+        content: 'p',
+        kintoneFileKey: 'fk-1',
+      });
+      const r = buildUserMessageContent('レコード 5 に添付して', [pdf]);
+      expect(r).toHaveLength(3);
+      expect(r[0]?.type).toBe('document');
+      expect(r[1]?.type).toBe('text');
+      const meta = r[1] as { text: string };
+      expect(meta.text).toContain('【kintone に保存済の添付ファイル】');
+      expect(meta.text).toContain('scan.pdf');
+      expect(meta.text).toContain('fileKey: fk-1');
+      expect(r[2]).toEqual({ type: 'text', text: 'レコード 5 に添付して' });
+    });
+
+    it('複数の fileKey を 1 つの block にまとめる', () => {
+      const a = ready({
+        filename: 'a.csv',
+        mimeType: 'text/csv',
+        kind: 'text',
+        content: 'x,y',
+        kintoneFileKey: 'fk-A',
+      });
+      const b = ready({
+        filename: 'b.png',
+        mimeType: 'image/png',
+        kind: 'image',
+        content: 'i',
+        kintoneFileKey: 'fk-B',
+      });
+      const r = buildUserMessageContent('hi', [a, b]);
+      // text(a) + image(b) + meta + user = 4
+      expect(r).toHaveLength(4);
+      const meta = r[2] as { text: string };
+      expect(meta.text).toContain('a.csv');
+      expect(meta.text).toContain('fk-A');
+      expect(meta.text).toContain('b.png');
+      expect(meta.text).toContain('fk-B');
+    });
+
+    it('fileKey が無いファイルだけのときは fileKey block を追加しない (既存挙動)', () => {
+      const pdf = ready({
+        filename: 'r.pdf',
+        mimeType: 'application/pdf',
+        kind: 'document',
+        content: 'p',
+      });
+      const r = buildUserMessageContent('要約', [pdf]);
+      expect(r).toHaveLength(2);
+      expect(r[1]).toEqual({ type: 'text', text: '要約' });
+    });
   });
 });

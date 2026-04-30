@@ -14,6 +14,7 @@ import { detectImageFormat } from '../../core/files/imageFormat';
 import { readAsBase64, readAsText } from '../../core/files/read';
 import { EXTENSION_TO_KIND } from '../../core/files/types';
 import { extensionOf, validateFile } from '../../core/files/validate';
+import { uploadFileToKintone } from '../../core/kintone/fileUploadKintone';
 import { useChatStore } from '../../store/chatStore';
 
 import type { AttachedFile } from '../../core/files/types';
@@ -72,8 +73,23 @@ export function useFileAttacher(): UseFileAttacherResult {
           mimeType: m.mime,
           kind: m.kind,
           status: 'reading',
+          kintoneUpload: 'uploading',
         };
         addAttachedFile(initial);
+
+        // kintone への並行 upload (Issue #27)。
+        // 失敗しても content block は影響を受けないので silent に best-effort。
+        void (async () => {
+          try {
+            const { fileKey } = await uploadFileToKintone(file);
+            updateAttachedFile(localId, {
+              kintoneFileKey: fileKey,
+              kintoneUpload: 'uploaded',
+            });
+          } catch {
+            updateAttachedFile(localId, { kintoneUpload: 'failed' });
+          }
+        })();
 
         // 読み込みは fire-and-forget (Promise を return しない)。
         // テストは waitFor で status==='ready' を待つ。

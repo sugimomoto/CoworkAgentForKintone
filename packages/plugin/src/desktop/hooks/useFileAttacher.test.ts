@@ -1,9 +1,18 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// kintone への parallel upload (#27) は本テストでは fetch せずデフォルト成功させる。
+// 個別ケースで mockResolvedValue / mockRejectedValue を上書きする。
+vi.mock('../../core/kintone/fileUploadKintone', () => ({
+  uploadFileToKintone: vi.fn().mockResolvedValue({ fileKey: 'test-fk' }),
+}));
+
+import { uploadFileToKintone } from '../../core/kintone/fileUploadKintone';
 import { useChatStore } from '../../store/chatStore';
 
 import { useFileAttacher } from './useFileAttacher';
+
+const mockUploadFileToKintone = vi.mocked(uploadFileToKintone);
 
 function makeFile(name: string, sizeBytes: number, type = '', content = ''): File {
   const data = content || new Uint8Array(sizeBytes);
@@ -13,6 +22,8 @@ function makeFile(name: string, sizeBytes: number, type = '', content = ''): Fil
 
 beforeEach(() => {
   useChatStore.getState().reset();
+  mockUploadFileToKintone.mockClear();
+  mockUploadFileToKintone.mockResolvedValue({ fileKey: 'test-fk' });
 });
 
 afterEach(() => {
@@ -151,6 +162,54 @@ describe('useFileAttacher', () => {
       expect(useChatStore.getState().attachedFiles[0]?.status).toBe('ready');
     });
     expect(useChatStore.getState().attachedFiles[0]?.mimeType).toBe('image/jpeg');
+  });
+
+  describe('kintone 並行 upload (#27)', () => {
+    it('attach 時に kintone へ並行 upload され、成功で kintoneFileKey がセット', async () => {
+      mockUploadFileToKintone.mockResolvedValueOnce({ fileKey: 'fk-9999' });
+
+      const { result } = renderHook(() => useFileAttacher());
+      const file = makeFile('a.csv', 0, 'text/csv', 'x,y');
+      result.current.attach([file]);
+
+      await waitFor(() => {
+        const f = useChatStore.getState().attachedFiles[0];
+        expect(f?.status).toBe('ready');
+        expect(f?.kintoneUpload).toBe('uploaded');
+      });
+      const f = useChatStore.getState().attachedFiles[0]!;
+      expect(f.kintoneFileKey).toBe('fk-9999');
+      expect(mockUploadFileToKintone).toHaveBeenCalledTimes(1);
+      expect((mockUploadFileToKintone.mock.calls[0]![0] as File).name).toBe('a.csv');
+    });
+
+    it('kintone upload が失敗しても content は読込まれて ready になる (best-effort)', async () => {
+      mockUploadFileToKintone.mockRejectedValueOnce(new Error('403 forbidden'));
+
+      const { result } = renderHook(() => useFileAttacher());
+      const file = makeFile('a.csv', 0, 'text/csv', 'x,y');
+      result.current.attach([file]);
+
+      await waitFor(() => {
+        const f = useChatStore.getState().attachedFiles[0];
+        expect(f?.status).toBe('ready');
+        expect(f?.kintoneUpload).toBe('failed');
+      });
+      const f = useChatStore.getState().attachedFiles[0]!;
+      expect(f.kintoneFileKey).toBeUndefined();
+      expect(f.content).toBe('x,y');
+    });
+
+    it('未対応拡張子では kintone upload は実行しない', async () => {
+      const { result } = renderHook(() => useFileAttacher());
+      const file = makeFile('doc.docx', 100, 'application/octet-stream');
+      result.current.attach([file]);
+
+      await waitFor(() => {
+        expect(useChatStore.getState().attachedFiles[0]?.status).toBe('error');
+      });
+      expect(mockUploadFileToKintone).not.toHaveBeenCalled();
+    });
   });
 
   it('複数を並列 attach できる', async () => {

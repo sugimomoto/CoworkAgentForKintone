@@ -50,6 +50,24 @@ export function buildUserMessageContent(
     }
   }
 
+  // Issue #27: kintone に保存済 (fileKey 取得済) のファイルがあれば、Agent が
+  // FILE フィールドへの再添付に使えるよう fileKey 一覧を text block で差し込む。
+  const kintoneStored = files.filter((f) => f.kintoneFileKey != null);
+  if (kintoneStored.length > 0) {
+    const lines = kintoneStored.map(
+      (f) => `- ${f.filename} (fileKey: ${f.kintoneFileKey})`,
+    );
+    blocks.push({
+      type: 'text',
+      text:
+        '【kintone に保存済の添付ファイル】\n' +
+        '以下のファイルは kintone にアップロード済です。レコードの FILE フィールドに' +
+        '添付したい場合は、`kintone-add-record` / `kintone-update-record` の FILE フィールド値に' +
+        '`[{"fileKey": "..."}]` を渡してください。`kintone-upload-file` を再度呼ぶ必要はありません。\n\n' +
+        lines.join('\n'),
+    });
+  }
+
   blocks.push({ type: 'text', text });
   return blocks;
 }

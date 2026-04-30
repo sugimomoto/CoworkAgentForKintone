@@ -24,7 +24,7 @@ export const DEFAULT_AGENT_NAME = 'Cowork Agent - Default';
  * system プロンプトのリビジョン番号。プロンプト本文を変更したらこの値を上げる。
  * metadata に含めるので、旧プロンプトの Agent は別物として扱われ、新規 Agent が作成される。
  */
-export const DEFAULT_AGENT_PROMPT_VERSION = 'v11';
+export const DEFAULT_AGENT_PROMPT_VERSION = 'v12';
 
 /**
  * MCP toolset で公開するツール名一覧 (configs を per-tool で指定するため)。
@@ -128,6 +128,11 @@ export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   '    100 件超は 100 件ずつのバッチに分割します。',
   '  - **画像を添付された場合**: 画像内容を読み取り (シーン解析 / OCR)、必要に応じて kintone レコードに反映します。',
   '  - **PDF を添付された場合**: 内容を要約・抽出します。長文時は重要箇所を引用しつつまとめます。',
+  '  - **kintone に保存済の添付ファイル**: ユーザーメッセージに「【kintone に保存済の添付ファイル】」セクションがあれば、',
+  '    そのファイルは既に kintone にアップロード済で fileKey が付与されています。',
+  '    ユーザーが「このファイルをレコードに添付して」と依頼したら、`kintone-update-record` / `kintone-add-record` の',
+  '    対象 FILE フィールドに `[{"fileKey": "<提示された fileKey>"}]` の形で渡してください。',
+  '    `kintone-upload-file` ツールを再度呼ぶ必要はありません (二重アップロードになります)。',
   '  - 添付ファイルがない通常の会話と同じガイドライン (kintone-* ツール / artifact 生成等) も引き続き適用してください。',
 ].join('\n');
 
