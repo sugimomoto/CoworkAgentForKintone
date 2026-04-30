@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getApp } from '../../src/tools/get-app';
 import { getApps } from '../../src/tools/get-apps';
 import { getFormFields } from '../../src/tools/get-form-fields';
+import { getRecord } from '../../src/tools/get-record';
+import { getRecordComments } from '../../src/tools/get-record-comments';
 import { getRecords } from '../../src/tools/get-records';
 
 import { TEST_CREDS as CREDS, jsonResponse } from './_helpers';
@@ -165,5 +167,80 @@ describe('kintone-get-records', () => {
     const url = fetchMock.mock.calls[0]![0] as string;
     expect(url).toContain('fields=title');
     expect(url).toContain('fields=owner');
+  });
+});
+
+describe('kintone-get-record', () => {
+  it('app と id を渡して /k/v1/record.json を呼ぶ', async () => {
+    const record = { $id: { value: '42' }, title: { value: 'hello' } };
+    fetchMock.mockResolvedValue(jsonResponse({ record }));
+
+    const result = await getRecord.callback({ app: '1', id: '42' }, { creds: CREDS });
+
+    const url = fetchMock.mock.calls[0]![0] as string;
+    expect(url).toContain('/k/v1/record.json');
+    expect(url).toContain('app=1');
+    expect(url).toContain('id=42');
+    expect(result.structuredContent).toEqual({ record });
+  });
+
+  it('404 は KintoneApiError として伝播 (code を含む)', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ code: 'GAIA_RE01', message: 'no record' }), { status: 404 }),
+    );
+
+    await expect(getRecord.callback({ app: '1', id: '999' }, { creds: CREDS })).rejects.toThrow(
+      /404.*GAIA_RE01/,
+    );
+  });
+});
+
+describe('kintone-get-record-comments', () => {
+  it('app / record だけ指定で基本リクエスト', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ comments: [], older: false, newer: false }));
+
+    await getRecordComments.callback({ app: '1', record: '42' }, { creds: CREDS });
+
+    const url = fetchMock.mock.calls[0]![0] as string;
+    expect(url).toContain('/k/v1/record/comments.json');
+    expect(url).toContain('app=1');
+    expect(url).toContain('record=42');
+    expect(url).not.toContain('order=');
+    expect(url).not.toContain('limit=');
+    expect(url).not.toContain('offset=');
+  });
+
+  it('order / offset / limit を query に含む', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ comments: [], older: false, newer: false }));
+
+    await getRecordComments.callback(
+      { app: '1', record: '42', order: 'asc', offset: 10, limit: 5 },
+      { creds: CREDS },
+    );
+
+    const url = fetchMock.mock.calls[0]![0] as string;
+    expect(url).toContain('order=asc');
+    expect(url).toContain('offset=10');
+    expect(url).toContain('limit=5');
+  });
+
+  it('レスポンスをそのまま structuredContent にする', async () => {
+    const body = {
+      comments: [
+        {
+          id: '1',
+          text: 'hi',
+          createdAt: '2026-04-30T00:00:00Z',
+          creator: { code: 'sato', name: 'Sato' },
+          mentions: [],
+        },
+      ],
+      older: false,
+      newer: true,
+    };
+    fetchMock.mockResolvedValue(jsonResponse(body));
+
+    const result = await getRecordComments.callback({ app: '1', record: '42' }, { creds: CREDS });
+    expect(result.structuredContent).toEqual(body);
   });
 });

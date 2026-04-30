@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { kintoneRequest, type KintoneCreds } from '../src/kintone';
+import { KintoneApiError, kintoneRequest, type KintoneCreds } from '../src/kintone';
 
 const CREDS: KintoneCreds = {
   domain: 'tenant.cybozu.com',
@@ -75,13 +75,48 @@ describe('kintoneRequest', () => {
     expect(result).toEqual({});
   });
 
-  it('非 2xx は例外を投げ、status と本文を含む', async () => {
+  it('非 2xx は KintoneApiError を投げ、status / code / message を含む', async () => {
     fetchMock.mockResolvedValue(
-      new Response('{"code":"GAIA_DA02","message":"app not found"}', { status: 404 }),
+      new Response('{"code":"GAIA_DA02","message":"app not found","id":"req-1"}', {
+        status: 404,
+      }),
     );
 
     await expect(kintoneRequest(CREDS, 'GET', '/k/v1/app.json')).rejects.toThrow(
       /404.*app not found/,
     );
+
+    fetchMock.mockResolvedValue(
+      new Response('{"code":"GAIA_DA02","message":"app not found","id":"req-1"}', {
+        status: 404,
+      }),
+    );
+
+    try {
+      await kintoneRequest(CREDS, 'GET', '/k/v1/app.json');
+      expect.fail('should throw');
+    } catch (e) {
+      const err = e as KintoneApiError;
+      expect(err).toBeInstanceOf(KintoneApiError);
+      expect(err.status).toBe(404);
+      expect(err.code).toBe('GAIA_DA02');
+      expect(err.errorId).toBe('req-1');
+      expect(err.retryable).toBe(false);
+    }
+  });
+
+  it('5xx は retryable=true', async () => {
+    fetchMock.mockResolvedValue(new Response('upstream', { status: 503 }));
+
+    try {
+      await kintoneRequest(CREDS, 'GET', '/k/v1/app.json');
+      expect.fail('should throw');
+    } catch (e) {
+      const err = e as KintoneApiError;
+      expect(err).toBeInstanceOf(KintoneApiError);
+      expect(err.status).toBe(503);
+      expect(err.retryable).toBe(true);
+      expect(err.code).toBeUndefined();
+    }
   });
 });

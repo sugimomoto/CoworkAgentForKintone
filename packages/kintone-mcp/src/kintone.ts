@@ -19,6 +19,57 @@ export interface KintoneRequestOptions {
   body?: unknown;
 }
 
+interface KintoneErrorBody {
+  code?: string;
+  message?: string;
+  id?: string;
+  errors?: unknown;
+}
+
+/**
+ * kintone REST API のエラー応答を表す例外。
+ *
+ * - `status`: HTTP status
+ * - `code`: kintone エラーコード (例: `GAIA_IL01`, `CB_VA01`)
+ * - `errorId`: kintone リクエスト ID (サポート問い合わせで参照)
+ * - `errors`: フィールド単位のエラー詳細 (`CV_VL01` など)
+ * - `retryable`: クライアント側で再試行が妥当か (5xx / 429 のみ true)
+ *
+ * `message` は `kintone <status> [<code>]: <body>` 形式。既存の文字列マッチを壊さない。
+ */
+export class KintoneApiError extends Error {
+  readonly status: number;
+  readonly code: string | undefined;
+  readonly errorId: string | undefined;
+  readonly errors: unknown;
+  readonly retryable: boolean;
+  readonly responseText: string;
+
+  constructor(status: number, responseText: string, parsed?: KintoneErrorBody) {
+    const code = parsed?.code;
+    const detail = parsed?.message ?? responseText;
+    const prefix = code ? `kintone ${status} [${code}]` : `kintone ${status}`;
+    super(`${prefix}: ${detail}`);
+    this.name = 'KintoneApiError';
+    this.status = status;
+    this.code = code;
+    this.errorId = parsed?.id;
+    this.errors = parsed?.errors;
+    this.retryable = status >= 500 || status === 429;
+    this.responseText = responseText;
+  }
+}
+
+function parseKintoneError(text: string): KintoneErrorBody | undefined {
+  try {
+    const obj = JSON.parse(text) as unknown;
+    if (obj && typeof obj === 'object') return obj as KintoneErrorBody;
+  } catch {
+    // ignore
+  }
+  return undefined;
+}
+
 function buildHeaders(creds: KintoneCreds, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
     // cybozu.com Cloudflare WAF が User-Agent 無しを 1003 で弾くため明示。
@@ -61,7 +112,7 @@ export async function kintoneRequest(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`kintone ${response.status}: ${text}`);
+    throw new KintoneApiError(response.status, text, parseKintoneError(text));
   }
 
   if (response.status === 204) return {};
