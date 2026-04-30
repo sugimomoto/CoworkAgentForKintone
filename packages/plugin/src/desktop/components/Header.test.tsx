@@ -68,4 +68,63 @@ describe('Header', () => {
     expect(screen.queryByRole('button', { name: /履歴/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /新規会話/ })).not.toBeInTheDocument();
   });
+
+  describe('再連携ボタン', () => {
+    it('reconnectVisible=true で表示され、押下で onReconnectKintone が呼ばれる', async () => {
+      const onReconnectKintone = vi.fn();
+      const user = userEvent.setup();
+      render(
+        <Header
+          agentName="Aoi"
+          status="x"
+          onReconnectKintone={onReconnectKintone}
+          reconnectVisible
+        />,
+      );
+
+      const button = screen.getByRole('button', { name: /kintone を再連携/ });
+      await user.click(button);
+      expect(onReconnectKintone).toHaveBeenCalledTimes(1);
+    });
+
+    it('reconnectVisible=false なら描画しない', () => {
+      render(
+        <Header
+          agentName="Aoi"
+          status="x"
+          onReconnectKintone={vi.fn()}
+          reconnectVisible={false}
+        />,
+      );
+      expect(
+        screen.queryByRole('button', { name: /kintone を再連携/ }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('onReconnectKintone 未指定なら描画しない', () => {
+      render(<Header agentName="Aoi" status="x" reconnectVisible />);
+      expect(
+        screen.queryByRole('button', { name: /kintone を再連携/ }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('reconnectDisabled=true なら disabled でクリックしても呼ばれない', async () => {
+      const onReconnectKintone = vi.fn();
+      const user = userEvent.setup();
+      render(
+        <Header
+          agentName="Aoi"
+          status="x"
+          onReconnectKintone={onReconnectKintone}
+          reconnectVisible
+          reconnectDisabled
+        />,
+      );
+
+      const button = screen.getByRole('button', { name: /kintone を再連携/ });
+      expect(button).toBeDisabled();
+      await user.click(button);
+      expect(onReconnectKintone).not.toHaveBeenCalled();
+    });
+  });
 });

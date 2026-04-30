@@ -257,6 +257,13 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
         onHistoryClick={handleHistoryClick}
         onNewConversationClick={handleNewConversationClick}
         onSettingsClick={handleSettingsClick}
+        onReconnectKintone={handleConnect}
+        reconnectVisible={
+          bindingStatus === 'bound' ||
+          bindingStatus === 'binding' ||
+          bindingStatus === 'error'
+        }
+        reconnectDisabled={bindingStatus === 'binding'}
         {...(onClose ? { onClose } : {})}
       />
 

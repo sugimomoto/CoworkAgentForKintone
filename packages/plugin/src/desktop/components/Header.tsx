@@ -19,6 +19,12 @@ export interface HeaderProps {
   onSettingsClick?: () => void;
   /** 閉じるアイコン押下時。未指定ならボタン非表示 */
   onClose?: () => void;
+  /** kintone 再連携ボタン押下時。未指定ならボタン非表示 */
+  onReconnectKintone?: () => void;
+  /** 再連携ボタンを描画するか (bound / binding / error の時に true) */
+  reconnectVisible?: boolean;
+  /** 再連携処理中 (binding) で disabled 表示 */
+  reconnectDisabled?: boolean;
 }
 
 export function Header({
@@ -29,6 +35,9 @@ export function Header({
   onNewConversationClick,
   onSettingsClick,
   onClose,
+  onReconnectKintone,
+  reconnectVisible = false,
+  reconnectDisabled = false,
 }: HeaderProps): JSX.Element {
   return (
     <header className="flex items-center gap-[10px] border-b border-border bg-panel px-[14px] py-[10px] backdrop-blur-[12px]">
@@ -69,6 +78,16 @@ export function Header({
             <NewChatIcon />
           </IconButton>
         )}
+        {onReconnectKintone && reconnectVisible && (
+          <IconButton
+            aria-label="kintone を再連携"
+            title="kintone を再連携"
+            onClick={onReconnectKintone}
+            disabled={reconnectDisabled}
+          >
+            <LinkIcon />
+          </IconButton>
+        )}
         {onSettingsClick && (
           <IconButton aria-label="設定" onClick={onSettingsClick}>
             <SettingsIcon />
@@ -91,7 +110,7 @@ function IconButton({
   return (
     <button
       type="button"
-      className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px] text-muted hover:bg-accent-soft hover:text-accent"
+      className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px] text-muted hover:bg-accent-soft hover:text-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted"
       {...rest}
     >
       {children}
@@ -142,6 +161,15 @@ function NewChatIcon(): JSX.Element {
       <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
       <line x1="12" y1="9" x2="12" y2="14" />
       <line x1="9.5" y1="11.5" x2="14.5" y2="11.5" />
+    </svg>
+  );
+}
+
+function LinkIcon(): JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" strokeWidth="1.6" {...strokeAttrs} aria-hidden="true">
+      <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" />
+      <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" />
     </svg>
   );
 }

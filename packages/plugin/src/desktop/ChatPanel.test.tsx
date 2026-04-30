@@ -279,6 +279,41 @@ describe('ChatPanel', () => {
     expect(screen.getByText(/auth failed/)).toBeInTheDocument();
   });
 
+  it('Header の再連携ボタン押下で useUserBinding.connect() が呼ばれる (bound 状態)', async () => {
+    setBootstrapOk();
+    setBindingStatus('bound');
+    mockConnect.mockClear();
+
+    const user = userEvent.setup();
+    render(<ChatPanel />);
+    await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+    const button = screen.getByLabelText('kintone を再連携');
+    await user.click(button);
+    expect(mockConnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('Header の再連携ボタンは bindingStatus=unbound の時は表示しない (ConnectKintoneButton と重複しない)', async () => {
+    setBootstrapOk();
+    setBindingStatus('unbound');
+
+    render(<ChatPanel />);
+    await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+    expect(screen.queryByLabelText('kintone を再連携')).not.toBeInTheDocument();
+  });
+
+  it('Header の再連携ボタンは bindingStatus=binding の時 disabled', async () => {
+    setBootstrapOk();
+    setBindingStatus('binding');
+
+    render(<ChatPanel />);
+    await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+    const button = screen.getByLabelText('kintone を再連携');
+    expect(button).toBeDisabled();
+  });
+
   it('Header の設定アイコンクリックで onSettingsClick が呼ばれる', async () => {
     setBootstrapOk();
     setBindingStatus('bound');
