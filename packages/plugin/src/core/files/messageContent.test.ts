@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { buildUserMessageContent } from './messageContent';
+import { HIDDEN_BLOCK_MARKER, buildUserMessageContent } from './messageContent';
 
 import type { AttachedFile } from './types';
 
@@ -141,6 +141,8 @@ describe('buildUserMessageContent', () => {
       expect(meta.text).toContain('【kintone に保存済の添付ファイル】');
       expect(meta.text).toContain('scan.pdf');
       expect(meta.text).toContain('fileKey: fk-1');
+      // UI 非表示マーカーを先頭に持つ (eventInterpreter.extractText が skip する)
+      expect(meta.text.startsWith(HIDDEN_BLOCK_MARKER)).toBe(true);
       expect(r[2]).toEqual({ type: 'text', text: 'レコード 5 に添付して' });
     });
 

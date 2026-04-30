@@ -8,6 +8,7 @@
 //   - 表示に関係しないイベントは空配列を返す
 
 import { parseCreateArtifactInput } from '../artifacts/types';
+import { HIDDEN_BLOCK_MARKER } from '../files/messageContent';
 
 import type { ArtifactKind, CreateArtifactInput } from '../artifacts/types';
 import type { ChatMessage, ToolMessage } from '../../desktop/components/MessageList';
@@ -169,7 +170,11 @@ function extractText(content: unknown): string {
       .map((b) => {
         if (b && typeof b === 'object' && 'type' in b && (b as { type: string }).type === 'text') {
           const text = (b as { text?: unknown }).text;
-          return typeof text === 'string' ? text : '';
+          if (typeof text !== 'string') return '';
+          // UI 非表示マーカー (cowork-agent:hidden) で始まる block は内部メタ情報
+          // (fileKey 一覧など) なのでチャットに表示しない。LLM には届いている。
+          if (text.startsWith(HIDDEN_BLOCK_MARKER)) return '';
+          return text;
         }
         return '';
       })

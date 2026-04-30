@@ -29,6 +29,24 @@ describe('interpretEvent', () => {
     ]);
   });
 
+  it('user.message: 隠し sentinel 付き text block は UI 表示用テキストから除外する (#27 fileKey メタ)', () => {
+    const evt = {
+      id: 'evt_user_2',
+      type: 'user.message',
+      content: [
+        {
+          type: 'text',
+          text: '<!--cowork-agent:hidden-->\n【kintone に保存済の添付ファイル】\n- a.pdf (fileKey: fk-1)',
+        },
+        { type: 'text', text: '要約して' },
+      ],
+      processed_at: '...',
+    } as unknown as SessionEvent;
+    expect(interpretEvent(evt)).toEqual([
+      { kind: 'add', message: { id: 'evt_user_2', kind: 'user', text: '要約して' } },
+    ]);
+  });
+
   it('agent.thinking を thinking kind の add に変換', () => {
     const evt: SessionEvent = { id: 'evt_2', type: 'agent.thinking', processed_at: '...' };
     expect(interpretEvent(evt)).toEqual([

@@ -9,6 +9,19 @@
 
 import type { AttachedFile } from './types';
 
+/**
+ * UI に表示しない text block の先頭に付けるマーカー。
+ *
+ * Anthropic API は user.message の content を echo back してくるので、そのまま
+ * UI に流すと内部メタ情報 (fileKey 一覧など) がユーザーメッセージとしてチャット
+ * に出てしまう。eventInterpreter.extractText 側でこの prefix を見つけたら block
+ * を skip することで、LLM には届くが UI には出さない振る舞いを実現する。
+ *
+ * HTML コメントの形にしているのは、万一どこかで素のままレンダリングされても
+ * 副作用が無く、LLM 側も「コメントなので無視してよい」と自然に解釈できるため。
+ */
+export const HIDDEN_BLOCK_MARKER = '<!--cowork-agent:hidden-->';
+
 /** Anthropic content block (本実装が組み立てる範囲のみ) */
 export type ContentBlock =
   | { type: 'text'; text: string }
@@ -60,6 +73,7 @@ export function buildUserMessageContent(
     blocks.push({
       type: 'text',
       text:
+        HIDDEN_BLOCK_MARKER + '\n' +
         '【kintone に保存済の添付ファイル】\n' +
         '以下のファイルは kintone にアップロード済です。レコードの FILE フィールドに' +
         '添付したい場合は、`kintone-add-record` / `kintone-update-record` の FILE フィールド値に' +
