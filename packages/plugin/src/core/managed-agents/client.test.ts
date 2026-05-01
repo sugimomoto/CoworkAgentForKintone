@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { ApiError, apiHeaders, apiRequest, resetTransport, setTransport } from './client';
+import {
+  ApiError,
+  apiHeaders,
+  apiRequest,
+  getApiBase,
+  resetApiBase,
+  resetTransport,
+  setApiBase,
+  setTransport,
+} from './client';
 
 describe('apiHeaders', () => {
   it('GET リクエストでは anthropic-version + anthropic-beta が必須、Content-Type は付かない', () => {
@@ -168,5 +177,43 @@ describe('apiRequest', () => {
 
     expect(result).toEqual({ ok: true });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('setApiBase / getApiBase (Issue #31)', () => {
+  beforeEach(() => {
+    resetApiBase();
+  });
+  afterEach(() => {
+    resetApiBase();
+  });
+
+  it('既定では Anthropic 直接 URL', () => {
+    expect(getApiBase()).toBe('https://api.anthropic.com');
+  });
+
+  it('setApiBase で Worker passthrough URL に切替えられる', () => {
+    setApiBase('https://worker.example.com/anthropic');
+    expect(getApiBase()).toBe('https://worker.example.com/anthropic');
+  });
+
+  it('末尾の `/` は削られる', () => {
+    setApiBase('https://worker.example.com/anthropic/');
+    expect(getApiBase()).toBe('https://worker.example.com/anthropic');
+  });
+
+  it('apiRequest の URL に反映される', async () => {
+    const transport = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ via: 'worker' }), { status: 200 }),
+    );
+    setTransport(transport);
+    setApiBase('https://worker.example.com/anthropic');
+
+    await apiRequest('GET', '/v1/agents');
+
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(transport.mock.calls[0]![0]).toBe('https://worker.example.com/anthropic/v1/agents');
+
+    resetTransport();
   });
 });

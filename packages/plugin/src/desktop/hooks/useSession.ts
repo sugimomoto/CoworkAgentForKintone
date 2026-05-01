@@ -75,7 +75,7 @@ export function useSession(): UseSessionResult {
         const lower = message.toLowerCase();
         const hint =
           lower.includes('failed to fetch') || lower.includes('network')
-            ? ' — kintone のプロキシ設定で https://api.anthropic.com/ への許可 (GET / POST) が登録されているか確認してください。'
+            ? ' — kintone のプロキシ設定で Worker URL (`<workerUrl>/anthropic/`) への許可 (GET / POST) が登録されているか確認してください。プラグイン設定画面で「保存」を押すと再登録されます。'
             : lower.includes('authentication')
               ? ' — kintone プラグイン設定の Anthropic API Key が正しいか確認してください。'
               : '';

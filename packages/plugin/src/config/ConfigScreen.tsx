@@ -27,7 +27,6 @@ export interface ConfigScreenProps {
   pluginId: string;
 }
 
-const ANTHROPIC_URL_PREFIX = 'https://api.anthropic.com/';
 
 const CONFIG_KEY_SAVED = 'saved';
 const CONFIG_KEY_WORKER_URL = 'workerUrl';
@@ -220,15 +219,25 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
           headers: { 'X-Anthropic-Api-Key': apiKeyTrimmed },
         });
       }
-      // Anthropic 通常 API (POST + GET) — apiKey のみ必要
+      // Issue #31: Anthropic API は Worker /anthropic/* 経由で叩く。
+      // 旧 `https://api.anthropic.com/` への直接 proxy 登録は廃止。
       if (hasApiKey) {
+        const anthropicPassthroughUrl = joinUrl(finalWorkerUrl, 'anthropic/');
         proxySteps.push(
           {
-            url: ANTHROPIC_URL_PREFIX,
+            url: anthropicPassthroughUrl,
             method: 'POST',
-            headers: { ...anthropicHeaders, 'Content-Type': 'application/json' },
+            headers: {
+              'X-Anthropic-Api-Key': apiKeyTrimmed,
+              ...anthropicHeaders,
+              'Content-Type': 'application/json',
+            },
           },
-          { url: ANTHROPIC_URL_PREFIX, method: 'GET', headers: anthropicHeaders },
+          {
+            url: anthropicPassthroughUrl,
+            method: 'GET',
+            headers: { 'X-Anthropic-Api-Key': apiKeyTrimmed, ...anthropicHeaders },
+          },
         );
       }
       for (const step of proxySteps) {

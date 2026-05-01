@@ -24,7 +24,7 @@ export const DEFAULT_AGENT_NAME = 'Cowork Agent - Default';
  * system プロンプトのリビジョン番号。プロンプト本文を変更したらこの値を上げる。
  * metadata に含めるので、旧プロンプトの Agent は別物として扱われ、新規 Agent が作成される。
  */
-export const DEFAULT_AGENT_PROMPT_VERSION = 'v17';
+export const DEFAULT_AGENT_PROMPT_VERSION = 'v18';
 
 /**
  * Default Agent に attach する Anthropic 製 Skills (Issue #18 Step 1)。

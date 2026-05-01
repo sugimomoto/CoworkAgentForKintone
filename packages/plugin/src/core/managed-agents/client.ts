@@ -2,6 +2,10 @@
 //
 // kintone.plugin.app.proxy 経由で Anthropic API を呼ぶ前提のため、
 // API Key はここでは扱わない (Proxy 設定で固定ヘッダとして注入される)。
+//
+// Issue #31: API base は **Worker /anthropic/* 経由** が標準。`setApiBase()` で
+// 起動時に `${workerUrl}/anthropic` を inject する。テストや fallback では
+// Anthropic 直接 (`ANTHROPIC_API_BASE`) を使う。
 
 import { ANTHROPIC_API_BASE, ANTHROPIC_VERSION, MANAGED_AGENTS_BETA } from '../constants';
 
@@ -49,6 +53,28 @@ export function resetTransport(): void {
   transport = defaultTransport;
 }
 
+// ----- API base (差し替え可能な URL prefix) ---------------------------------
+//
+// 既定は Anthropic 直接 (旧経路 / テスト互換)。
+// 本番起動時は `setApiBase('${workerUrl}/anthropic')` を呼び、Worker 経由に切替。
+
+let apiBase: string = ANTHROPIC_API_BASE;
+
+/** Anthropic API へのリクエスト URL prefix を切り替える。 */
+export function setApiBase(base: string): void {
+  apiBase = base.replace(/\/$/, '');
+}
+
+/** 現在の API base を取得する (テスト用)。 */
+export function getApiBase(): string {
+  return apiBase;
+}
+
+/** API base をデフォルト (`ANTHROPIC_API_BASE`) に戻す (テスト用)。 */
+export function resetApiBase(): void {
+  apiBase = ANTHROPIC_API_BASE;
+}
+
 /** Managed Agents API のエラー */
 export class ApiError extends Error {
   constructor(
@@ -72,7 +98,7 @@ export async function apiRequest<T = unknown>(
   path: string,
   body?: unknown,
 ): Promise<T | null> {
-  const url = `${ANTHROPIC_API_BASE}${path}`;
+  const url = `${apiBase}${path}`;
   // x-api-key は kintone.plugin.app.setProxyConfig で固定ヘッダとして登録され、
   // kintone runtime がリクエスト時に自動付与する (JS 側からは付与しない)
   const init: RequestInit = {
@@ -125,7 +151,7 @@ export async function apiRequestRaw(
   path: string,
   extraHeaders: Headers = {},
 ): Promise<Response> {
-  const url = `${ANTHROPIC_API_BASE}${path}`;
+  const url = `${apiBase}${path}`;
   const init: RequestInit = {
     method,
     headers: apiHeaders(method, extraHeaders),

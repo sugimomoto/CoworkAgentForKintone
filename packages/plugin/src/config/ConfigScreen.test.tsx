@@ -103,10 +103,15 @@ describe('ConfigScreen', () => {
     expect(upsertHeaders['X-Kintone-OAuth-Client-Id']).toBe('cid');
     expect(upsertHeaders['X-Kintone-OAuth-Client-Secret']).toBe('csec');
 
-    // 3, 4) Anthropic POST + GET
-    const anthropicCalls = calls.filter((c) => c[0] === 'https://api.anthropic.com/');
+    // Issue #31: Anthropic API は Worker /anthropic/* 経由で proxy 登録される
+    const anthropicCalls = calls.filter((c) => c[0] === 'https://w.example.com/anthropic/');
     expect(anthropicCalls.length).toBe(2);
     expect(anthropicCalls.map((c) => c[1]).sort()).toEqual(['GET', 'POST']);
+    // X-Anthropic-Api-Key が両方の経路に乗っていること (Worker passthrough が読む)
+    for (const c of anthropicCalls) {
+      const headers = c[2] as Record<string, string>;
+      expect(headers['X-Anthropic-Api-Key']).toBe('sk-ant-x');
+    }
   });
 
   it('保存時 setConfig には secret が含まれない', async () => {

@@ -1,13 +1,17 @@
 // Cowork Agent for kintone — Remote MCP Server (Cloudflare Workers)
 //
 // マルチテナント版 (env / secret 一切なし):
-//   POST /mcp/<domain>        — Anthropic Managed Agents が Bearer (kintone OAuth access_token) で叩く
-//   GET  /oauth/callback      — kintone OAuth リダイレクト受け口
-//   POST /credentials/upsert  — Plugin が Anthropic Vault Credential を作成・更新
-//   GET  /healthz             — health check
-//   GET  /debug/echo          — リクエストヘッダ確認用 (検証中のみ)
+//   POST /mcp/<domain>             — Anthropic Managed Agents が Bearer (kintone OAuth access_token) で叩く
+//   GET  /oauth/callback           — kintone OAuth リダイレクト受け口
+//   POST /credentials/upsert       — Plugin が Anthropic Vault Credential を作成・更新
+//   *    /anthropic/<path>         — Anthropic API 汎用 passthrough (Issue #31)
+//   GET  /files/<id>/content       — Anthropic Files API バイナリ DL (base64 中継)
+//   GET  /healthz                  — health check
+//   GET  /version                  — build version
+//   GET  /debug/echo               — リクエストヘッダ確認用 (検証中のみ)
 
 import { maskToken } from './_http';
+import { handleAnthropicPassthrough } from './anthropic-passthrough';
 import { handleCredentialsUpsert } from './credentials-upsert';
 import { handleFilesDownload } from './files-download';
 import { handleMcp } from './mcp';
@@ -39,6 +43,12 @@ export default {
       if (m && request.method === 'GET') {
         return handleFilesDownload(request, m[1]!);
       }
+    }
+
+    // /anthropic/<path> — Anthropic API 汎用 passthrough (Issue #31)
+    if (url.pathname.startsWith('/anthropic/')) {
+      const upstreamPath = url.pathname.slice('/anthropic'.length); // "/v1/agents" など
+      return handleAnthropicPassthrough(request, upstreamPath);
     }
 
     if (url.pathname === '/' || url.pathname === '/healthz') {

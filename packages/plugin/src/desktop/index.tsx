@@ -4,8 +4,9 @@
 
 import { createRoot } from 'react-dom/client';
 
+import { getPluginConfig } from '../core/kintone/pluginConfig';
 import { createKintoneProxyTransport } from '../core/kintone/proxyTransport';
-import { setTransport } from '../core/managed-agents/client';
+import { setApiBase, setTransport } from '../core/managed-agents/client';
 import { useChatStore } from '../store/chatStore';
 
 import { App } from './App';
@@ -80,6 +81,13 @@ function exposeTestApiIfRequested(): void {
     // Plugin ID を store に保存。useUserBinding が /mint 呼出時に kintone proxy の
     // 第 1 引数として使う。
     useChatStore.getState().setPluginId(PLUGIN_ID);
+
+    // Issue #31: Anthropic API は Worker /anthropic/* 経由で叩く。
+    // workerUrl が設定されていれば API base を Worker passthrough に切替。
+    const cfg = getPluginConfig(PLUGIN_ID);
+    if (cfg.workerUrl) {
+      setApiBase(`${cfg.workerUrl.replace(/\/$/, '')}/anthropic`);
+    }
   }
 
   kintone.events.on('app.record.index.show', (event) => {

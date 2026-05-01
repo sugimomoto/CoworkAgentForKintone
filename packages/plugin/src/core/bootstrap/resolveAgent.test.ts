@@ -60,7 +60,7 @@ describe('resolveDefaultAgent', () => {
     expect(body.metadata).toEqual({
       source: 'cowork-agent-for-kintone',
       type: 'default',
-      promptVersion: 'v17',
+      promptVersion: 'v18',
     });
     // Anthropic 製 skills (xlsx / docx / pdf / pptx) が attach されること (Issue #18 Step 1)
     expect(body.skills).toEqual([
@@ -276,11 +276,11 @@ describe('resolveDefaultAgent', () => {
     it('workerUrl 指定が異なれば別の Agent として解決される (in-flight キャッシュも分離)', async () => {
       const a = makeAgent({
         id: 'agent_a',
-        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v17', workerUrl: 'https://a.example', kintoneDomain: 'a.cybozu.com' },
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v18', workerUrl: 'https://a.example', kintoneDomain: 'a.cybozu.com' },
       });
       const b = makeAgent({
         id: 'agent_b',
-        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v17', workerUrl: 'https://b.example', kintoneDomain: 'b.cybozu.com' },
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v18', workerUrl: 'https://b.example', kintoneDomain: 'b.cybozu.com' },
       });
 
       // a の解決: list で a が返る
