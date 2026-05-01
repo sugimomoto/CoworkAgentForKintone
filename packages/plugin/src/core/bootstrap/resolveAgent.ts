@@ -24,7 +24,25 @@ export const DEFAULT_AGENT_NAME = 'Cowork Agent - Default';
  * system プロンプトのリビジョン番号。プロンプト本文を変更したらこの値を上げる。
  * metadata に含めるので、旧プロンプトの Agent は別物として扱われ、新規 Agent が作成される。
  */
-export const DEFAULT_AGENT_PROMPT_VERSION = 'v13';
+export const DEFAULT_AGENT_PROMPT_VERSION = 'v17';
+
+/**
+ * Default Agent に attach する Anthropic 製 Skills (Issue #18 Step 1)。
+ * Skills は Agent がタスクに応じて自動ロードする再利用可能な知識単位。
+ * - xlsx: Excel / CSV の読み書き (kintone への CSV 一括登録 / レポート出力で効く)
+ * - docx: Word ドキュメント生成
+ * - pdf: PDF からの表構造抽出 / 見積・申請書の取り込み
+ * - pptx: PowerPoint プレゼン生成
+ *
+ * description は context に常駐するが本文 (SKILL.md) は呼ばれた時だけロードされる。
+ * Max 20 skills/session の制限あり。
+ */
+export const DEFAULT_AGENT_SKILLS: ReadonlyArray<{ type: 'anthropic'; skill_id: string }> = [
+  { type: 'anthropic', skill_id: 'xlsx' },
+  { type: 'anthropic', skill_id: 'docx' },
+  { type: 'anthropic', skill_id: 'pdf' },
+  { type: 'anthropic', skill_id: 'pptx' },
+];
 
 /**
  * MCP toolset で公開するツール名一覧 (configs を per-tool で指定するため)。
@@ -120,6 +138,18 @@ export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   '  - kind=html: `<html>` を含めても省略してもよい。sandbox で実行されるので外部 API には触れない',
   '  - kind=csv: RFC 4180 形式 (カンマ区切り、必要に応じて "" でクォート)',
   '',
+  '【バイナリファイルの出力 (xlsx / docx / pptx / pdf 等)】',
+  '  - **これらは create_artifact では返しません**。代わりに **コンテナの `/mnt/session/outputs/` に最終ファイルを置いてください**。',
+  '    このパスのファイルは Anthropic Files API で session スコープに自動登録され、',
+  '    Plugin が検出して右ペインに DL ボタン付きの artifact として提示します。',
+  '  - 推奨パス: `/mnt/session/outputs/<人間に分かるファイル名.拡張子>` (例: `/mnt/session/outputs/sales_q1.pptx`)',
+  '  - Anthropic Skills (xlsx / docx / pdf / pptx) は作業途中で `/workspace/` を使うことがありますが、',
+  '    **完成版は必ず `/mnt/session/outputs/` に最終配置** してください (skill 内の bash で `cp` するか、最初からそこに書き出す)。',
+  '  - 出力後、会話本文には「ファイルを生成しました。右ペインから DL できます」程度の短い案内のみ。',
+  '    base64 を会話に貼ったり create_artifact に詰める必要はありません (むしろ禁止)。',
+  '  - **kintone レコードに添付したい場合は別経路**: ファイル生成後に `kintone-upload-file` を呼び、',
+  '    返ってきた fileKey を `kintone-add-record` / `kintone-update-record` の FILE フィールドに紐付けてください。',
+  '',
   '【ファイル添付】',
   '  - ユーザーは PDF / 画像 / テキスト系ファイル (CSV / Markdown / JSON / TXT) を',
   '    メッセージに添付できます。content block (text / document / image) として渡されます。',
@@ -134,6 +164,11 @@ export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   '    対象 FILE フィールドに `[{"fileKey": "<提示された fileKey>"}]` の形で渡してください。',
   '    `kintone-upload-file` ツールを再度呼ぶ必要はありません (二重アップロードになります)。',
   '  - 添付ファイルがない通常の会話と同じガイドライン (kintone-* ツール / artifact 生成等) も引き続き適用してください。',
+  '  - **Anthropic Skills (xlsx / docx / pdf / pptx) が attach されています**。',
+  '    Excel / CSV / Word / PDF / PowerPoint の読み書きが必要なときは skill が自動ロードされ、',
+  '    openpyxl / python-docx / pypdf 等のライブラリを使って高精度に処理できます。',
+  '    例: CSV 添付 → xlsx skill で列ヘッダ / 型推論。PDF 添付 → pdf skill で表抽出。',
+  '    レポート依頼 → xlsx skill で書式付き .xlsx を生成して artifact / fileKey 経由で返す。',
   '',
   '【kintone FILE フィールド (添付ファイル) を扱う際の注意】',
   '  - **fileKey は 2 種類あり相互利用不可**:',
@@ -175,7 +210,8 @@ export const CREATE_ARTIFACT_TOOL = {
         description:
           'markdown=レポート / code=コード片 / json=構造化データ / ' +
           'react=React コンポーネント (Recharts 利用可) / mermaid=フロー/ER 図 / ' +
-          'svg=SVG 画像 / html=HTML プレビュー / csv=表形式データ',
+          'svg=SVG 画像 / html=HTML プレビュー / csv=表形式データ。' +
+          'xlsx/docx/pptx/pdf 等のバイナリは create_artifact ではなく /workspace/ にファイル出力すること',
       },
       title: { type: 'string', description: 'ユーザー向け表示名' },
       language: {
@@ -308,6 +344,7 @@ async function doResolve(options: ResolveDefaultAgentOptions): Promise<Agent> {
     name: DEFAULT_AGENT_NAME,
     system: DEFAULT_AGENT_SYSTEM_PROMPT,
     tools: buildAgentTools(includeMcp),
+    skills: DEFAULT_AGENT_SKILLS.map((s) => ({ ...s })),
     metadata: filter,
   };
   if (includeMcp) {

@@ -72,7 +72,7 @@ export const WORKER_BUNDLE_BUILT_AT = ${JSON.stringify(buildTime)};
 }
 
 // ----- 2-3. esbuild で 2 エントリを IIFE バンドル (並行) --------------------
-async function bundleJs() {
+async function bundleJs(pluginBuild, semver) {
   mkdirSync(JS_OUT_DIR, { recursive: true });
 
   const commonOptions = {
@@ -85,6 +85,13 @@ async function bundleJs() {
     minify: true,
     sourcemap: false,
     logLevel: 'warning',
+    // VersionBadge / config 画面で表示用に
+    //   __PLUGIN_VERSION__: build 番号 (manifest.json の整数)
+    //   __PLUGIN_SEMVER__: semver (package.json の version)
+    define: {
+      __PLUGIN_VERSION__: JSON.stringify(String(pluginBuild)),
+      __PLUGIN_SEMVER__: JSON.stringify(semver),
+    },
   };
 
   await Promise.all([
@@ -133,6 +140,14 @@ function buildCss() {
 // ----- main ----------------------------------------------------------------
 async function main() {
   const pluginBuild = bumpBuildNumber();
+  const semver = (() => {
+    try {
+      const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf-8'));
+      return typeof pkg.version === 'string' ? pkg.version : '0.0.0';
+    } catch {
+      return '0.0.0';
+    }
+  })();
   // Worker のバージョンは Plugin の build 番号 + ビルド時刻 (ISO8601 秒精度)
   const buildTime = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
   const buildVersion = `plugin.${pluginBuild}+${buildTime}`;
@@ -141,8 +156,8 @@ async function main() {
   // 書き出され、Plugin の bundleJs はそれを読みに行く) — ので bundleWorkerAsString が
   // 先に終わっていればよい。CSS は完全独立。
   await bundleWorkerAsString(buildVersion, buildTime);
-  await Promise.all([bundleJs(), Promise.resolve(buildCss())]);
-  console.log('[build] done');
+  await Promise.all([bundleJs(pluginBuild, semver), Promise.resolve(buildCss())]);
+  console.log(`[build] done (semver=${semver}, build=${pluginBuild})`);
 }
 
 main().catch((err) => {

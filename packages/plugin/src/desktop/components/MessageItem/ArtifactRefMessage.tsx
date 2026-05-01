@@ -22,6 +22,11 @@ const KIND_LABEL: Record<ArtifactKind, string> = {
   html: 'HTML',
   'kintone-customize-js': 'kintone JS',
   csv: 'CSV',
+  binary: 'ファイル',
+};
+
+const KIND_EMOJI: Partial<Record<ArtifactKind, string>> = {
+  binary: '📎',
 };
 
 export function ArtifactRefMessage({
@@ -46,11 +51,11 @@ export function ArtifactRefMessage({
       }
     >
       <span className="text-xl leading-none" aria-hidden>
-        📄
+        {KIND_EMOJI[artifactKind] ?? '📄'}
       </span>
       <span className="flex flex-1 flex-col gap-0.5 overflow-hidden">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-          アーティファクト
+          {artifactKind === 'binary' ? '生成ファイル' : 'アーティファクト'}
         </span>
         <span className="truncate text-sm font-medium text-slate-800">{title}</span>
       </span>

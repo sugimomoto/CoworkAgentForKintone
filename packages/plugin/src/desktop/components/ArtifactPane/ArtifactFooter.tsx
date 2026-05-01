@@ -10,8 +10,12 @@ export interface ArtifactFooterProps {
   onToggleRaw: () => void;
 }
 
-export function ArtifactFooter({ artifact, showRaw, onToggleRaw }: ArtifactFooterProps): JSX.Element {
+export function ArtifactFooter({ artifact, showRaw, onToggleRaw }: ArtifactFooterProps): JSX.Element | null {
   const [copied, setCopied] = useState(false);
+
+  // binary kind は本体側 (BinaryArtifact renderer) に DL ボタンと
+  // メタ情報を出すので Footer は丸ごと非表示にする
+  if (artifact.kind === 'binary') return null;
 
   const handleCopy = async (): Promise<void> => {
     const ok = await copyToClipboard(artifact.content);

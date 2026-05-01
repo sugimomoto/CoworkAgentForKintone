@@ -6,6 +6,7 @@ import { useChatStore } from '../../../store/chatStore';
 
 import { ArtifactFooter } from './ArtifactFooter';
 import { ArtifactHeader } from './ArtifactHeader';
+import { BinaryArtifact } from './renderers/BinaryArtifact';
 import { CodeArtifact } from './renderers/CodeArtifact';
 import { CsvArtifact } from './renderers/CsvArtifact';
 import { HtmlArtifact } from './renderers/HtmlArtifact';
@@ -38,6 +39,8 @@ function renderBody(artifact: Artifact): JSX.Element {
       return <MermaidArtifact key={key} artifact={artifact} />;
     case 'csv':
       return <CsvArtifact artifact={artifact} />;
+    case 'binary':
+      return <BinaryArtifact artifact={artifact} />;
     default:
       return <PlaceholderArtifact artifact={artifact} />;
   }

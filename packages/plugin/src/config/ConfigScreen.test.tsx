@@ -3,7 +3,7 @@
 // 検証:
 // - workerUrl 入力で callbackUrl が `<workerUrl>/oauth/callback` で計算される
 // - cybozu admin リンクが `https://<location.hostname>/admin/integrations/oauth/list`
-// - 保存時 setProxyConfig が 4 経路 (oauth2/token, /credentials/upsert, anthropic POST, anthropic GET)
+// - 保存時 setProxyConfig が 5 経路 (oauth2/token, /credentials/upsert, /files/ GET, anthropic POST, anthropic GET)
 // - setConfig には secret (client_secret / anthropic_api_key) が含まれない
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -68,7 +68,7 @@ describe('ConfigScreen', () => {
     );
   });
 
-  it('全項目入力 → 保存で setProxyConfig が 4 経路呼ばれる', async () => {
+  it('全項目入力 → 保存で setProxyConfig が 5 経路呼ばれる', async () => {
     const user = userEvent.setup();
     render(<ConfigScreen pluginId={PLUGIN_ID} />);
 
@@ -80,7 +80,7 @@ describe('ConfigScreen', () => {
     await user.click(screen.getByRole('button', { name: '保存' }));
 
     // setProxyConfig は逐次 await + sleep(700ms) を入れているので待つ
-    await waitFor(() => expect(setProxyConfigMock).toHaveBeenCalledTimes(4), {
+    await waitFor(() => expect(setProxyConfigMock).toHaveBeenCalledTimes(5), {
       timeout: 10_000,
     });
 
@@ -146,12 +146,11 @@ describe('ConfigScreen', () => {
     expect(saveBtn).not.toBeDisabled();
   });
 
-  it('既存設定がある状態で開くと workerUrl / clientId / scope が復元される (secret は復元されない)', () => {
+  it('既存設定がある状態で開くと workerUrl / clientId が復元される (secret は復元されない)', () => {
     getConfigMock.mockReturnValue({
       saved: 'true',
       workerUrl: 'https://prev.example.com',
       oauthClientId: 'prev-cid',
-      oauthScope: 'k:app_record:read',
     });
     render(<ConfigScreen pluginId={PLUGIN_ID} />);
 
@@ -159,7 +158,6 @@ describe('ConfigScreen', () => {
       'https://prev.example.com',
     );
     expect((screen.getByLabelText('client_id') as HTMLInputElement).value).toBe('prev-cid');
-    expect((screen.getByLabelText('scope') as HTMLInputElement).value).toBe('k:app_record:read');
     // secret は空欄
     expect((screen.getByLabelText('client_secret') as HTMLInputElement).value).toBe('');
     expect((screen.getByLabelText('Anthropic API Key') as HTMLInputElement).value).toBe('');
@@ -173,7 +171,7 @@ describe('ConfigScreen', () => {
     await user.type(screen.getByLabelText('Worker URL'), 'not-a-url');
 
     const heading2 = screen.getByText('Step 2. cybozu.com に OAuth クライアントを登録');
-    const heading3 = screen.getByText('Step 3. OAuth クライアント情報と スコープ');
+    const heading3 = screen.getByText('Step 3. OAuth クライアント情報');
     expect(heading2.closest('section')!.getAttribute('aria-disabled')).toBe('true');
     expect(heading3.closest('section')!.getAttribute('aria-disabled')).toBe('true');
   });

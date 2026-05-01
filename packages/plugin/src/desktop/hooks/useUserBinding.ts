@@ -131,7 +131,7 @@ export function useUserBinding(): UseUserBindingResult {
     const kctx = getCurrentSessionContext();
     const redirectUri = joinUrl(workerUrl, 'oauth/callback');
     const mcpServerUrl = buildMcpServerUrl(workerUrl, kctx.kintoneDomain);
-    const scope = cfg.oauthScope ?? DEFAULT_KINTONE_OAUTH_SCOPE;
+    const scope = DEFAULT_KINTONE_OAUTH_SCOPE;
     const tokenEndpoint = `https://${kctx.kintoneDomain}/oauth2/token`;
     const authorizationEndpoint = `https://${kctx.kintoneDomain}/oauth2/authorization`;
     const workerOrigin = new URL(workerUrl).origin;

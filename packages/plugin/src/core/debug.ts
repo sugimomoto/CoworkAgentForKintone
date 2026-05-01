@@ -8,7 +8,9 @@ type Scope =
   | 'CustomTool'
   | 'Poller'
   | 'Session'
-  | 'Banner';
+  | 'Banner'
+  | 'SessionFiles'
+  | 'BinaryArtifact';
 
 function isDebugEnabled(): boolean {
   if (typeof window === 'undefined') return false;

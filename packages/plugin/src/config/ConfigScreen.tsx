@@ -4,7 +4,7 @@
 //   Step 0: Cloudflare Workers デプロイ (任意)
 //   Step 1: Worker URL + ANTHROPIC_API_KEY
 //   Step 2: cybozu OAuth クライアント登録の案内
-//   Step 3: kintone OAuth client_id / client_secret / scope → 保存
+//   Step 3: kintone OAuth client_id / client_secret → 保存 (scope は固定)
 
 import { useMemo, useState } from 'react';
 
@@ -57,15 +57,12 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
   const isSaved = existing[CONFIG_KEY_SAVED] === 'true';
   const existingWorkerUrl = existing[CONFIG_KEY_WORKER_URL] ?? '';
   const existingClientId = existing[CONFIG_KEY_OAUTH_CLIENT_ID] ?? '';
-  const existingScope = existing[CONFIG_KEY_OAUTH_SCOPE] ?? DEFAULT_KINTONE_OAUTH_SCOPE;
-
   const [workerUrl, setWorkerUrl] = useState<string>(existingWorkerUrl);
   const [anthropicApiKey, setAnthropicApiKey] = useState<string>('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [clientId, setClientId] = useState<string>(existingClientId);
   const [clientSecret, setClientSecret] = useState<string>('');
   const [showSecret, setShowSecret] = useState(false);
-  const [scope, setScope] = useState<string>(existingScope);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -94,15 +91,19 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
   const apiKeyTrimmed = anthropicApiKey.trim();
   const clientIdTrimmed = clientId.trim();
   const clientSecretTrimmed = clientSecret.trim();
-  const scopeTrimmed = scope.trim() || DEFAULT_KINTONE_OAUTH_SCOPE;
 
-  // 全項目入力済 + Worker URL 妥当 で保存可能
-  const canSave =
-    !saving &&
-    workerUrlValid &&
+  // 初回保存時は全 secret 必須。再保存時 (isSaved=true) は何か 1 つでも入っていれば
+  // 該当 proxy step だけ更新する形で保存可能。空欄の secret に依存する proxy step は skip。
+  const hasAnySecret =
+    apiKeyTrimmed.length > 0 ||
+    clientIdTrimmed.length > 0 ||
+    clientSecretTrimmed.length > 0;
+  const hasAllSecrets =
     apiKeyTrimmed.length > 0 &&
     clientIdTrimmed.length > 0 &&
     clientSecretTrimmed.length > 0;
+  const canSave =
+    !saving && workerUrlValid && (isSaved ? hasAnySecret : hasAllSecrets);
 
   function copyToClipboard(text: string): void {
     navigator.clipboard.writeText(text).catch(() => {
@@ -177,24 +178,30 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
         'anthropic-beta': MANAGED_AGENTS_BETA,
       };
 
-      // setProxyConfig 4 経路を直列に登録する。並行だと kintone 内部 DB の
+      // setProxyConfig 経路を直列に登録する。並行だと kintone 内部 DB の
       // ロック競合 (update.json 400) が起きるため必ず逐次 + 待ち時間。
+      // 再保存時 (isSaved=true) は空欄 secret に依存する step を skip する。
+      const hasOAuth = clientIdTrimmed.length > 0 && clientSecretTrimmed.length > 0;
+      const hasApiKey = apiKeyTrimmed.length > 0;
       const proxySteps: Array<{
         url: string;
         method: 'GET' | 'POST';
         headers: Record<string, string>;
-      }> = [
-        // /oauth2/token (token 交換 + Anthropic 自動 refresh)
-        {
+      }> = [];
+      // /oauth2/token (token 交換 + Anthropic 自動 refresh) — clientId + clientSecret 必要
+      if (hasOAuth) {
+        proxySteps.push({
           url: tokenEndpoint,
           method: 'POST',
           headers: {
             Authorization: `Basic ${btoa(`${clientIdTrimmed}:${clientSecretTrimmed}`)}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
-        },
-        // Worker /credentials/upsert (X-Anthropic-Api-Key + OAuth client headers)
-        {
+        });
+      }
+      // Worker /credentials/upsert (X-Anthropic-Api-Key + OAuth client headers) — 全 secret 必要
+      if (hasApiKey && hasOAuth) {
+        proxySteps.push({
           url: credentialsUpsertUrl,
           method: 'POST',
           headers: {
@@ -203,28 +210,41 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
             'X-Kintone-OAuth-Client-Secret': clientSecretTrimmed,
             'Content-Type': 'application/json',
           },
-        },
-        // Anthropic 通常 API (POST + GET)
-        {
-          url: ANTHROPIC_URL_PREFIX,
-          method: 'POST',
-          headers: { ...anthropicHeaders, 'Content-Type': 'application/json' },
-        },
-        { url: ANTHROPIC_URL_PREFIX, method: 'GET', headers: anthropicHeaders },
-      ];
+        });
+      }
+      // Worker /files/<fileId>/content (binary DL の base64 中継) — apiKey のみ必要
+      if (hasApiKey) {
+        proxySteps.push({
+          url: joinUrl(finalWorkerUrl, 'files/'),
+          method: 'GET',
+          headers: { 'X-Anthropic-Api-Key': apiKeyTrimmed },
+        });
+      }
+      // Anthropic 通常 API (POST + GET) — apiKey のみ必要
+      if (hasApiKey) {
+        proxySteps.push(
+          {
+            url: ANTHROPIC_URL_PREFIX,
+            method: 'POST',
+            headers: { ...anthropicHeaders, 'Content-Type': 'application/json' },
+          },
+          { url: ANTHROPIC_URL_PREFIX, method: 'GET', headers: anthropicHeaders },
+        );
+      }
       for (const step of proxySteps) {
         await setProxyConfigAsync(step.url, step.method, step.headers, {});
         await sleep(PROXY_STEP_DELAY_MS);
       }
 
-      // setConfig (secret は保存しない)
+      // setConfig (secret は保存しない / scope は plugin 内固定なので保存しない)
       const config: Record<string, string> = {
         ...existing,
         [CONFIG_KEY_WORKER_URL]: finalWorkerUrl,
         [CONFIG_KEY_OAUTH_CLIENT_ID]: clientIdTrimmed,
-        [CONFIG_KEY_OAUTH_SCOPE]: scopeTrimmed,
         [CONFIG_KEY_SAVED]: 'true',
       };
+      // 旧バージョンが書き込んだ scope 値が残っていれば掃除する
+      delete config[CONFIG_KEY_OAUTH_SCOPE];
 
       kintone.plugin.app.setConfig(config, () => {
         alert('Cowork Agent: 設定を保存しました。');
@@ -247,8 +267,10 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
         Cowork Agent for kintone — 設定
       </h1>
       {isSaved && (
-        <p className="mb-[12px] rounded-[8px] bg-accent-soft px-[12px] py-[8px] text-[12px] text-accent">
-          登録済み。再保存すると proxy 設定 (secret 含む) が上書きされます。
+        <p className="mb-[12px] rounded-[8px] bg-accent-soft px-[12px] py-[8px] text-[12px] leading-[1.6] text-accent">
+          登録済み。再保存時は <strong>入力済みの secret に対応する proxy 設定だけ</strong> が
+          上書きされます (空欄の項目は変更されません)。proxy 経路の追加だけ反映したい場合は、
+          Anthropic API Key を再入力して保存してください。
         </p>
       )}
 
@@ -421,22 +443,6 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
           </div>
         </div>
 
-        <div className="mb-[8px]">
-          <p className="mb-[2px] text-[11px] text-text">推奨スコープ</p>
-          <div className="flex items-center gap-[6px]">
-            <code className="flex-1 truncate rounded-[6px] bg-bg px-[8px] py-[6px] font-mono text-[11px]">
-              {DEFAULT_KINTONE_OAUTH_SCOPE}
-            </code>
-            <button
-              type="button"
-              onClick={() => copyToClipboard(DEFAULT_KINTONE_OAUTH_SCOPE)}
-              className="rounded-[6px] border border-card-border px-[8px] py-[4px] text-[11px] text-muted hover:text-accent"
-            >
-              コピー
-            </button>
-          </div>
-        </div>
-
         <a
           data-testid="cybozu-admin-link"
           href={cybozuAdminUrl}
@@ -455,7 +461,6 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
             <li>上のリンクから OAuth クライアント追加画面を開く</li>
             <li>クライアント名は任意 (例: "Cowork Agent for kintone")</li>
             <li>リダイレクト URI に上のコールバック URL を貼り付ける</li>
-            <li>スコープに上のスコープをすべてチェックする</li>
             <li>「追加」を押すと client_id / client_secret が表示される</li>
             <li>表示された 2 つを Step 3 に貼り付ける</li>
           </ol>
@@ -470,7 +475,7 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
         aria-disabled={!workerUrlValid}
       >
         <h2 className="mb-[12px] text-[14px] font-semibold">
-          Step 3. OAuth クライアント情報と スコープ
+          Step 3. OAuth クライアント情報
         </h2>
 
         <label className="mb-[4px] block text-[12px] text-text" htmlFor="client-id-input">
@@ -509,18 +514,6 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
           </button>
         </div>
 
-        <label className="mt-[12px] mb-[4px] block text-[12px] text-text" htmlFor="scope-input">
-          scope
-        </label>
-        <input
-          id="scope-input"
-          type="text"
-          value={scope}
-          onChange={(e) => setScope(e.target.value)}
-          autoComplete="off"
-          spellCheck={false}
-          className="w-full rounded-[8px] border border-card-border bg-bg px-[12px] py-[8px] font-mono text-[11px] text-text outline-none focus:border-accent"
-        />
       </section>
 
       {errorMessage && (

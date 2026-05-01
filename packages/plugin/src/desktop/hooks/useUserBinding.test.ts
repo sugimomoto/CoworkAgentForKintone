@@ -97,7 +97,6 @@ beforeEach(() => {
   mockGetCfg.mockReturnValue({
     workerUrl: 'https://worker.example.com',
     oauthClientId: 'client-id',
-    oauthScope: null,
   });
   mockListVaults.mockResolvedValue({ data: [], next_page: null });
   mockResolveVault.mockResolvedValue({
@@ -187,7 +186,7 @@ describe('useUserBinding connect (OAuth flow)', () => {
   });
 
   it('Worker URL 未設定 → status=error で例外', async () => {
-    mockGetCfg.mockReturnValue({ workerUrl: null, oauthClientId: null, oauthScope: null });
+    mockGetCfg.mockReturnValue({ workerUrl: null, oauthClientId: null });
     const { result } = renderHook(() => useUserBinding());
     await expect(
       act(async () => {

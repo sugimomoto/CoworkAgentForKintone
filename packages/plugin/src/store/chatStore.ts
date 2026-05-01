@@ -5,7 +5,16 @@
 
 import { create } from 'zustand';
 
+import { binaryArtifactIdFromFileId } from '../core/artifacts/types';
+
 import type { Artifact, CreateArtifactInput } from '../core/artifacts/types';
+
+export interface BinaryArtifactInput {
+  fileId: string;
+  filename: string;
+  mime?: string;
+  sizeBytes?: number;
+}
 import type { AttachedFile } from '../core/files/types';
 import type { ChatMessage, ToolMessage } from '../desktop/components/MessageList';
 
@@ -128,6 +137,11 @@ export interface ChatState {
    * 戻り値は反映後の Artifact (呼出側で result 返却に使う)。
    */
   upsertArtifact: (input: CreateArtifactInput) => Artifact;
+  /**
+   * Anthropic Files API で検出した session ファイルを binary artifact として登録する。
+   * 同じ file_id で再呼出しても何もしない (artifact map のキーは file_id 由来で安定)。
+   */
+  upsertBinaryArtifact: (input: BinaryArtifactInput) => Artifact;
   /** Artifact を削除 */
   removeArtifact: (id: string) => void;
   /** 全 Artifact を削除 */
@@ -285,6 +299,46 @@ export const useChatStore = create<ChatState>((set) => ({
       result = next;
       const artifacts = new Map(s.artifacts);
       artifacts.set(input.id, next);
+      return { artifacts };
+    });
+    return result;
+  },
+
+  upsertBinaryArtifact: (input) => {
+    const now = Date.now();
+    const id = binaryArtifactIdFromFileId(input.fileId);
+    let result!: Artifact;
+    set((s) => {
+      const existing = s.artifacts.get(id);
+      const next: Artifact = existing
+        ? {
+            ...existing,
+            kind: 'binary',
+            title: input.filename,
+            content: '',
+            fileId: input.fileId,
+            filename: input.filename,
+            mime: input.mime,
+            sizeBytes: input.sizeBytes,
+            updatedAt: now,
+            version: existing.version + 1,
+          }
+        : {
+            id,
+            kind: 'binary',
+            title: input.filename,
+            content: '',
+            fileId: input.fileId,
+            filename: input.filename,
+            mime: input.mime,
+            sizeBytes: input.sizeBytes,
+            createdAt: now,
+            updatedAt: now,
+            version: 1,
+          };
+      result = next;
+      const artifacts = new Map(s.artifacts);
+      artifacts.set(id, next);
       return { artifacts };
     });
     return result;

@@ -60,8 +60,15 @@ describe('resolveDefaultAgent', () => {
     expect(body.metadata).toEqual({
       source: 'cowork-agent-for-kintone',
       type: 'default',
-      promptVersion: 'v13',
+      promptVersion: 'v17',
     });
+    // Anthropic 製 skills (xlsx / docx / pdf / pptx) が attach されること (Issue #18 Step 1)
+    expect(body.skills).toEqual([
+      { type: 'anthropic', skill_id: 'xlsx' },
+      { type: 'anthropic', skill_id: 'docx' },
+      { type: 'anthropic', skill_id: 'pdf' },
+      { type: 'anthropic', skill_id: 'pptx' },
+    ]);
     // tools に agent_toolset_20260401 が含まれること (bash + write + read)
     expect(Array.isArray(body.tools)).toBe(true);
     expect(body.tools.length).toBeGreaterThan(0);
@@ -72,6 +79,8 @@ describe('resolveDefaultAgent', () => {
     );
     expect(customTool).toBeTruthy();
     expect(customTool.input_schema.required).toEqual(['id', 'kind', 'title', 'content']);
+    // binary kind は Files API で自動検出する経路にしたので create_artifact の enum には含めない
+    expect(customTool.input_schema.properties.kind.enum).not.toContain('binary');
   });
 
   it('プラグイン外の Agent (source 違い) は無視する', async () => {
@@ -267,11 +276,11 @@ describe('resolveDefaultAgent', () => {
     it('workerUrl 指定が異なれば別の Agent として解決される (in-flight キャッシュも分離)', async () => {
       const a = makeAgent({
         id: 'agent_a',
-        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v13', workerUrl: 'https://a.example', kintoneDomain: 'a.cybozu.com' },
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v17', workerUrl: 'https://a.example', kintoneDomain: 'a.cybozu.com' },
       });
       const b = makeAgent({
         id: 'agent_b',
-        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v13', workerUrl: 'https://b.example', kintoneDomain: 'b.cybozu.com' },
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v17', workerUrl: 'https://b.example', kintoneDomain: 'b.cybozu.com' },
       });
 
       // a の解決: list で a が返る

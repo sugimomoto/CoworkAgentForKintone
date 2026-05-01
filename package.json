@@ -21,6 +21,7 @@
     "plugin:e2e": "pnpm --filter @cowork-agent/plugin run e2e",
     "plugin:e2e:ui": "pnpm --filter @cowork-agent/plugin run e2e:ui",
     "plugin:e2e:install": "pnpm --filter @cowork-agent/plugin run e2e:install",
+    "worker:deploy": "node --env-file=.env packages/plugin/scripts/deploy-worker.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml}\"",

@@ -7,13 +7,10 @@
 
 const CONFIG_KEY_WORKER_URL = 'workerUrl';
 const CONFIG_KEY_OAUTH_CLIENT_ID = 'oauthClientId';
-const CONFIG_KEY_OAUTH_SCOPE = 'oauthScope';
 
 export interface PluginConfig {
   workerUrl: string | null;
   oauthClientId: string | null;
-  /** OAuth scope (スペース区切り)。null なら ConfigScreen のデフォルト推奨が使われる */
-  oauthScope: string | null;
 }
 
 /**
@@ -21,7 +18,7 @@ export interface PluginConfig {
  */
 export function getPluginConfig(pluginId: string): PluginConfig {
   if (typeof kintone === 'undefined' || !kintone) {
-    return { workerUrl: null, oauthClientId: null, oauthScope: null };
+    return { workerUrl: null, oauthClientId: null };
   }
   const raw = kintone.plugin.app.getConfig(pluginId) ?? {};
   const pickStr = (key: string): string | null => {
@@ -31,6 +28,5 @@ export function getPluginConfig(pluginId: string): PluginConfig {
   return {
     workerUrl: pickStr(CONFIG_KEY_WORKER_URL),
     oauthClientId: pickStr(CONFIG_KEY_OAUTH_CLIENT_ID),
-    oauthScope: pickStr(CONFIG_KEY_OAUTH_SCOPE),
   };
 }

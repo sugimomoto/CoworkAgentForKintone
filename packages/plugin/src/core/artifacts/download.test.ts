@@ -63,3 +63,4 @@ describe('buildDownloadFileName', () => {
     ).toBe('foo_bar_baz_.js');
   });
 });
+

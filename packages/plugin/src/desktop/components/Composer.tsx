@@ -14,6 +14,7 @@ import {
 import { ACCEPT_ATTRIBUTE } from '../../core/files/types';
 
 import { AttachmentChipRow } from './AttachmentChipRow';
+import { VersionBadge } from './VersionBadge';
 import { PAPERCLIP_ICON } from './attachmentAssets';
 
 import type { AttachedFile } from '../../core/files/types';
@@ -216,8 +217,9 @@ export function Composer({
         )}
         </div>
       </div>
-      <div className="mt-[6px] px-[4px] text-[10px] text-subtle">
-        ⌘K 呼び出し · Claude Managed Agents
+      <div className="mt-[6px] flex items-center justify-between px-[4px] text-[10px] text-subtle">
+        <span>⌘K 呼び出し · Claude Managed Agents</span>
+        <VersionBadge />
       </div>
     </form>
   );

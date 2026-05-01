@@ -114,3 +114,35 @@ export async function apiRequest<T = unknown>(
 
   return JSON.parse(text) as T;
 }
+
+/**
+ * Managed Agents API への raw リクエスト。
+ * バイナリレスポンス (Files API の `/content` など) を取りたいときに使う。
+ * 4xx/5xx は `apiRequest` 同様 ApiError を throw。成功時はそのまま `Response` を返す。
+ */
+export async function apiRequestRaw(
+  method: HttpMethod,
+  path: string,
+  extraHeaders: Headers = {},
+): Promise<Response> {
+  const url = `${ANTHROPIC_API_BASE}${path}`;
+  const init: RequestInit = {
+    method,
+    headers: apiHeaders(method, extraHeaders),
+  };
+  const res = await transport(url, init);
+  if (!res.ok) {
+    let body: string | undefined;
+    try {
+      body = await res.text();
+    } catch {
+      // ignore
+    }
+    throw new ApiError(
+      res.status,
+      `[HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ''}]`,
+      body,
+    );
+  }
+  return res;
+}

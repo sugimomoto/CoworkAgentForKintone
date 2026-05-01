@@ -9,6 +9,7 @@
 
 import { maskToken } from './_http';
 import { handleCredentialsUpsert } from './credentials-upsert';
+import { handleFilesDownload } from './files-download';
 import { handleMcp } from './mcp';
 import { handleOAuthCallback } from './oauth-callback';
 import { BUILD_TIME, BUILD_VERSION } from './version';
@@ -30,6 +31,14 @@ export default {
 
     if (url.pathname === '/credentials/upsert' && request.method === 'POST') {
       return handleCredentialsUpsert(request);
+    }
+
+    // GET /files/:fileId/content — Anthropic Files API バイナリ DL の base64 中継
+    {
+      const m = url.pathname.match(/^\/files\/([^/]+)\/content$/);
+      if (m && request.method === 'GET') {
+        return handleFilesDownload(request, m[1]!);
+      }
     }
 
     if (url.pathname === '/' || url.pathname === '/healthz') {

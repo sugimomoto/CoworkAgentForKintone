@@ -17,7 +17,8 @@ export type ArtifactKind =
   | 'svg'
   | 'html'
   | 'kintone-customize-js'
-  | 'csv';
+  | 'csv'
+  | 'binary';
 
 export const SUPPORTED_ARTIFACT_KINDS: readonly ArtifactKind[] = [
   'markdown',
@@ -29,6 +30,7 @@ export const SUPPORTED_ARTIFACT_KINDS: readonly ArtifactKind[] = [
   'html',
   'kintone-customize-js',
   'csv',
+  'binary',
 ] as const;
 
 /** 本フェーズで「ちゃんと描画できる」 kind */
@@ -41,19 +43,44 @@ export const RENDERABLE_ARTIFACT_KINDS = new Set<ArtifactKind>([
   'svg',
   'html',
   'csv',
+  'binary',
 ]);
 
+/**
+ * `binary` 以外の create_artifact 用 kind 一覧。Agent が create_artifact で指定できるのはこれだけ。
+ * `binary` artifact は plugin が Files API から自動生成するため Agent は呼ばない。
+ */
+export const AGENT_CREATABLE_ARTIFACT_KINDS: readonly ArtifactKind[] = [
+  'markdown',
+  'code',
+  'json',
+  'react',
+  'mermaid',
+  'svg',
+  'html',
+  'kintone-customize-js',
+  'csv',
+] as const;
+
 export interface Artifact {
-  /** Agent が指定する安定識別子 (同じ id で再呼出 = 更新) */
+  /** 安定識別子。create_artifact 由来は Agent 指定、binary 由来は `file:<file_id>` を使う */
   id: string;
   kind: ArtifactKind;
   title: string;
   /** kind=code 時の言語ヒント (任意) */
   language?: string;
-  /** 本文 */
+  /** 本文 (kind=binary 以外で使用)。kind=binary では空文字 */
   content: string;
   /** 1 行要約 (任意) */
   summary?: string;
+  /** kind=binary 時の Anthropic Files API の file_id (DL に使う) */
+  fileId?: string;
+  /** kind=binary 時のファイル名 (Anthropic から返ってきた filename) */
+  filename?: string;
+  /** kind=binary 時の MIME */
+  mime?: string;
+  /** kind=binary 時のバイト数 (Anthropic から返ってきた size_bytes) */
+  sizeBytes?: number;
   /** 初回作成 epoch ms */
   createdAt: number;
   /** 最終更新 epoch ms */
@@ -62,7 +89,7 @@ export interface Artifact {
   version: number;
 }
 
-/** create_artifact ツールの入力 (Agent → plugin) */
+/** create_artifact ツールの入力 (Agent → plugin)。binary kind は受け付けない。 */
 export interface CreateArtifactInput {
   id: string;
   kind: ArtifactKind;
@@ -75,7 +102,7 @@ export interface CreateArtifactInput {
 /**
  * Agent からの input を検証する。
  * 必須フィールド (id / kind / title / content) のチェックと kind の正規化。
- * 不正なら null を返す (呼び出し側で error result を返す)。
+ * binary kind は Agent 経由では作らない (Files API で自動検出する) ため reject する。
  */
 export function parseCreateArtifactInput(raw: unknown): CreateArtifactInput | null {
   if (raw === null || typeof raw !== 'object') return null;
@@ -85,7 +112,7 @@ export function parseCreateArtifactInput(raw: unknown): CreateArtifactInput | nu
   const title = typeof o.title === 'string' ? o.title : '';
   const content = typeof o.content === 'string' ? o.content : '';
   if (!id || !title || !content) return null;
-  if (!(SUPPORTED_ARTIFACT_KINDS as readonly string[]).includes(kind)) return null;
+  if (!(AGENT_CREATABLE_ARTIFACT_KINDS as readonly string[]).includes(kind)) return null;
   const out: CreateArtifactInput = {
     id,
     kind: kind as ArtifactKind,
@@ -95,4 +122,9 @@ export function parseCreateArtifactInput(raw: unknown): CreateArtifactInput | nu
   if (typeof o.language === 'string' && o.language.length > 0) out.language = o.language;
   if (typeof o.summary === 'string' && o.summary.length > 0) out.summary = o.summary;
   return out;
+}
+
+/** 既知 file_id から binary artifact ID を組み立てる (artifact map のキーに使う) */
+export function binaryArtifactIdFromFileId(fileId: string): string {
+  return `file:${fileId}`;
 }

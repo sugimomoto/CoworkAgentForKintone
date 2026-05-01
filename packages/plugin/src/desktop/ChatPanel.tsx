@@ -25,6 +25,7 @@ import { useElapsedSeconds } from './hooks/useElapsedSeconds';
 import { useEventPoller } from './hooks/useEventPoller';
 import { useFileAttacher } from './hooks/useFileAttacher';
 import { useSession } from './hooks/useSession';
+import { useSessionFiles } from './hooks/useSessionFiles';
 import { useUserBinding } from './hooks/useUserBinding';
 
 export interface ChatPanelProps {
@@ -61,6 +62,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
 
   useEventPoller({ sessionId, enabled: status === 'ready' && sessionId !== null });
   useCustomToolResponder({ sessionId, enabled: status === 'ready' && sessionId !== null });
+  useSessionFiles({ sessionId, enabled: status === 'ready' && sessionId !== null });
   const agentPhase = useAgentPhase();
 
   // Agent ターン進行中の経過秒数。30 秒以上で「応答が遅い」バナーを出す目印。

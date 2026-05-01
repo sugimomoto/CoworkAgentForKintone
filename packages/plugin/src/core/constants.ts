@@ -36,7 +36,11 @@ export const AGENT_TYPE = {
   custom: 'custom',
 } as const;
 
-/** kintone OAuth scope のデフォルト推奨。ConfigScreen 初期値 + connect 時 fallback。 */
+/**
+ * kintone OAuth で要求する scope (固定)。
+ * Plugin が叩くツールセット (kintone-* MCP ツール群) で必要なものを全部含む。
+ * ユーザー編集不可: 削れば壊れるし、足しても使われない。
+ */
 export const DEFAULT_KINTONE_OAUTH_SCOPE =
   'k:app_record:read k:app_record:write k:app_settings:read k:file:read k:file:write';
 

@@ -17,6 +17,8 @@ const KIND_EXT: Record<ArtifactKind, ExtMime> = {
   html: { ext: 'html', mime: 'text/html' },
   'kintone-customize-js': { ext: 'js', mime: 'application/javascript' },
   csv: { ext: 'csv', mime: 'text/csv' },
+  // binary は filename / mime を artifact 側のフィールドから取るので fallback のみ
+  binary: { ext: 'bin', mime: 'application/octet-stream' },
 };
 
 /** language ヒントからの拡張子マッピング (kind=code 用)。落ちたら .txt */
@@ -81,10 +83,16 @@ export function buildDownloadFileName(params: DownloadParams): string {
 export function downloadArtifact(params: DownloadParams): void {
   if (typeof document === 'undefined' || typeof URL === 'undefined') return;
   const blob = new Blob([params.content], { type: mimeFor(params.kind) });
+  triggerBrowserDownload(blob, buildDownloadFileName(params));
+}
+
+/** Blob を `<a download>` でダウンロードさせる共通処理。Files API DL からも使う。 */
+export function triggerBrowserDownload(blob: Blob, filename: string): void {
+  if (typeof document === 'undefined' || typeof URL === 'undefined') return;
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = buildDownloadFileName(params);
+  a.download = filename;
   a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
