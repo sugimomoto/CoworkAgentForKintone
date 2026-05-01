@@ -21,12 +21,12 @@ test.describe('Cowork Agent — レコード一覧画面', () => {
     await expect(root).toBeAttached({ timeout: 15_000 });
   });
 
-  test('Header に Agent 名 "Aoi" と AGENT バッジが表示される', async ({ page }) => {
+  test('Header に Agent 名と AGENT バッジが表示される', async ({ page }) => {
     await page.goto(`/k/${APP_ID}/`);
 
     const root = page.locator('#cowork-agent-root');
     await expect(root).toBeAttached({ timeout: 15_000 });
-    await expect(root.getByText('Aoi')).toBeVisible();
+    await expect(root.getByText('Cowork Agent for kintone')).toBeVisible();
     // AGENT バッジはサイズが小さいため toBeVisible だとレイアウト依存で flaky になりうる。
     // DOM 上に存在することを確認する (描画品質は Vitest 単体テストで担保済み)
     await expect(root.getByText(/^AGENT$/i)).toBeAttached();

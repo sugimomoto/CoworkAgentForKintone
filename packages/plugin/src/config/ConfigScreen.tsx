@@ -91,18 +91,18 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
   const clientIdTrimmed = clientId.trim();
   const clientSecretTrimmed = clientSecret.trim();
 
-  // 初回保存時は全 secret 必須。再保存時 (isSaved=true) は何か 1 つでも入っていれば
-  // 該当 proxy step だけ更新する形で保存可能。空欄の secret に依存する proxy step は skip。
-  const hasAnySecret =
-    apiKeyTrimmed.length > 0 ||
-    clientIdTrimmed.length > 0 ||
-    clientSecretTrimmed.length > 0;
+  // 初回保存時は全 secret 必須。再保存時 (isSaved=true) は **secret 系の入力** が
+  // 1 つでもあれば該当 proxy step だけ更新する形で保存可能。
+  // clientId は公開可能な識別子で plugin config に永続化されるため secret 判定からは外す
+  // (空欄でも自動的にプリフィルされてしまうため、これで save 有効になると意図しない)。
+  const hasAnyNewSecret =
+    apiKeyTrimmed.length > 0 || clientSecretTrimmed.length > 0;
   const hasAllSecrets =
     apiKeyTrimmed.length > 0 &&
     clientIdTrimmed.length > 0 &&
     clientSecretTrimmed.length > 0;
   const canSave =
-    !saving && workerUrlValid && (isSaved ? hasAnySecret : hasAllSecrets);
+    !saving && workerUrlValid && (isSaved ? hasAnyNewSecret : hasAllSecrets);
 
   function copyToClipboard(text: string): void {
     navigator.clipboard.writeText(text).catch(() => {
