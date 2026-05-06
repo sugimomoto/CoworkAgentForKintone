@@ -131,6 +131,20 @@ describe('Composer', () => {
     expect(screen.getByText(/⌘K/)).toBeInTheDocument();
   });
 
+  // Regression: 「チャット画面を閉じた状態でリフレッシュ → 開くと textarea 高さが 0」
+  // パネル open 直後でレイアウトが未確定なときに scrollHeight=0 を返しても、
+  // 1 行分 (lineHeight) は確保される。
+  it('scrollHeight が 0 (= 非表示直後 / 未確定) でも textarea 高さが 0 にならない', () => {
+    // jsdom は scrollHeight を 0 で返す。これを利用してレース状況を再現する
+    render(<Composer onSubmit={vi.fn()} />);
+    const input = screen.getByLabelText('メッセージ入力') as HTMLTextAreaElement;
+    expect(input.style.height).not.toBe('0px');
+    expect(input.style.height).toMatch(/^\d+px$/);
+    // 0 より大きい値であること
+    const px = parseFloat(input.style.height);
+    expect(px).toBeGreaterThan(0);
+  });
+
   describe('running モード (Agent ターン進行中)', () => {
     it('running=true で送信ボタンの代わりにキャンセルボタンを出す', () => {
       render(<Composer onSubmit={vi.fn()} running onCancel={vi.fn()} />);

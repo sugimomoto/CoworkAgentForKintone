@@ -63,6 +63,10 @@ export function Composer({
 
   // 入力に応じて textarea を auto-grow する (1〜MAX_ROWS 行)。
   // scrollHeight ベースで height を都度書き換える。値が空に戻ったら 1 行へ縮める。
+  //
+  // 注意: refresh 直後 / パネル open 直後など、レイアウトが未確定な瞬間に
+  //   scrollHeight が 0 を返すと height: 0px が固定されて入力欄が潰れる現象が
+  //   起きるため、最低でも 1 行分 (lineHeight) は確保する。
   useEffect(() => {
     const el = inputRef.current;
     if (!el) return;
@@ -70,7 +74,9 @@ export function Composer({
     const maxRows = 8;
     const maxHeight = lineHeight * maxRows;
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+    const measured = el.scrollHeight;
+    const next = Math.min(Math.max(measured, lineHeight), maxHeight);
+    el.style.height = `${next}px`;
   }, [value]);
   // IME 変換中フラグ。
   // macOS の日本語入力では Enter で「変換確定」を行うが、`keydown` のタイミングでは
