@@ -27,7 +27,7 @@ export type ChatView = 'chat' | 'history';
  * ユーザー (Vault + Environment) のバインディング状態。
  * - unknown: 未調査 (mount 直後)
  * - checking: listVaults / listEnvironments 検索中
- * - unbound: 未バインド (CredentialDialog で入力が必要)
+ * - unbound: 未バインド (kintone OAuth 連携ボタンで認可が必要)
  * - binding: bind() 進行中
  * - bound: 完了 (vaultId / credentialId が store に揃っている)
  * - error: 検索 or 作成で失敗

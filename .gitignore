@@ -54,3 +54,4 @@ packages/plugin/.keys/
 .env
 .env.local
 .env.*.local
+.devcontainer/
