@@ -8,6 +8,13 @@ import type { Config } from 'tailwindcss';
 const config: Config = {
   content: ['./src/**/*.{ts,tsx,html}'],
   darkMode: ['selector', '[data-theme="dark"]'],
+  // preflight (Tailwind の base reset) はグローバルに `*` を上書きしてしまい、
+  // kintone 本体の `<a>` / `<h1>` / `<button>` 等のスタイルを破壊する (タイトル位置ズレ等)。
+  // プラグインは kintone DOM 内に注入されるため preflight は OFF。
+  // 必要な reset は `.cowork-agent-root` スコープで src/styles/global.css に手書きする。
+  corePlugins: {
+    preflight: false,
+  },
   theme: {
     extend: {
       colors: {

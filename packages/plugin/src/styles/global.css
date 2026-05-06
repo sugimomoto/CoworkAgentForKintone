@@ -57,6 +57,100 @@
     'Yu Gothic UI',
     Meiryo,
     sans-serif;
+  box-sizing: border-box;
+}
+
+/*
+ * Tailwind preflight (base reset) はグローバル `*` を書き換えて kintone 本体の
+ * スタイルを破壊するため OFF にしてある (tailwind.config.ts)。
+ * その代わり、プラグイン UI が依存している最小限の reset をここに書く。
+ * セレクタはすべて `.cowork-agent-root` スコープなので kintone 本体には漏れない。
+ */
+.cowork-agent-root *,
+.cowork-agent-root *::before,
+.cowork-agent-root *::after {
+  box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+  border-color: currentColor;
+}
+
+.cowork-agent-root h1,
+.cowork-agent-root h2,
+.cowork-agent-root h3,
+.cowork-agent-root h4,
+.cowork-agent-root h5,
+.cowork-agent-root h6 {
+  font-size: inherit;
+  font-weight: inherit;
+  margin: 0;
+}
+
+.cowork-agent-root p,
+.cowork-agent-root figure,
+.cowork-agent-root blockquote,
+.cowork-agent-root dl,
+.cowork-agent-root dd {
+  margin: 0;
+}
+
+.cowork-agent-root ol,
+.cowork-agent-root ul,
+.cowork-agent-root menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cowork-agent-root a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+.cowork-agent-root button,
+.cowork-agent-root input,
+.cowork-agent-root optgroup,
+.cowork-agent-root select,
+.cowork-agent-root textarea {
+  font-family: inherit;
+  font-size: 100%;
+  font-weight: inherit;
+  line-height: inherit;
+  color: inherit;
+  margin: 0;
+  padding: 0;
+}
+
+.cowork-agent-root button,
+.cowork-agent-root [type='button'],
+.cowork-agent-root [type='reset'],
+.cowork-agent-root [type='submit'] {
+  -webkit-appearance: button;
+  background-color: transparent;
+  background-image: none;
+  cursor: pointer;
+}
+
+.cowork-agent-root img,
+.cowork-agent-root svg,
+.cowork-agent-root video,
+.cowork-agent-root canvas {
+  display: block;
+  max-width: 100%;
+}
+
+.cowork-agent-root pre,
+.cowork-agent-root code,
+.cowork-agent-root kbd,
+.cowork-agent-root samp {
+  font-family: var(--cw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 1em;
+}
+
+.cowork-agent-root hr {
+  height: 0;
+  color: inherit;
+  border-top-width: 1px;
 }
 
 /* 新着メッセージのフェードイン + 上方向からのスライド */
