@@ -14,10 +14,8 @@ import {
   fetchDeployedWorkerVersion,
 } from '../core/cloudflare/cfDeploy';
 import {
-  ANTHROPIC_VERSION,
   CLOUDFLARE_WORKER_SCRIPT_NAME,
   DEFAULT_KINTONE_OAUTH_SCOPE,
-  MANAGED_AGENTS_BETA,
 } from '../core/constants';
 import { setProxyConfigAsync } from '../core/kintone/setProxyConfigAsync';
 import { syncSkills, SkillSyncError } from '../core/skills/skillsSyncClient';
@@ -181,12 +179,10 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
     try {
       const finalWorkerUrl = workerUrlTrimmed.replace(/\/$/, '');
       const tokenEndpoint = `https://${window.location.hostname}/oauth2/token`;
-      const credentialsUpsertUrl = joinUrl(finalWorkerUrl, 'credentials/upsert');
-      const anthropicHeaders = {
-        'X-Api-Key': apiKeyTrimmed,
-        'anthropic-version': ANTHROPIC_VERSION,
-        'anthropic-beta': MANAGED_AGENTS_BETA,
-      };
+      // Worker root URL (末尾スラッシュ) — kintone proxy は前方一致なので、
+      // この 1 つの登録だけで Worker 配下の全パス
+      // (/credentials/upsert, /files/<id>/content, /skills/sync, /anthropic/*) をカバーする。
+      const workerRootUrl = `${finalWorkerUrl}/`;
 
       // setProxyConfig 経路を直列に登録する。並行だと kintone 内部 DB の
       // ロック競合 (update.json 400) が起きるため必ず逐次 + 待ち時間。
@@ -198,7 +194,8 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
         method: 'GET' | 'POST';
         headers: Record<string, string>;
       }> = [];
-      // /oauth2/token (token 交換 + Anthropic 自動 refresh) — clientId + clientSecret 必要
+
+      // 1. /oauth2/token (token 交換 + Anthropic 自動 refresh) — kintone 自身のドメイン
       if (hasOAuth) {
         proxySteps.push({
           url: tokenEndpoint,
@@ -209,58 +206,38 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
           },
         });
       }
-      // Worker /credentials/upsert (X-Anthropic-Api-Key + OAuth client headers) — 全 secret 必要
-      if (hasApiKey && hasOAuth) {
+
+      // 2. Worker root URL (POST) — 配下の全パスに共通の固定ヘッダ
+      //    各 Worker ハンドラは必要なヘッダだけ読み、不要なものは無視する設計:
+      //    - /credentials/upsert: X-Anthropic-Api-Key + X-Kintone-OAuth-Client-{Id,Secret}
+      //    - /skills/sync: X-Anthropic-Api-Key + Content-Type: application/json
+      //    - /anthropic/*: X-Anthropic-Api-Key (anthropic-version / anthropic-beta は JS 側 apiHeaders で付与)
+      if (hasApiKey) {
+        const postHeaders: Record<string, string> = {
+          'X-Anthropic-Api-Key': apiKeyTrimmed,
+          'Content-Type': 'application/json',
+        };
+        if (hasOAuth) {
+          postHeaders['X-Kintone-OAuth-Client-Id'] = clientIdTrimmed;
+          postHeaders['X-Kintone-OAuth-Client-Secret'] = clientSecretTrimmed;
+        }
         proxySteps.push({
-          url: credentialsUpsertUrl,
+          url: workerRootUrl,
           method: 'POST',
-          headers: {
-            'X-Anthropic-Api-Key': apiKeyTrimmed,
-            'X-Kintone-OAuth-Client-Id': clientIdTrimmed,
-            'X-Kintone-OAuth-Client-Secret': clientSecretTrimmed,
-            'Content-Type': 'application/json',
-          },
+          headers: postHeaders,
         });
       }
-      // Worker /files/<fileId>/content (binary DL の base64 中継) — apiKey のみ必要
+
+      // 3. Worker root URL (GET) — 配下の全 GET エンドポイント
+      //    - /files/<id>/content: X-Anthropic-Api-Key (binary DL の base64 中継)
+      //    - /anthropic/*: X-Anthropic-Api-Key
+      //    - /version / /healthz: 認証不要だが固定ヘッダがあっても害なし
       if (hasApiKey) {
         proxySteps.push({
-          url: joinUrl(finalWorkerUrl, 'files/'),
+          url: workerRootUrl,
           method: 'GET',
           headers: { 'X-Anthropic-Api-Key': apiKeyTrimmed },
         });
-      }
-      // Worker /skills/sync (Issue #30: 同期ボタンが叩く) — apiKey + JSON
-      if (hasApiKey) {
-        proxySteps.push({
-          url: joinUrl(finalWorkerUrl, 'skills/sync'),
-          method: 'POST',
-          headers: {
-            'X-Anthropic-Api-Key': apiKeyTrimmed,
-            'Content-Type': 'application/json',
-          },
-        });
-      }
-      // Issue #31: Anthropic API は Worker /anthropic/* 経由で叩く。
-      // 旧 `https://api.anthropic.com/` への直接 proxy 登録は廃止。
-      if (hasApiKey) {
-        const anthropicPassthroughUrl = joinUrl(finalWorkerUrl, 'anthropic/');
-        proxySteps.push(
-          {
-            url: anthropicPassthroughUrl,
-            method: 'POST',
-            headers: {
-              'X-Anthropic-Api-Key': apiKeyTrimmed,
-              ...anthropicHeaders,
-              'Content-Type': 'application/json',
-            },
-          },
-          {
-            url: anthropicPassthroughUrl,
-            method: 'GET',
-            headers: { 'X-Anthropic-Api-Key': apiKeyTrimmed, ...anthropicHeaders },
-          },
-        );
       }
       for (const step of proxySteps) {
         await setProxyConfigAsync(step.url, step.method, step.headers, {});

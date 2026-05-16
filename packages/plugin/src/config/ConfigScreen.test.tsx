@@ -3,7 +3,7 @@
 // 検証:
 // - workerUrl 入力で callbackUrl が `<workerUrl>/oauth/callback` で計算される
 // - cybozu admin リンクが `https://<location.hostname>/admin/integrations/oauth/list`
-// - 保存時 setProxyConfig が 6 経路 (oauth2/token, /credentials/upsert, /files/ GET, /skills/sync POST, anthropic POST, anthropic GET)
+// - 保存時 setProxyConfig が 3 経路 (oauth2/token + Worker root POST + Worker root GET) — kintone proxy URL 前方一致を活用
 // - setConfig には secret (client_secret / anthropic_api_key) が含まれない
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -68,7 +68,7 @@ describe('ConfigScreen', () => {
     );
   });
 
-  it('全項目入力 → 保存で setProxyConfig が 6 経路呼ばれる', async () => {
+  it('全項目入力 → 保存で setProxyConfig が 3 経路呼ばれる (Worker root を前方一致で活用)', async () => {
     const user = userEvent.setup();
     render(<ConfigScreen pluginId={PLUGIN_ID} />);
 
@@ -80,46 +80,40 @@ describe('ConfigScreen', () => {
     await user.click(screen.getByRole('button', { name: '保存' }));
 
     // setProxyConfig は逐次 await + sleep(700ms) を入れているので待つ
-    await waitFor(() => expect(setProxyConfigMock).toHaveBeenCalledTimes(6), {
-      timeout: 12_000,
+    await waitFor(() => expect(setProxyConfigMock).toHaveBeenCalledTimes(3), {
+      timeout: 6_000,
     });
 
     const calls = setProxyConfigMock.mock.calls;
     const urls = calls.map((c) => c[0]);
     const methods = calls.map((c) => c[1]);
 
-    // 1) oauth2/token POST
+    // 1) oauth2/token POST (kintone 自身のドメイン)
     const tokenIdx = urls.indexOf('https://tenant.cybozu.com/oauth2/token');
     expect(tokenIdx).toBeGreaterThanOrEqual(0);
     expect(methods[tokenIdx]).toBe('POST');
     const tokenHeaders = calls[tokenIdx]![2] as Record<string, string>;
     expect(tokenHeaders['Authorization']).toContain('Basic ');
 
-    // 2) credentials/upsert POST with all 3 secret headers
-    const upsertIdx = urls.indexOf('https://w.example.com/credentials/upsert');
-    expect(upsertIdx).toBeGreaterThanOrEqual(0);
-    const upsertHeaders = calls[upsertIdx]![2] as Record<string, string>;
-    expect(upsertHeaders['X-Anthropic-Api-Key']).toBe('sk-ant-x');
-    expect(upsertHeaders['X-Kintone-OAuth-Client-Id']).toBe('cid');
-    expect(upsertHeaders['X-Kintone-OAuth-Client-Secret']).toBe('csec');
+    // 2) Worker root URL POST — 配下の全 POST エンドポイントを 1 つの登録でカバー
+    //    (/credentials/upsert / /skills/sync / /anthropic/*)
+    const workerPost = calls.find(
+      (c) => c[0] === 'https://w.example.com/' && c[1] === 'POST',
+    );
+    expect(workerPost).toBeTruthy();
+    const postHeaders = workerPost![2] as Record<string, string>;
+    expect(postHeaders['X-Anthropic-Api-Key']).toBe('sk-ant-x');
+    expect(postHeaders['X-Kintone-OAuth-Client-Id']).toBe('cid');
+    expect(postHeaders['X-Kintone-OAuth-Client-Secret']).toBe('csec');
+    expect(postHeaders['Content-Type']).toBe('application/json');
 
-    // Issue #31: Anthropic API は Worker /anthropic/* 経由で proxy 登録される
-    const anthropicCalls = calls.filter((c) => c[0] === 'https://w.example.com/anthropic/');
-    expect(anthropicCalls.length).toBe(2);
-    expect(anthropicCalls.map((c) => c[1]).sort()).toEqual(['GET', 'POST']);
-    // X-Anthropic-Api-Key が両方の経路に乗っていること (Worker passthrough が読む)
-    for (const c of anthropicCalls) {
-      const headers = c[2] as Record<string, string>;
-      expect(headers['X-Anthropic-Api-Key']).toBe('sk-ant-x');
-    }
-
-    // Issue #30: /skills/sync POST が proxy 登録されている
-    const skillsCall = calls.find((c) => c[0] === 'https://w.example.com/skills/sync');
-    expect(skillsCall).toBeTruthy();
-    expect(skillsCall![1]).toBe('POST');
-    const skillsHeaders = skillsCall![2] as Record<string, string>;
-    expect(skillsHeaders['X-Anthropic-Api-Key']).toBe('sk-ant-x');
-    expect(skillsHeaders['Content-Type']).toBe('application/json');
+    // 3) Worker root URL GET — 配下の GET エンドポイント (/files/, /anthropic/*) をカバー
+    const workerGet = calls.find(
+      (c) => c[0] === 'https://w.example.com/' && c[1] === 'GET',
+    );
+    expect(workerGet).toBeTruthy();
+    const getHeaders = workerGet![2] as Record<string, string>;
+    expect(getHeaders['X-Anthropic-Api-Key']).toBe('sk-ant-x');
   });
 
   it('保存時 setConfig には secret が含まれない', async () => {
