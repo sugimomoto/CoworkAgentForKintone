@@ -24,7 +24,7 @@ export const DEFAULT_AGENT_NAME = 'Cowork Agent - Default';
  * system プロンプトのリビジョン番号。プロンプト本文を変更したらこの値を上げる。
  * metadata に含めるので、旧プロンプトの Agent は別物として扱われ、新規 Agent が作成される。
  */
-export const DEFAULT_AGENT_PROMPT_VERSION = 'v18';
+export const DEFAULT_AGENT_PROMPT_VERSION = 'v19';
 
 /**
  * Default Agent に attach する Anthropic 製 Skills (Issue #18 Step 1)。
@@ -292,6 +292,16 @@ export interface ResolveDefaultAgentOptions {
   workerUrl?: string;
   /** kintone ドメイン (例: tenant.cybozu.com)。workerUrl と組で `/mcp/<domain>` を構成 */
   kintoneDomain?: string;
+  /**
+   * Issue #30: 同期済 custom skill の id 一覧。あれば DEFAULT_AGENT_SKILLS (Anthropic 製)
+   * に追加で attach される。
+   */
+  customSkillIds?: ReadonlyArray<string>;
+  /**
+   * Issue #30: 同期済 skill bundle の version 識別子 (sha256 短縮ハッシュ)。
+   * metadata.skillsVersion に含めて、内容変化時に別 Agent 扱いにする。
+   */
+  skillsVersion?: string;
 }
 
 /**
@@ -306,7 +316,12 @@ export interface ResolveDefaultAgentOptions {
 export async function resolveDefaultAgent(
   options: ResolveDefaultAgentOptions = {},
 ): Promise<Agent> {
-  const key = options.workerUrl ?? '';
+  // skillsVersion + sorted custom skill ids も in-flight キーに含める
+  // (skill 入替時に同一 Worker URL でも別 Promise として扱う)
+  const skillsKey = options.customSkillIds
+    ? [...options.customSkillIds].sort().join(',')
+    : '';
+  const key = `${options.workerUrl ?? ''}|${options.skillsVersion ?? ''}|${skillsKey}`;
   const cached = inFlightByKey.get(key);
   if (cached) return cached;
 
@@ -331,6 +346,10 @@ async function doResolve(options: ResolveDefaultAgentOptions): Promise<Agent> {
     filter['workerUrl'] = options.workerUrl!;
     filter['kintoneDomain'] = options.kintoneDomain!;
   }
+  // skillsVersion を metadata に含める (内容変化で別 Agent として扱う)
+  if (options.skillsVersion) {
+    filter['skillsVersion'] = options.skillsVersion;
+  }
 
   // 1. 既存 Agent を探索
   const existing = await findDefaultAgents(filter);
@@ -339,12 +358,21 @@ async function doResolve(options: ResolveDefaultAgentOptions): Promise<Agent> {
   }
 
   // 2. 無ければ作成
+  //    Anthropic 製 skills (DEFAULT_AGENT_SKILLS) + Plugin 同期済 custom skill を attach
+  const skills: Array<{ type: 'anthropic' | 'custom'; skill_id: string }> = [
+    ...DEFAULT_AGENT_SKILLS.map((s) => ({ ...s })),
+  ];
+  if (options.customSkillIds && options.customSkillIds.length > 0) {
+    for (const id of options.customSkillIds) {
+      skills.push({ type: 'custom', skill_id: id });
+    }
+  }
   const createParams: Record<string, unknown> = {
     model: 'claude-sonnet-4-6',
     name: DEFAULT_AGENT_NAME,
     system: DEFAULT_AGENT_SYSTEM_PROMPT,
     tools: buildAgentTools(includeMcp),
-    skills: DEFAULT_AGENT_SKILLS.map((s) => ({ ...s })),
+    skills,
     metadata: filter,
   };
   if (includeMcp) {

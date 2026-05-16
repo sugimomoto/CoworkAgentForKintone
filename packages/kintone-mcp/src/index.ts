@@ -4,6 +4,7 @@
 //   POST /mcp/<domain>             — Anthropic Managed Agents が Bearer (kintone OAuth access_token) で叩く
 //   GET  /oauth/callback           — kintone OAuth リダイレクト受け口
 //   POST /credentials/upsert       — Plugin が Anthropic Vault Credential を作成・更新
+//   POST /skills/sync              — Plugin が kintone 固有 custom skill を Anthropic にアップロード (Issue #30)
 //   *    /anthropic/<path>         — Anthropic API 汎用 passthrough (Issue #31)
 //   GET  /files/<id>/content       — Anthropic Files API バイナリ DL (base64 中継)
 //   GET  /healthz                  — health check
@@ -16,6 +17,7 @@ import { handleCredentialsUpsert } from './credentials-upsert';
 import { handleFilesDownload } from './files-download';
 import { handleMcp } from './mcp';
 import { handleOAuthCallback } from './oauth-callback';
+import { handleSkillsSync } from './skills-sync';
 import { BUILD_TIME, BUILD_VERSION } from './version';
 
 // Worker は env / secret を保持しない。型のために空オブジェクトで宣言。
@@ -35,6 +37,11 @@ export default {
 
     if (url.pathname === '/credentials/upsert' && request.method === 'POST') {
       return handleCredentialsUpsert(request);
+    }
+
+    // POST /skills/sync — Plugin → Anthropic Skills API の multipart 中継 (Issue #30)
+    if (url.pathname === '/skills/sync' && request.method === 'POST') {
+      return handleSkillsSync(request);
     }
 
     // GET /files/:fileId/content — Anthropic Files API バイナリ DL の base64 中継

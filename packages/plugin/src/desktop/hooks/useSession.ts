@@ -50,14 +50,24 @@ export function useSession(): UseSessionResult {
     (async () => {
       try {
         const pluginId = useChatStore.getState().pluginId;
-        const cfg = pluginId ? getPluginConfig(pluginId) : { workerUrl: null };
+        const cfg = pluginId
+          ? getPluginConfig(pluginId)
+          : { workerUrl: null, skillsMapping: {}, skillsVersion: null };
         const workerUrl = cfg.workerUrl ?? undefined;
         const kctx = getCurrentSessionContext();
 
+        // Issue #30: 同期済 custom skill を Agent に attach
+        const customSkillIds = Object.values(cfg.skillsMapping ?? {})
+          .map((entry) => entry.skillId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0);
+        const agentOptions: Parameters<typeof resolveDefaultAgent>[0] = {
+          ...(workerUrl ? { workerUrl, kintoneDomain: kctx.kintoneDomain } : {}),
+          ...(customSkillIds.length > 0 ? { customSkillIds } : {}),
+          ...(cfg.skillsVersion ? { skillsVersion: cfg.skillsVersion } : {}),
+        };
+
         const [agent, env] = await Promise.all([
-          resolveDefaultAgent(
-            workerUrl ? { workerUrl, kintoneDomain: kctx.kintoneDomain } : {},
-          ),
+          resolveDefaultAgent(agentOptions),
           resolveBootstrapEnvironment(),
         ]);
         if (cancelled) return;

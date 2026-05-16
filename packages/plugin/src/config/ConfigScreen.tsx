@@ -20,7 +20,9 @@ import {
   MANAGED_AGENTS_BETA,
 } from '../core/constants';
 import { setProxyConfigAsync } from '../core/kintone/setProxyConfigAsync';
+import { syncSkills, SkillSyncError } from '../core/skills/skillsSyncClient';
 import { joinUrl, sleep, toErrorMessage } from '../core/utils';
+import { SKILL_BUNDLES, SKILLS_VERSION } from '../generated/skills-bundle';
 import { WORKER_BUNDLE_JS, WORKER_BUNDLE_VERSION } from '../generated/worker-bundle';
 
 export interface ConfigScreenProps {
@@ -32,6 +34,8 @@ const CONFIG_KEY_SAVED = 'saved';
 const CONFIG_KEY_WORKER_URL = 'workerUrl';
 const CONFIG_KEY_OAUTH_CLIENT_ID = 'oauthClientId';
 const CONFIG_KEY_OAUTH_SCOPE = 'oauthScope';
+const CONFIG_KEY_SKILLS_MAPPING = 'skillsMapping';
+const CONFIG_KEY_SKILLS_VERSION = 'skillsVersion';
 
 const WORKER_URL_RE = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+(\/.*)?$/i;
 
@@ -72,6 +76,13 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
   const [cfDeploying, setCfDeploying] = useState(false);
   const [cfDeployMessage, setCfDeployMessage] = useState<string | null>(null);
   const [cfDeployError, setCfDeployError] = useState<string | null>(null);
+
+  // Issue #30: Skills 同期
+  const existingSkillsVersion = existing[CONFIG_KEY_SKILLS_VERSION] ?? null;
+  const skillsSynced = existingSkillsVersion === SKILLS_VERSION;
+  const [skillsSyncing, setSkillsSyncing] = useState(false);
+  const [skillsSyncMessage, setSkillsSyncMessage] = useState<string | null>(null);
+  const [skillsSyncError, setSkillsSyncError] = useState<string | null>(null);
 
   const cfTokenTrimmed = cfApiToken.trim();
   const cfAccountIdTrimmed = cfAccountId.trim();
@@ -219,6 +230,17 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
           headers: { 'X-Anthropic-Api-Key': apiKeyTrimmed },
         });
       }
+      // Worker /skills/sync (Issue #30: 同期ボタンが叩く) — apiKey + JSON
+      if (hasApiKey) {
+        proxySteps.push({
+          url: joinUrl(finalWorkerUrl, 'skills/sync'),
+          method: 'POST',
+          headers: {
+            'X-Anthropic-Api-Key': apiKeyTrimmed,
+            'Content-Type': 'application/json',
+          },
+        });
+      }
       // Issue #31: Anthropic API は Worker /anthropic/* 経由で叩く。
       // 旧 `https://api.anthropic.com/` への直接 proxy 登録は廃止。
       if (hasApiKey) {
@@ -268,6 +290,60 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
 
   function handleCancel(): void {
     history.back();
+  }
+
+  /**
+   * Issue #30: 「Skills 同期」ボタンのハンドラ。
+   * 同梱されている SKILL_BUNDLES を Worker /skills/sync 経由で Anthropic にアップロード、
+   * 返ってきた skill_id mapping を plugin config に保存する。
+   * (proxy 登録 = `${workerUrl}/skills/sync` POST は保存時に登録済の前提)
+   */
+  async function handleSyncSkills(): Promise<void> {
+    if (skillsSyncing) return;
+    if (!workerUrlValid) {
+      setSkillsSyncError('Worker URL が未設定です');
+      return;
+    }
+    if (SKILL_BUNDLES.length === 0) {
+      setSkillsSyncError('同期する skill がありません');
+      return;
+    }
+    setSkillsSyncing(true);
+    setSkillsSyncMessage(null);
+    setSkillsSyncError(null);
+    try {
+      const finalWorkerUrl = workerUrlTrimmed.replace(/\/$/, '');
+      const result = await syncSkills({
+        pluginId,
+        workerUrl: finalWorkerUrl,
+        bundles: SKILL_BUNDLES,
+      });
+      const mapping: Record<string, { skillId: string; version: string }> = {};
+      for (const r of result.results) {
+        mapping[r.name] = { skillId: r.skillId, version: r.version };
+      }
+      // setConfig: 既存 config + skill mapping + skillsVersion を保存
+      const next: Record<string, string> = {
+        ...existing,
+        [CONFIG_KEY_SKILLS_MAPPING]: JSON.stringify(mapping),
+        [CONFIG_KEY_SKILLS_VERSION]: SKILLS_VERSION,
+      };
+      await new Promise<void>((resolve) => {
+        kintone.plugin.app.setConfig(next, () => resolve());
+      });
+      const summary = result.results
+        .map((r) => `${r.name} (${r.action})`)
+        .join(', ');
+      setSkillsSyncMessage(`✓ ${result.results.length} skill を同期: ${summary}`);
+    } catch (err) {
+      if (err instanceof SkillSyncError) {
+        setSkillsSyncError(`Worker /skills/sync が ${err.status} を返しました: ${err.responseBody.slice(0, 200)}`);
+      } else {
+        setSkillsSyncError(toErrorMessage(err));
+      }
+    } finally {
+      setSkillsSyncing(false);
+    }
   }
 
   return (
@@ -523,6 +599,63 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
           </button>
         </div>
 
+      </section>
+
+      {/* Step 4: kintone 固有 custom skill の Anthropic workspace への同期 (Issue #30) */}
+      <section
+        className={`mb-[20px] rounded-[12px] border border-card-border bg-card p-[16px] ${
+          isSaved ? '' : 'pointer-events-none opacity-50'
+        }`}
+        aria-disabled={!isSaved}
+      >
+        <h2 className="mb-[4px] text-[14px] font-semibold">
+          Step 4. kintone 固有 Skills を Anthropic workspace に同期 <span className="text-[11px] font-normal text-muted">(任意)</span>
+        </h2>
+        <p className="mb-[10px] text-[11px] leading-[1.6] text-muted">
+          kintone カスタマイズ / Plugin 開発の定石をまとめた skill (<code>kintone-customize-js</code> / <code>kintone-plugin-development</code> 等) を Anthropic workspace にアップロードします。Agent がタスクに応じて自動ロードし、より kintone 固有の精度で回答できるようになります。Plugin 設定保存後に実行してください。
+        </p>
+        <div className="mb-[8px] flex items-center gap-[6px] text-[11px] text-muted">
+          <span>同梱 skill:</span>
+          {SKILL_BUNDLES.map((b) => (
+            <code
+              key={b.name}
+              className="rounded-[6px] bg-bg px-[6px] py-[2px] font-mono text-[10px]"
+            >
+              {b.name}
+            </code>
+          ))}
+          <span className="ml-[6px] opacity-70">version: {SKILLS_VERSION}</span>
+          {skillsSynced && (
+            <span className="ml-[6px] rounded-[6px] bg-accent-soft px-[6px] py-[1px] text-[10px] text-accent">
+              ✓ 最新版が同期済
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          data-testid="skills-sync-button"
+          onClick={() => void handleSyncSkills()}
+          disabled={!isSaved || skillsSyncing}
+          className="rounded-[8px] border border-card-border bg-bg px-[12px] py-[6px] text-[12px] font-medium text-text shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:border-accent disabled:opacity-50"
+        >
+          {skillsSyncing ? '同期中…' : 'Skills を同期'}
+        </button>
+        {skillsSyncMessage && (
+          <p
+            data-testid="skills-sync-message"
+            className="mt-[8px] rounded-[8px] bg-accent-soft px-[12px] py-[8px] text-[11px] leading-[1.6] text-accent"
+          >
+            {skillsSyncMessage}
+          </p>
+        )}
+        {skillsSyncError && (
+          <p
+            data-testid="skills-sync-error"
+            className="mt-[8px] rounded-[8px] border border-warn/40 bg-warn-soft px-[12px] py-[8px] text-[11px] leading-[1.6] text-warn"
+          >
+            ⚠ {skillsSyncError}
+          </p>
+        )}
       </section>
 
       {errorMessage && (

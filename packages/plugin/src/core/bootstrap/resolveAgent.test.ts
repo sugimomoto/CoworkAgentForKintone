@@ -60,7 +60,7 @@ describe('resolveDefaultAgent', () => {
     expect(body.metadata).toEqual({
       source: 'cowork-agent-for-kintone',
       type: 'default',
-      promptVersion: 'v18',
+      promptVersion: 'v19',
     });
     // Anthropic 製 skills (xlsx / docx / pdf / pptx) が attach されること (Issue #18 Step 1)
     expect(body.skills).toEqual([
@@ -276,11 +276,11 @@ describe('resolveDefaultAgent', () => {
     it('workerUrl 指定が異なれば別の Agent として解決される (in-flight キャッシュも分離)', async () => {
       const a = makeAgent({
         id: 'agent_a',
-        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v18', workerUrl: 'https://a.example', kintoneDomain: 'a.cybozu.com' },
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v19', workerUrl: 'https://a.example', kintoneDomain: 'a.cybozu.com' },
       });
       const b = makeAgent({
         id: 'agent_b',
-        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v18', workerUrl: 'https://b.example', kintoneDomain: 'b.cybozu.com' },
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v19', workerUrl: 'https://b.example', kintoneDomain: 'b.cybozu.com' },
       });
 
       // a の解決: list で a が返る
@@ -293,6 +293,79 @@ describe('resolveDefaultAgent', () => {
 
       expect(ra.id).toBe('agent_a');
       expect(rb.id).toBe('agent_b');
+    });
+  });
+
+  describe('customSkillIds オプション (Issue #30)', () => {
+    it('customSkillIds 指定時、Anthropic 製 + custom skill が attach される', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data: [], next_page: null }));
+      const created = makeAgent({ id: 'agent_with_custom_skills' });
+      fetchMock.mockResolvedValueOnce(jsonResponse(created, 201));
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data: [created], next_page: null }));
+
+      await resolveDefaultAgent({
+        customSkillIds: ['skill_abc', 'skill_xyz'],
+        skillsVersion: 'sha256:abc123',
+      });
+
+      const init = fetchMock.mock.calls[1]![1] as RequestInit;
+      const body = JSON.parse(init.body as string);
+      expect(body.skills).toEqual([
+        { type: 'anthropic', skill_id: 'xlsx' },
+        { type: 'anthropic', skill_id: 'docx' },
+        { type: 'anthropic', skill_id: 'pdf' },
+        { type: 'anthropic', skill_id: 'pptx' },
+        { type: 'custom', skill_id: 'skill_abc' },
+        { type: 'custom', skill_id: 'skill_xyz' },
+      ]);
+    });
+
+    it('skillsVersion が metadata に含まれる (内容変更で別 Agent 扱い)', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data: [], next_page: null }));
+      const created = makeAgent({ id: 'agent_v1' });
+      fetchMock.mockResolvedValueOnce(jsonResponse(created, 201));
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data: [created], next_page: null }));
+
+      await resolveDefaultAgent({ skillsVersion: 'sha256:v1' });
+
+      const init = fetchMock.mock.calls[1]![1] as RequestInit;
+      const body = JSON.parse(init.body as string);
+      expect(body.metadata.skillsVersion).toBe('sha256:v1');
+    });
+
+    it('skillsVersion が異なれば別 Agent として解決される (in-flight キャッシュ分離)', async () => {
+      const a = makeAgent({
+        id: 'agent_v1',
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v19', skillsVersion: 'sha256:v1' },
+      });
+      const b = makeAgent({
+        id: 'agent_v2',
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v19', skillsVersion: 'sha256:v2' },
+      });
+      // skillsVersion 'sha256:v1' のとき
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data: [a], next_page: null }));
+      // skillsVersion 'sha256:v2' のとき (別の list 呼出が走る)
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data: [b], next_page: null }));
+
+      const r1 = await resolveDefaultAgent({ skillsVersion: 'sha256:v1' });
+      const r2 = await resolveDefaultAgent({ skillsVersion: 'sha256:v2' });
+
+      expect(r1.id).toBe('agent_v1');
+      expect(r2.id).toBe('agent_v2');
+    });
+
+    it('customSkillIds 無し時は Anthropic 製 skill だけ attach される', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data: [], next_page: null }));
+      const created = makeAgent({ id: 'agent_no_custom' });
+      fetchMock.mockResolvedValueOnce(jsonResponse(created, 201));
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data: [created], next_page: null }));
+
+      await resolveDefaultAgent();
+
+      const init = fetchMock.mock.calls[1]![1] as RequestInit;
+      const body = JSON.parse(init.body as string);
+      expect(body.skills).toHaveLength(4);
+      expect(body.skills.every((s: { type: string }) => s.type === 'anthropic')).toBe(true);
     });
   });
 });

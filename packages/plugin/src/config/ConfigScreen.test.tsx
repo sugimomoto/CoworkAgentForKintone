@@ -3,7 +3,7 @@
 // 検証:
 // - workerUrl 入力で callbackUrl が `<workerUrl>/oauth/callback` で計算される
 // - cybozu admin リンクが `https://<location.hostname>/admin/integrations/oauth/list`
-// - 保存時 setProxyConfig が 5 経路 (oauth2/token, /credentials/upsert, /files/ GET, anthropic POST, anthropic GET)
+// - 保存時 setProxyConfig が 6 経路 (oauth2/token, /credentials/upsert, /files/ GET, /skills/sync POST, anthropic POST, anthropic GET)
 // - setConfig には secret (client_secret / anthropic_api_key) が含まれない
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -68,7 +68,7 @@ describe('ConfigScreen', () => {
     );
   });
 
-  it('全項目入力 → 保存で setProxyConfig が 5 経路呼ばれる', async () => {
+  it('全項目入力 → 保存で setProxyConfig が 6 経路呼ばれる', async () => {
     const user = userEvent.setup();
     render(<ConfigScreen pluginId={PLUGIN_ID} />);
 
@@ -80,8 +80,8 @@ describe('ConfigScreen', () => {
     await user.click(screen.getByRole('button', { name: '保存' }));
 
     // setProxyConfig は逐次 await + sleep(700ms) を入れているので待つ
-    await waitFor(() => expect(setProxyConfigMock).toHaveBeenCalledTimes(5), {
-      timeout: 10_000,
+    await waitFor(() => expect(setProxyConfigMock).toHaveBeenCalledTimes(6), {
+      timeout: 12_000,
     });
 
     const calls = setProxyConfigMock.mock.calls;
@@ -112,6 +112,14 @@ describe('ConfigScreen', () => {
       const headers = c[2] as Record<string, string>;
       expect(headers['X-Anthropic-Api-Key']).toBe('sk-ant-x');
     }
+
+    // Issue #30: /skills/sync POST が proxy 登録されている
+    const skillsCall = calls.find((c) => c[0] === 'https://w.example.com/skills/sync');
+    expect(skillsCall).toBeTruthy();
+    expect(skillsCall![1]).toBe('POST');
+    const skillsHeaders = skillsCall![2] as Record<string, string>;
+    expect(skillsHeaders['X-Anthropic-Api-Key']).toBe('sk-ant-x');
+    expect(skillsHeaders['Content-Type']).toBe('application/json');
   });
 
   it('保存時 setConfig には secret が含まれない', async () => {
