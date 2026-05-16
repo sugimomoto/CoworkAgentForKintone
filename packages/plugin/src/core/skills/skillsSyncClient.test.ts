@@ -1,8 +1,8 @@
 // Plugin skillsSyncClient のテスト (Issue #30)。
 //
 // 検証内容:
-// - kintone.plugin.app.proxy 経由で Worker /skills/sync に JSON 送信
-// - 成功時に results を返却
+// - Config 画面用に kintone.proxy() を使う (kintone.plugin.app.proxy ではない)
+// - API Key を引数で受け取り X-Anthropic-Api-Key ヘッダに付与する
 // - 失敗時に SkillSyncError をスロー
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,8 +15,9 @@ let proxyMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   proxyMock = vi.fn();
+  // Config 画面用の kintone.proxy (kintone.plugin.app.proxy ではない)
   vi.stubGlobal('kintone', {
-    plugin: { app: { proxy: proxyMock } },
+    proxy: proxyMock,
   });
 });
 
@@ -33,7 +34,7 @@ function makeBundle(name: string): SkillBundle {
 }
 
 describe('syncSkills', () => {
-  it('Worker /skills/sync に POST + JSON body を kintone proxy 経由で送信する', async () => {
+  it('Worker /skills/sync に POST + JSON body を kintone.proxy 経由で送信する (X-Anthropic-Api-Key ヘッダ付き)', async () => {
     proxyMock.mockResolvedValueOnce([
       JSON.stringify({
         results: [
@@ -50,8 +51,8 @@ describe('syncSkills', () => {
     ]);
 
     const result = await syncSkills({
-      pluginId: 'plg_x',
       workerUrl: 'https://w.example.com',
+      anthropicApiKey: 'sk-ant-x',
       bundles: [makeBundle('kintone-customize-js')],
     });
 
@@ -59,20 +60,31 @@ describe('syncSkills', () => {
     expect(result.results[0]!.skillId).toBe('skill_a');
 
     expect(proxyMock).toHaveBeenCalledTimes(1);
-    const [pluginId, url, method, headers, body] = proxyMock.mock.calls[0]!;
-    expect(pluginId).toBe('plg_x');
+    const [url, method, headers, body] = proxyMock.mock.calls[0]!;
     expect(url).toBe('https://w.example.com/skills/sync');
     expect(method).toBe('POST');
-    expect(headers).toEqual({});
+    expect((headers as Record<string, string>)['X-Anthropic-Api-Key']).toBe('sk-ant-x');
+    expect((headers as Record<string, string>)['Content-Type']).toBe('application/json');
     const parsed = JSON.parse(body as string);
     expect(parsed.skills).toHaveLength(1);
     expect(parsed.skills[0].name).toBe('kintone-customize-js');
   });
 
+  it('API Key 未指定はエラー', async () => {
+    await expect(
+      syncSkills({
+        workerUrl: 'https://w.example.com',
+        anthropicApiKey: '',
+        bundles: [makeBundle('k')],
+      }),
+    ).rejects.toThrow(/API Key/);
+    expect(proxyMock).not.toHaveBeenCalled();
+  });
+
   it('空 bundle 配列なら何も送らず results=[] を返す', async () => {
     const result = await syncSkills({
-      pluginId: 'plg_x',
       workerUrl: 'https://w.example.com',
+      anthropicApiKey: 'sk-ant-x',
       bundles: [],
     });
     expect(result.results).toEqual([]);
@@ -83,8 +95,8 @@ describe('syncSkills', () => {
     proxyMock.mockResolvedValueOnce(['internal error', 500]);
     await expect(
       syncSkills({
-        pluginId: 'plg_x',
         workerUrl: 'https://w.example.com',
+        anthropicApiKey: 'sk-ant-x',
         bundles: [makeBundle('k')],
       }),
     ).rejects.toBeInstanceOf(SkillSyncError);
@@ -94,8 +106,8 @@ describe('syncSkills', () => {
     proxyMock.mockResolvedValueOnce(['not-json', 200]);
     await expect(
       syncSkills({
-        pluginId: 'plg_x',
         workerUrl: 'https://w.example.com',
+        anthropicApiKey: 'sk-ant-x',
         bundles: [makeBundle('k')],
       }),
     ).rejects.toThrow(/invalid JSON/);
@@ -105,8 +117,8 @@ describe('syncSkills', () => {
     proxyMock.mockResolvedValueOnce([JSON.stringify({ foo: 'bar' }), 200]);
     await expect(
       syncSkills({
-        pluginId: 'plg_x',
         workerUrl: 'https://w.example.com',
+        anthropicApiKey: 'sk-ant-x',
         bundles: [makeBundle('k')],
       }),
     ).rejects.toThrow(/results array/);

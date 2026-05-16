@@ -273,12 +273,21 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
    * Issue #30: 「Skills 同期」ボタンのハンドラ。
    * 同梱されている SKILL_BUNDLES を Worker /skills/sync 経由で Anthropic にアップロード、
    * 返ってきた skill_id mapping を plugin config に保存する。
-   * (proxy 登録 = `${workerUrl}/skills/sync` POST は保存時に登録済の前提)
+   *
+   * 注意: Config 画面では `kintone.plugin.app.proxy` が使えないため、`kintone.proxy()` を
+   *   経由する → setProxyConfig 固定ヘッダは効かない → API Key を form 入力から
+   *   明示的に渡す必要がある。Plugin 設定の「保存」より先に API Key を入力する必要あり。
    */
   async function handleSyncSkills(): Promise<void> {
     if (skillsSyncing) return;
     if (!workerUrlValid) {
       setSkillsSyncError('Worker URL が未設定です');
+      return;
+    }
+    if (!apiKeyTrimmed) {
+      setSkillsSyncError(
+        'Anthropic API Key を入力してから同期してください (フォーム上の値を直接使います)',
+      );
       return;
     }
     if (SKILL_BUNDLES.length === 0) {
@@ -291,8 +300,8 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
     try {
       const finalWorkerUrl = workerUrlTrimmed.replace(/\/$/, '');
       const result = await syncSkills({
-        pluginId,
         workerUrl: finalWorkerUrl,
+        anthropicApiKey: apiKeyTrimmed,
         bundles: SKILL_BUNDLES,
       });
       const mapping: Record<string, { skillId: string; version: string }> = {};

@@ -5,9 +5,12 @@
 // plugin config に保存し、resolveAgent.ts が次回 Agent 作成時に attach できる
 // ようにする。
 //
-// kintone setProxyConfig に以下が固定登録されている前提:
-//   X-Anthropic-Api-Key: <ANTHROPIC_API_KEY>
-//   Content-Type: application/json
+// 重要: 本クライアントは **Plugin の Config 画面 (admin) から** 呼ばれる前提。
+//   - `kintone.plugin.app.proxy` は end-user JS (desktop.js) でしか使えない
+//     (config 画面では $PLUGIN_ID が未確定なため undefined)
+//   - 代わりに `kintone.proxy()` を使う (cfDeploy と同じパターン)
+//   - `kintone.proxy()` は setProxyConfig 固定ヘッダを使わないので、
+//     X-Anthropic-Api-Key を引数で受け取って明示的にヘッダに付与する
 
 import type { SkillBundle } from '../../generated/skills-bundle';
 
@@ -38,18 +41,24 @@ export class SkillSyncError extends Error {
 }
 
 export interface SyncSkillsArgs {
-  pluginId: string;
   workerUrl: string;
+  /** Anthropic API Key (Config 画面 form input から渡す) */
+  anthropicApiKey: string;
   bundles: SkillBundle[];
 }
 
 /**
  * Worker /skills/sync に bundle 一覧を送信して Anthropic にアップロード。
  * 返却値の skillId マッピングを呼出側で plugin config に保存する。
+ *
+ * Config 画面の `kintone.proxy()` を使うので、API Key は引数で明示的に渡す。
  */
 export async function syncSkills(args: SyncSkillsArgs): Promise<SkillSyncResult> {
-  if (typeof kintone === 'undefined' || !kintone?.plugin?.app?.proxy) {
-    throw new Error('kintone JavaScript API is not available');
+  if (typeof kintone === 'undefined' || typeof kintone.proxy !== 'function') {
+    throw new Error('kintone.proxy is not available (Plugin 設定画面以外では使えません)');
+  }
+  if (!args.anthropicApiKey) {
+    throw new Error('Anthropic API Key が未入力です');
   }
   if (args.bundles.length === 0) {
     return { results: [] };
@@ -64,11 +73,13 @@ export async function syncSkills(args: SyncSkillsArgs): Promise<SkillSyncResult>
     })),
   };
 
-  const [respBody, status] = await kintone.plugin.app.proxy(
-    args.pluginId,
+  const [respBody, status] = await kintone.proxy(
     url,
     'POST',
-    {}, // X-Anthropic-Api-Key は setProxyConfig 経由
+    {
+      'X-Anthropic-Api-Key': args.anthropicApiKey,
+      'Content-Type': 'application/json',
+    },
     JSON.stringify(body),
   );
 
