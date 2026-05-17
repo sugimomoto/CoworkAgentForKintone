@@ -4,7 +4,7 @@
 // 未バインディング状態 (kintone OAuth 未連携) では Composer の代わりに ConnectKintoneButton を表示。
 // connect() 完了後に保留テキストを送信する。
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { postToolConfirmation, postUserInterrupt, postUserMessage } from '../core/managed-agents/events';
 import { useChatStore } from '../store/chatStore';
@@ -13,10 +13,19 @@ import { ArtifactPane } from './components/ArtifactPane';
 import { Banner } from './components/Banner';
 import { Composer } from './components/Composer';
 import { ConnectKintoneButton } from './components/ConnectKintoneButton';
-import { Header } from './components/Header';
+import { Header } from './Header';
 import { MessageList } from './components/MessageList';
 import { WelcomeMessage } from './components/WelcomeMessage';
 import { HistoryView } from './HistoryView';
+import { SettingsView } from './settings/SettingsView';
+import { useIsAdmin } from '../core/admin/useIsAdmin';
+import { selectAgent } from './hooks/useSession';
+import { getCurrentSessionContext } from '../core/kintone/user';
+import { getPluginConfig } from '../core/kintone/pluginConfig';
+import { SKILL_BUNDLES, SKILLS_VERSION } from '../generated/skills-bundle';
+import type { CustomSkillInput } from './settings/SkillAddModal';
+import type { BundledSkillEntry } from './settings/SkillsPane';
+import type { AgentRecord } from '../core/bootstrap/agentTypes';
 import { buildUserMessageContent } from '../core/files/messageContent';
 
 import { useAgentPhase } from './hooks/useAgentPhase';
@@ -39,6 +48,10 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   const messages = useChatStore((s) => s.messages);
   const sessionId = useChatStore((s) => s.sessionId);
   const agentId = useChatStore((s) => s.agentId);
+  const builtInAgents = useChatStore((s) => s.builtInAgents);
+  const currentAgentId = useChatStore((s) => s.currentAgentId);
+  const memoryEnabled = useChatStore((s) => s.memoryEnabled);
+  const isAdmin = useIsAdmin();
   const activeArtifactId = useChatStore((s) => s.activeArtifactId);
   const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
   const attachedFiles = useChatStore((s) => s.attachedFiles);
@@ -135,9 +148,37 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
     }
   }, [connect, ensureSession, pendingText]);
 
-  const handleSettingsClick = useCallback(() => {
+  /**
+   * 旧 Plugin Config (kintone admin) を開くハンドラ。SettingsView nav 下部の
+   * 「Plugin Config →」リンクから呼ばれる。
+   */
+  const handlePluginConfigClick = useCallback(() => {
     if (onSettingsClick) onSettingsClick();
   }, [onSettingsClick]);
+
+  /**
+   * Header ⚙ ボタンから Chat Panel 内の Settings View を開く (admin のみ表示)。
+   */
+  const handleSettingsClick = useCallback(() => {
+    if (isAdmin) setView('settings');
+  }, [isAdmin, setView]);
+
+  const handleSettingsClose = useCallback(() => {
+    setView('chat');
+  }, [setView]);
+
+  /**
+   * Header の Agent プルダウン選択で呼ばれる。
+   * localStorage 保存 + chatStore 更新 + 新規会話開始 を selectAgent ヘルパーで実行。
+   */
+  const handleSelectAgent = useCallback(
+    (id: string) => {
+      const ctx = getCurrentSessionContext();
+      selectAgent(id, ctx);
+      setView('chat'); // settings / history から chat に戻す
+    },
+    [setView],
+  );
 
   const handleHistoryClick = useCallback(() => {
     setView(view === 'history' ? 'chat' : 'history');
@@ -253,27 +294,29 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   return (
     <div className="cowork-agent-root flex h-full flex-col bg-bg">
       <Header
-        agentName="Cowork Agent for kintone"
-        status={statusLine}
-        agentState={agentState}
-        onHistoryClick={handleHistoryClick}
-        onNewConversationClick={handleNewConversationClick}
-        onSettingsClick={handleSettingsClick}
-        onReconnectKintone={handleConnect}
-        reconnectVisible={
-          bindingStatus === 'bound' ||
-          bindingStatus === 'binding' ||
-          bindingStatus === 'error'
-        }
-        reconnectDisabled={bindingStatus === 'binding'}
+        agents={builtInAgents}
+        currentAgentId={currentAgentId}
+        onSelectAgent={handleSelectAgent}
+        isAdmin={isAdmin}
+        memoryEnabled={false}
+        memoryOn={memoryEnabled}
+        {...(isAdmin ? { onSettingsClick: handleSettingsClick } : {})}
         {...(onClose ? { onClose } : {})}
       />
+      {/*
+        旧 Header の handleHistoryClick / handleNewConversationClick / handleConnect /
+        agentState / statusLine は 2 段構成 Header (案 C) には統合しなかった。
+        - 履歴 / 新規会話 / 再連携は将来 Conversation View 内のヘッダー二次行や
+          メッセージ間のアフォーダンスで提供する想定 (V2)。
+        - 暫定: status 系イベントは下の Banner 群でカバー (error / sessionTerminated /
+          oauth-rebind / slow-response)。
+      */}
 
       {status === 'error' && error && (
         <Banner
           tone="warn"
           {...(looksLikeAuthError(error) && onSettingsClick
-            ? { actionLabel: 'プラグイン設定を開く', onAction: handleSettingsClick }
+            ? { actionLabel: 'プラグイン設定を開く', onAction: handlePluginConfigClick }
             : {})}
         >
           ⚠ {error}
@@ -316,7 +359,15 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
         </Banner>
       )}
 
-      {view === 'history' && agentId ? (
+      {view === 'settings' && isAdmin ? (
+        <SettingsViewBound
+          onClose={handleSettingsClose}
+          {...(onSettingsClick ? { onPluginConfigClick: handlePluginConfigClick } : {})}
+        />
+      ) : view === 'settings' && !isAdmin ? (
+        // 安全策: 非 admin が誤って settings に到達したら chat に戻す
+        <ChatViewRedirect onRedirect={() => setView('chat')} />
+      ) : view === 'history' && agentId ? (
         <HistoryView agentId={agentId} onSelect={handleHistorySelect} />
       ) : (
         <div className="relative flex flex-1 overflow-hidden">
@@ -365,6 +416,127 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
       )}
     </div>
   );
+}
+
+// ─── Settings View 統合 (chatStore / Anthropic API / skillsSyncClient を bind) ────
+
+/**
+ * SettingsView を chatStore / Anthropic API と接続するアダプタ。
+ * SkillsPane / AgentsListPane の Anthropic API ハンドラはここで実装する。
+ */
+function SettingsViewBound({
+  onClose,
+  onPluginConfigClick,
+}: {
+  onClose: () => void;
+  onPluginConfigClick?: () => void;
+}): JSX.Element {
+  const builtInAgents = useChatStore((s) => s.builtInAgents);
+  const setBuiltInAgents = useChatStore((s) => s.setBuiltInAgents);
+  const pluginId = useChatStore((s) => s.pluginId);
+
+  // SkillsPane に渡す Plugin 同梱 skill 一覧 (同期状態は localStorage 経由の Plugin Config から)
+  const cfg = pluginId
+    ? getPluginConfig(pluginId)
+    : { workerUrl: null, skillsMapping: {}, skillsVersion: null };
+  const bundledSkills: BundledSkillEntry[] = SKILL_BUNDLES.map((b) => {
+    const mapped = cfg.skillsMapping?.[b.name];
+    const isLatest = cfg.skillsVersion === SKILLS_VERSION;
+    return {
+      name: b.name,
+      displayTitle: b.displayTitle,
+      skillId: mapped?.skillId ?? null,
+      version: mapped?.version ?? null,
+      status: mapped?.skillId ? (isLatest ? 'synced' : 'updated') : 'pending',
+    };
+  });
+
+  // Plugin 同梱 skill の同期: kintone.plugin.app.proxy で /skills/sync を叩く。
+  // API Key は proxyConfig 固定ヘッダで自動付与される (X-Anthropic-Api-Key)。
+  const handleSyncBundled = useCallback(async (): Promise<void> => {
+    if (!pluginId) throw new Error('Plugin ID が未取得です');
+    if (!cfg.workerUrl) throw new Error('Worker URL が未設定です (Plugin Config で設定してください)');
+    const url = `${cfg.workerUrl.replace(/\/$/, '')}/skills/sync`;
+    const body = {
+      skills: SKILL_BUNDLES.map((b) => ({
+        name: b.name,
+        displayTitle: b.displayTitle,
+        skillMd: b.skillMd,
+      })),
+    };
+    const [respBody, status] = await kintone.plugin.app.proxy(
+      pluginId,
+      url,
+      'POST',
+      { 'Content-Type': 'application/json' },
+      JSON.stringify(body),
+    );
+    if (status < 200 || status >= 300) {
+      throw new Error(`skills/sync が ${status} を返しました: ${respBody.slice(0, 200)}`);
+    }
+    const parsed = JSON.parse(respBody) as {
+      results: Array<{ name: string; skillId: string; version: string }>;
+    };
+    const mapping: Record<string, { skillId: string; version: string }> = {};
+    for (const r of parsed.results) {
+      mapping[r.name] = { skillId: r.skillId, version: r.version };
+    }
+    // Plugin Config に skill mapping を保存
+    const nextConfig: Record<string, string> = {
+      ...kintone.plugin.app.getConfig(pluginId),
+      skillsMapping: JSON.stringify(mapping),
+      skillsVersion: SKILLS_VERSION,
+    };
+    await new Promise<void>((resolve) => {
+      kintone.plugin.app.setConfig(nextConfig, () => resolve());
+    });
+  }, [pluginId, cfg.workerUrl]);
+
+  const handleAddCustomSkill = useCallback(async (_input: CustomSkillInput): Promise<void> => {
+    // V1 では同じ /skills/sync エンドポイントに単一 skill を投入する形で動作させる予定
+    // だが、現状の Worker は **同梱 skill バンドル名で識別** するため、カスタム skill 追加は
+    // Worker 側の対応が必要。V1.x で Worker /skills/sync を name 衝突回避ロジック付きに
+    // 拡張してから wire-up する。
+    throw new Error('カスタムスキル追加は V1 配線中です (Worker 拡張待ち、別タスクで実装予定)');
+  }, []);
+
+  // Agent 公開トグル (Anthropic POST /v1/agents/{id} で metadata.visibility 更新)
+  const handleToggleVisibility = useCallback(
+    async (agent: AgentRecord, next: 'public' | 'private') => {
+      // V1 では Anthropic API を直接叩く実装は別タスク (#39 仕上げ) で配線。
+      // 暫定で chatStore のローカル state だけ更新して UI を動かす (再起動で消える)。
+      const updated = builtInAgents.map((a) =>
+        a.id === agent.id ? { ...a, visibility: next } : a,
+      );
+      setBuiltInAgents(updated);
+    },
+    [builtInAgents, setBuiltInAgents],
+  );
+
+  return (
+    <SettingsView
+      onClose={onClose}
+      {...(onPluginConfigClick ? { onPluginConfigClick } : {})}
+      bundledSkills={bundledSkills}
+      onSyncBundled={handleSyncBundled}
+      onAddCustomSkill={handleAddCustomSkill}
+      onToggleVisibility={handleToggleVisibility}
+    />
+  );
+}
+
+/**
+ * 非 admin が誤って view='settings' に到達した時の安全策。
+ * mount 時に onRedirect で 'chat' に戻す。
+ */
+function ChatViewRedirect({ onRedirect }: { onRedirect: () => void }): JSX.Element {
+  // mount 直後に redirect (useEffect で副作用化)
+  // setState を render 中に呼ばないようにする
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    onRedirect();
+  }, [onRedirect]);
+  return <></>;
 }
 
 /**

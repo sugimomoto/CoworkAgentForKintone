@@ -13,15 +13,33 @@ import { SettingsNav } from './SettingsNav';
 import { SkillsPane } from './SkillsPane';
 
 import type { SettingsSection } from './SettingsNav';
+import type { BundledSkillEntry } from './SkillsPane';
+import type { CustomSkillInput } from './SkillAddModal';
+import type { AgentRecord } from '../../core/bootstrap/agentTypes';
 
 export interface SettingsViewProps {
   /** Settings を閉じる (Conversation View に戻る) */
   onClose: () => void;
   /** Plugin Config (kintone admin 画面) を新タブで開く */
   onPluginConfigClick?: () => void;
+  /** Plugin 同梱 skill 一覧 (ChatPanel 側で Plugin Config から算出して渡す) */
+  bundledSkills?: BundledSkillEntry[];
+  /** Plugin 同梱 skill を Anthropic に同期 */
+  onSyncBundled?: () => Promise<void>;
+  /** カスタム skill 追加 (admin が SkillAddModal で投入) */
+  onAddCustomSkill?: (input: CustomSkillInput) => Promise<void>;
+  /** Agent 公開トグル切替 (Anthropic POST /v1/agents/{id} で metadata.visibility 更新) */
+  onToggleVisibility?: (agent: AgentRecord, next: 'public' | 'private') => Promise<void>;
 }
 
-export function SettingsView({ onClose, onPluginConfigClick }: SettingsViewProps): JSX.Element {
+export function SettingsView({
+  onClose,
+  onPluginConfigClick,
+  bundledSkills,
+  onSyncBundled,
+  onAddCustomSkill,
+  onToggleVisibility,
+}: SettingsViewProps): JSX.Element {
   const [section, setSection] = useState<SettingsSection>('agents');
 
   return (
@@ -58,8 +76,16 @@ export function SettingsView({ onClose, onPluginConfigClick }: SettingsViewProps
           onPluginConfigClick={onPluginConfigClick}
         />
         <div className="flex-1 overflow-y-auto">
-          {section === 'agents' && <AgentsListPane />}
-          {section === 'skills' && <SkillsPane />}
+          {section === 'agents' && (
+            <AgentsListPane {...(onToggleVisibility ? { onToggleVisibility } : {})} />
+          )}
+          {section === 'skills' && (
+            <SkillsPane
+              {...(bundledSkills ? { bundledSkills } : {})}
+              {...(onSyncBundled ? { onSyncBundled } : {})}
+              {...(onAddCustomSkill ? { onAddCustomSkill } : {})}
+            />
+          )}
           {section === 'mcp' && <MCPPanePlaceholder />}
         </div>
       </div>
