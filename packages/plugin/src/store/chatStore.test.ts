@@ -130,6 +130,82 @@ describe('chatStore', () => {
       useChatStore.getState().setView('history');
       expect(useChatStore.getState().view).toBe('history');
     });
+
+    it("setView で settings に切り替えられる (Customizer wedge V1)", () => {
+      useChatStore.getState().setView('settings');
+      expect(useChatStore.getState().view).toBe('settings');
+    });
+  });
+
+  describe('Customizer wedge V1 — Agent / Memory / Workflow state', () => {
+    it('初期値: currentAgentId=null / builtInAgents=[] / memoryEnabled=false / workflowHistory 空', () => {
+      const s = useChatStore.getState();
+      expect(s.currentAgentId).toBeNull();
+      expect(s.builtInAgents).toEqual([]);
+      expect(s.memoryEnabled).toBe(false);
+      expect(s.workflowHistory.size).toBe(0);
+    });
+
+    it('setCurrentAgentId で Agent ID を保存', () => {
+      useChatStore.getState().setCurrentAgentId('agent_xyz');
+      expect(useChatStore.getState().currentAgentId).toBe('agent_xyz');
+    });
+
+    it('setBuiltInAgents で 3 variant を一括セット', () => {
+      const agents = [
+        {
+          id: 'agent_biz',
+          name: '業務エージェント',
+          model: 'sonnet' as const,
+          modelLabel: 'SONNET' as const,
+          description: 'biz',
+          purpose: 'business' as const,
+          iconKind: 'biz' as const,
+          iconColor: 'accentSoft' as const,
+          visibility: 'public' as const,
+          isDefault: false,
+          source: 'builtin' as const,
+        },
+      ];
+      useChatStore.getState().setBuiltInAgents(agents);
+      expect(useChatStore.getState().builtInAgents).toHaveLength(1);
+      expect(useChatStore.getState().builtInAgents[0]?.id).toBe('agent_biz');
+    });
+
+    it('setMemoryEnabled で boolean を切替 (V1 は呼ばれないが API として動く)', () => {
+      useChatStore.getState().setMemoryEnabled(true);
+      expect(useChatStore.getState().memoryEnabled).toBe(true);
+    });
+
+    it('saveWorkflowSnapshot は新規 artifactId で保存', () => {
+      useChatStore.getState().saveWorkflowSnapshot('art_1', 'old js content');
+      expect(useChatStore.getState().workflowHistory.get('art_1')).toBe('old js content');
+    });
+
+    it('saveWorkflowSnapshot は既存の同 artifactId を上書きしない (最古を保持)', () => {
+      useChatStore.getState().saveWorkflowSnapshot('art_1', 'first');
+      useChatStore.getState().saveWorkflowSnapshot('art_1', 'second');
+      expect(useChatStore.getState().workflowHistory.get('art_1')).toBe('first');
+    });
+
+    it('clearWorkflowSnapshot で削除', () => {
+      useChatStore.getState().saveWorkflowSnapshot('art_1', 'js');
+      useChatStore.getState().clearWorkflowSnapshot('art_1');
+      expect(useChatStore.getState().workflowHistory.has('art_1')).toBe(false);
+    });
+
+    it('reset で wedge state も初期化', () => {
+      useChatStore.getState().setCurrentAgentId('agent_xyz');
+      useChatStore.getState().setMemoryEnabled(true);
+      useChatStore.getState().saveWorkflowSnapshot('art_1', 'js');
+      useChatStore.getState().reset();
+
+      const s = useChatStore.getState();
+      expect(s.currentAgentId).toBeNull();
+      expect(s.builtInAgents).toEqual([]);
+      expect(s.memoryEnabled).toBe(false);
+      expect(s.workflowHistory.size).toBe(0);
+    });
   });
 
   describe('startNewConversation', () => {

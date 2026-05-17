@@ -7,6 +7,7 @@ import { create } from 'zustand';
 
 import { binaryArtifactIdFromFileId } from '../core/artifacts/types';
 
+import type { AgentRecord } from '../core/bootstrap/agentTypes';
 import type { Artifact, CreateArtifactInput } from '../core/artifacts/types';
 
 export interface BinaryArtifactInput {
@@ -20,8 +21,13 @@ import type { ChatMessage, ToolMessage } from '../desktop/components/MessageList
 
 export type ChatStatus = 'idle' | 'bootstrapping' | 'ready' | 'error';
 
-/** パネル内の表示モード。chat = 会話画面 / history = 過去 Session 一覧 */
-export type ChatView = 'chat' | 'history';
+/**
+ * パネル内の表示モード。
+ * - 'chat': 会話画面 (Conversation View、既定)
+ * - 'history': 過去 Session 一覧
+ * - 'settings': admin 専用設定画面 (Customizer wedge V1 で追加、Section 4.1 参照)
+ */
+export type ChatView = 'chat' | 'history' | 'settings';
 
 /**
  * ユーザー (Vault + Environment) のバインディング状態。
@@ -92,6 +98,29 @@ export interface ChatState {
    */
   attachedFiles: AttachedFile[];
 
+  // ─── Customizer wedge V1 で追加 (Section 2.3) ─────────────────────────
+  /**
+   * 現在のターン用 Agent ID。Header プルダウンで切替されると新規会話の起点になる。
+   * resolveBuiltInAgents 完了後に builtInAgents から isDefault=true を初期値に設定。
+   */
+  currentAgentId: string | null;
+  /**
+   * Built-in 3 variant の解決結果 (resolveBuiltInAgents の戻り値を Plugin metadata 付きで整形)。
+   * Header の Agent プルダウン / Settings View の AgentsListPane で参照。
+   */
+  builtInAgents: AgentRecord[];
+  /**
+   * Memory トグル状態 (V1 は常に false に固定、UI placeholder)。
+   * V2 で機能化されると Session 作成時に (user × agent) Memory Store を attach する。
+   */
+  memoryEnabled: boolean;
+  /**
+   * Customizer wedge の rollback 用スナップショット (#20)。
+   * key = artifact.id、value = apply 直前の旧 customize.js コンテンツ。
+   * Plugin リロードで失われる (V1 制約、design.md Risk R3)。
+   */
+  workflowHistory: Map<string, string>;
+
   /** メッセージを末尾に追加 */
   addMessage: (msg: ChatMessage) => void;
   /**
@@ -130,6 +159,21 @@ export interface ChatState {
   setSessionTerminated: (terminated: boolean) => void;
   /** 表示モードを切替 */
   setView: (view: ChatView) => void;
+
+  // ─── Customizer wedge V1 setter ───────────────────────────────────────
+  /** Header プルダウンで Agent を切替 (呼出側で startNewConversation も呼ぶ) */
+  setCurrentAgentId: (id: string | null) => void;
+  /** resolveBuiltInAgents 完了時に 3 variant をまとめてセット */
+  setBuiltInAgents: (agents: AgentRecord[]) => void;
+  /** Memory トグル切替 (V1 は呼び出されないが API として用意) */
+  setMemoryEnabled: (enabled: boolean) => void;
+  /**
+   * apply 直前の customize.js を snapshot 保存 (rollback 用)。
+   * 同じ artifactId で再 apply するときは上書きしない (= 最古のスナップショットを保持) — TODO: 要検討
+   */
+  saveWorkflowSnapshot: (artifactId: string, prevJs: string) => void;
+  /** rollback 完了後にスナップショットを破棄 */
+  clearWorkflowSnapshot: (artifactId: string) => void;
 
   /**
    * Artifact を新規追加 or 同 id 更新する。
@@ -193,6 +237,11 @@ const INITIAL_STATE = {
   activeArtifactId: null as string | null,
   pendingCustomToolUseIds: new Map<string, string>(),
   attachedFiles: [] as AttachedFile[],
+  // Customizer wedge V1
+  currentAgentId: null as string | null,
+  builtInAgents: [] as AgentRecord[],
+  memoryEnabled: false,
+  workflowHistory: new Map<string, string>(),
 };
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -268,6 +317,29 @@ export const useChatStore = create<ChatState>((set) => ({
   setSessionTerminated: (terminated) => set({ sessionTerminated: terminated }),
 
   setView: (view) => set({ view }),
+
+  setCurrentAgentId: (id) => set({ currentAgentId: id }),
+
+  setBuiltInAgents: (agents) => set({ builtInAgents: agents }),
+
+  setMemoryEnabled: (enabled) => set({ memoryEnabled: enabled }),
+
+  saveWorkflowSnapshot: (artifactId, prevJs) =>
+    set((s) => {
+      // 既存スナップショットがあれば最古を保持 (= 上書きしない)
+      if (s.workflowHistory.has(artifactId)) return s;
+      const next = new Map(s.workflowHistory);
+      next.set(artifactId, prevJs);
+      return { workflowHistory: next };
+    }),
+
+  clearWorkflowSnapshot: (artifactId) =>
+    set((s) => {
+      if (!s.workflowHistory.has(artifactId)) return s;
+      const next = new Map(s.workflowHistory);
+      next.delete(artifactId);
+      return { workflowHistory: next };
+    }),
 
   upsertArtifact: (input) => {
     const now = Date.now();
@@ -396,6 +468,8 @@ export const useChatStore = create<ChatState>((set) => ({
       artifacts: new Map(),
       pendingCustomToolUseIds: new Map(),
       attachedFiles: [],
+      builtInAgents: [],
+      workflowHistory: new Map(),
     }),
 
   resetConversation: () => set({ messages: [] }),
