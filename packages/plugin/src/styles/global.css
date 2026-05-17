@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,10 +9,13 @@
  *
  * light / dark は `.cowork-agent-root` に `data-theme` 属性で切替
  * 詳細は docs/functional-design.md §5.5 参照
+ *
+ * フォント: Noto Sans JP (日本語) + JetBrains Mono (コード / バッジ)
+ *   docs/design-handoff/customizer-wedge/project/styles.css と整合
  */
 
 .cowork-agent-root {
-  /* light theme (既定) */
+  /* light theme (既定) — Customizer wedge V1 design 案 C (ティール基調) に揃える */
   --cw-bg: #faf8f3;
   --cw-panel: rgba(255, 255, 255, 0.85);
   --cw-border: rgba(35, 18, 0, 0.1);
@@ -19,15 +24,15 @@
   --cw-subtle: #a89d85;
   --cw-card: #ffffff;
   --cw-card-border: rgba(35, 18, 0, 0.08);
-  --cw-card-hi: rgba(255, 191, 0, 0.06);
+  --cw-card-hi: rgba(13, 148, 136, 0.05); /* ティール薄め (旧: 黄 0.06) */
   --cw-accent: #0d9488;
   --cw-accent-soft: rgba(13, 148, 136, 0.1);
   --cw-user: rgba(13, 148, 136, 0.08);
   --cw-user-border: rgba(13, 148, 136, 0.25);
   --cw-warn: #b45309;
   --cw-warn-soft: #fef3c7;
-  --cw-ok: #8a6400;
-  --cw-ok-soft: #fff4c9;
+  --cw-ok: #22c55e; /* 緑 (旧: 金茶 #8a6400) — WorkflowFooter ステータスドット用 */
+  --cw-ok-soft: rgba(34, 197, 94, 0.12);
 }
 
 .cowork-agent-root[data-theme='dark'] {
@@ -39,24 +44,26 @@
   --cw-subtle: #6b6353;
   --cw-card: rgba(42, 34, 23, 0.85);
   --cw-card-border: rgba(255, 191, 0, 0.12);
-  --cw-card-hi: rgba(255, 191, 0, 0.05);
+  --cw-card-hi: rgba(13, 148, 136, 0.08); /* ティール薄め */
   --cw-warn: #f59e0b;
   --cw-warn-soft: rgba(245, 158, 11, 0.13);
-  --cw-ok: #ffbf00;
-  --cw-ok-soft: rgba(255, 191, 0, 0.13);
+  --cw-ok: #22c55e;
+  --cw-ok-soft: rgba(34, 197, 94, 0.15);
 }
 
 /* kintone 本体の UI に漏れないよう、ルートでスコープ */
 .cowork-agent-root {
   color: var(--cw-text);
   background-color: var(--cw-bg);
+  /* design ハンドオフ準拠の日本語フォント (Noto Sans JP 優先) */
   font-family:
-    -apple-system,
-    BlinkMacSystemFont,
+    'Noto Sans JP',
     'Hiragino Kaku Gothic ProN',
+    'Hiragino Sans',
     'Yu Gothic UI',
     Meiryo,
     sans-serif;
+  --cw-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   box-sizing: border-box;
 }
 

@@ -38,15 +38,16 @@ const config: Config = {
         'ok-soft': 'var(--cw-ok-soft)',
       },
       fontFamily: {
+        // design ハンドオフ (variant-rich.jsx / styles.css) に準拠
         sans: [
-          '-apple-system',
-          'BlinkMacSystemFont',
+          '"Noto Sans JP"',
           '"Hiragino Kaku Gothic ProN"',
+          '"Hiragino Sans"',
           '"Yu Gothic UI"',
           'Meiryo',
           'sans-serif',
         ],
-        mono: ['"JetBrains Mono"', '"SF Mono"', 'Consolas', 'monospace'],
+        mono: ['"JetBrains Mono"', '"SF Mono"', 'Menlo', 'Consolas', 'monospace'],
       },
       borderRadius: {
         bubble: '16px 16px 4px 16px', // user バブル (右下のみ尖る)
