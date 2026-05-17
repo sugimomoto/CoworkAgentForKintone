@@ -6,6 +6,7 @@
   "license": "MIT",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "tokens:build": "node scripts/build-tokens.mjs",
     "keygen": "node scripts/keygen.mjs",
     "pack": "mkdir -p dist && cli-kintone plugin pack --input plugin/manifest.json --private-key .keys/plugin.ppk --output dist/plugin.zip",
     "upload": "node --env-file=../../.env scripts/upload.mjs",
@@ -20,7 +21,10 @@
     "e2e": "node --env-file=../../.env scripts/e2e.mjs",
     "e2e:ui": "COWORK_E2E_UI=1 node --env-file=../../.env scripts/e2e.mjs",
     "e2e:install": "playwright install --with-deps chromium",
-    "snapshot": "node --env-file=../../.env scripts/snapshot-wedge.mjs"
+    "snapshot": "node --env-file=../../.env scripts/snapshot-wedge.mjs",
+    "snapshot:handoff": "node scripts/snapshot-handoff.mjs",
+    "snapshot:diff": "node scripts/snapshot-diff.mjs",
+    "snapshot:all": "pnpm run snapshot && pnpm run snapshot:handoff && pnpm run snapshot:diff"
   },
   "dependencies": {
     "clsx": "^2.1.1",

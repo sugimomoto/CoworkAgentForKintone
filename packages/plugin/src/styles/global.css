@@ -1,86 +1,31 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/*
+ * Cowork Agent for kintone — グローバル CSS
+ *
+ * デザイントークンは別ファイル (./tokens.css、build-tokens.mjs で生成) に分離。
+ * 本ファイルは Tailwind layer + reset + アニメーション定義に専念する。
+ */
+
+/* デザイントークン (tokens.json から生成) */
+@import './tokens.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/*
- * Cowork Agent for kintone — デザイントークン (CSS カスタムプロパティ)
- *
- * light / dark は `.cowork-agent-root` に `data-theme` 属性で切替
- * 詳細は docs/functional-design.md §5.5 参照
- *
- * フォント: Noto Sans JP (日本語) + JetBrains Mono (コード / バッジ)
- *   docs/design-handoff/customizer-wedge/project/styles.css と整合
- */
-
-.cowork-agent-root {
-  /* light theme (既定) — Customizer wedge V1 design 案 C (ティール基調) に揃える */
-  --cw-bg: #faf8f3;
-  --cw-panel: rgba(255, 255, 255, 0.85);
-  --cw-border: rgba(35, 18, 0, 0.1);
-  --cw-text: #231200;
-  --cw-muted: #6b5f4a;
-  --cw-subtle: #a89d85;
-  --cw-card: #ffffff;
-  --cw-card-border: rgba(35, 18, 0, 0.08);
-  --cw-card-hi: rgba(13, 148, 136, 0.05); /* ティール薄め (旧: 黄 0.06) */
-  --cw-accent: #0d9488;
-  --cw-accent-soft: rgba(13, 148, 136, 0.1);
-  --cw-user: rgba(13, 148, 136, 0.08);
-  --cw-user-border: rgba(13, 148, 136, 0.25);
-  --cw-warn: #b45309;
-  --cw-warn-soft: #fef3c7;
-  --cw-ok: #22c55e; /* 緑 (旧: 金茶 #8a6400) — WorkflowFooter ステータスドット用 */
-  --cw-ok-soft: rgba(34, 197, 94, 0.12);
-}
-
-.cowork-agent-root[data-theme='dark'] {
-  --cw-bg: #1a160f;
-  --cw-panel: rgba(34, 28, 19, 0.75);
-  --cw-border: rgba(255, 191, 0, 0.12);
-  --cw-text: #ede4d0;
-  --cw-muted: #a89d85;
-  --cw-subtle: #6b6353;
-  --cw-card: rgba(42, 34, 23, 0.85);
-  --cw-card-border: rgba(255, 191, 0, 0.12);
-  --cw-card-hi: rgba(13, 148, 136, 0.08); /* ティール薄め */
-  --cw-warn: #f59e0b;
-  --cw-warn-soft: rgba(245, 158, 11, 0.13);
-  --cw-ok: #22c55e;
-  --cw-ok-soft: rgba(34, 197, 94, 0.15);
-}
-
 /* kintone 本体の UI に漏れないよう、ルートでスコープ */
 .cowork-agent-root {
   color: var(--cw-text);
   background-color: var(--cw-bg);
-  /* design ハンドオフ準拠の日本語フォント (Noto Sans JP 優先) */
-  font-family:
-    'Noto Sans JP',
-    'Hiragino Kaku Gothic ProN',
-    'Hiragino Sans',
-    'Yu Gothic UI',
-    Meiryo,
-    sans-serif;
-  /*
-   * design ハンドオフ (variant-rich.jsx) は body font-size 13px / line-height 1.4
-   * (各 component で個別 leading-tight 指定が多く、ベースは詰めめ) 前提。
-   * kintone host (デフォルト 14px / 1.6 等) を継承すると全体がふかふかになる。
-   */
-  font-size: 13px;
-  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  --cw-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   box-sizing: border-box;
 }
 
 /*
  * Tailwind preflight OFF の影響で全要素の line-height / margin 初期値が kintone host
- * から継承される。design ハンドオフは line-height 1.5 + margin 0 が前提なので、
- * .cowork-agent-root 配下の全要素に明示的に line-height を継承させる。
+ * から継承される。design ハンドオフは line-height 1.4 が前提なので、.cowork-agent-root
+ * 配下の全要素に line-height を継承させる (kintone host の漏れ防止)。
  */
 .cowork-agent-root *,
 .cowork-agent-root *::before,
@@ -171,7 +116,7 @@
 .cowork-agent-root code,
 .cowork-agent-root kbd,
 .cowork-agent-root samp {
-  font-family: var(--cw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--cw-font-mono);
   font-size: 1em;
 }
 

@@ -25,7 +25,7 @@ const USERNAME = process.env['KINTONE_USERNAME'];
 const PASSWORD = process.env['KINTONE_PASSWORD'];
 const APP_ID = process.env['KINTONE_TEST_APP_ID'];
 const AUTH_FILE = resolve(process.cwd(), '.auth/kintone.json');
-const OUT_DIR = resolve(process.cwd(), 'dist/snapshots');
+const OUT_DIR = resolve(process.cwd(), 'dist/snapshots/impl');
 
 if (!BASE_URL || !USERNAME || !PASSWORD || !APP_ID) {
   console.error('❌ KINTONE_BASE_URL / KINTONE_USERNAME / KINTONE_PASSWORD / KINTONE_TEST_APP_ID が必要です');

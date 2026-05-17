@@ -21,6 +21,19 @@ const JS_OUT_DIR = resolve('plugin/js');
 const CSS_OUT_DIR = resolve('plugin/css');
 
 // ----- 1. manifest.json の build 番号を +1 ---------------------------------
+/**
+ * docs/design-handoff/customizer-wedge/tokens.json → src/styles/tokens.css を再生成。
+ * 詳細は scripts/build-tokens.mjs を参照。
+ */
+function buildTokens() {
+  const result = spawnSync(process.execPath, [resolve('scripts/build-tokens.mjs')], {
+    stdio: 'inherit',
+  });
+  if (result.status !== 0) {
+    throw new Error('build-tokens.mjs が失敗しました');
+  }
+}
+
 function bumpBuildNumber() {
   const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf-8'));
   const old = Number(manifest.version);
@@ -248,6 +261,10 @@ async function main() {
   // Worker のバージョンは Plugin の build 番号 + ビルド時刻 (ISO8601 秒精度)
   const buildTime = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
   const buildVersion = `plugin.${pluginBuild}+${buildTime}`;
+
+  // tokens.css を再生成 (docs/design-handoff/customizer-wedge/tokens.json から)。
+  // CSS bundle の前に走らせる必要がある (global.css が import するため)。
+  buildTokens();
 
   // Worker バンドル → Plugin JS の順序依存はない (Worker の出力は Plugin の generated/ に
   // 書き出され、Plugin の bundleJs はそれを読みに行く) — ので bundleWorkerAsString が

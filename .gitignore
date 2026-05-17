@@ -41,6 +41,9 @@ packages/plugin/plugin/js/
 packages/plugin/plugin/css/
 packages/plugin/src/generated/
 
+# build-tokens.mjs で再生成される CSS 変数 (源泉は docs/design-handoff/.../tokens.json)
+packages/plugin/src/styles/tokens.css
+
 # Playwright
 packages/plugin/.auth/
 packages/plugin/playwright-report/
