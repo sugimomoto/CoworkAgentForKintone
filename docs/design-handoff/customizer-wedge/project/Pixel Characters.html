@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Archibo — Clawd-inspired Pixel Robot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #faf6ea; }
+    body {
+      font-family: 'Noto Sans JP', 'Inter', sans-serif;
+      color: #231200;
+    }
+    .container { max-width: 1180px; margin: 0 auto; padding: 56px 32px 80px; }
+    h1 {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 22px; font-weight: 400; margin: 0 0 14px;
+      line-height: 1.4;
+    }
+    .lede {
+      font-size: 14px; color: #6b5f4a; max-width: 680px;
+      line-height: 1.7; margin-bottom: 36px;
+    }
+    .lede b { color: #231200; }
+    .palette-row {
+      display: flex; gap: 14px; align-items: center;
+      margin-bottom: 48px; font-size: 11px; color: #6b5f4a;
+    }
+    .swatch {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px 6px 6px; border-radius: 999px;
+      background: #fff; border: 1px solid rgba(35,18,0,0.10);
+    }
+    .swatch-dot {
+      width: 18px; height: 18px; border-radius: 50%;
+    }
+    .swatch-hex {
+      font-family: 'JetBrains Mono', monospace; font-size: 10.5px;
+      color: #231200;
+    }
+
+    h2 {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 13px; font-weight: 400; margin: 48px 0 6px;
+    }
+    h2 + .sub { font-size: 13px; color: #6b5f4a; margin: 0 0 24px; }
+
+    /* palette variation rows */
+    .palette-grid {
+      display: grid;
+      grid-template-columns: 220px repeat(5, 1fr);
+      gap: 1px;
+      background: rgba(35,18,0,0.08);
+      border: 1px solid rgba(35,18,0,0.08);
+      border-radius: 14px; overflow: hidden;
+    }
+    .palette-grid > div {
+      background: #fff; padding: 20px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .palette-head {
+      background: #f3ead6 !important;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.4px;
+      display: flex !important; flex-direction: column; align-items: flex-start !important;
+      gap: 2px; padding: 14px 16px !important;
+    }
+    .palette-head.intro {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 9px; font-weight: 400;
+    }
+    .palette-head .state-desc {
+      font-size: 10px; font-weight: 400; color: #6b5f4a;
+    }
+    .palette-meta {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      justify-content: center !important;
+      gap: 8px; background: #fdfaf0 !important;
+    }
+    .palette-name {
+      font-family: 'Press Start 2P', monospace; font-size: 11px;
+    }
+    .palette-chips {
+      display: flex; gap: 4px; margin-top: 2px;
+    }
+    .palette-chip {
+      width: 16px; height: 16px; border-radius: 4px;
+      border: 1px solid rgba(35,18,0,0.15);
+    }
+    .palette-note {
+      font-size: 10.5px; color: #6b5f4a; line-height: 1.5;
+    }
+
+    /* size demo */
+    .size-row {
+      display: flex; gap: 28px; align-items: flex-end;
+      padding: 24px; background: #fff;
+      border: 1px solid rgba(35,18,0,0.10); border-radius: 14px;
+    }
+    .size-cell {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .size-cell .label {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6b5f4a;
+    }
+
+    /* chat context preview */
+    .chat-preview {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px;
+    }
+    .chat-card {
+      background: #fff; border: 1px solid rgba(35,18,0,0.10);
+      border-radius: 12px; padding: 14px;
+    }
+    .chat-card-head {
+      display: flex; align-items: center; gap: 10px;
+      padding-bottom: 12px; margin-bottom: 12px;
+      border-bottom: 1px solid rgba(35,18,0,0.08);
+    }
+    .chat-card-meta { flex: 1; }
+    .chat-card-name { font-size: 13px; font-weight: 600; }
+    .chat-card-status { font-size: 10px; color: #a89d85; }
+    .chat-card-pill {
+      font-size: 10px; color: #0d9488; background: #0d948814;
+      padding: 1px 6px; border-radius: 4px; font-weight: 600;
+    }
+    .chat-card-bubble {
+      font-size: 11.5px; color: #231200; line-height: 1.55;
+      background: #faf6ea; border-radius: 8px; padding: 10px 12px;
+    }
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    // ─── Minimal pixel renderer ──────────────────────────────
+    function PixelSprite({ grid, palette, scale = 6 }) {
+      const canvasRef = React.useRef(null);
+      const rows = grid.trim().split('\n');
+      const h = rows.length;
+      const w = Math.max(...rows.map((r) => r.length));
+      React.useEffect(() => {
+        const cv = canvasRef.current;
+        if (!cv) return;
+        cv.width = w * scale; cv.height = h * scale;
+        const ctx = cv.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        for (let y = 0; y < h; y++) {
+          const row = rows[y];
+          for (let x = 0; x < row.length; x++) {
+            const ch = row[x];
+            const col = palette[ch];
+            if (!col) continue;
+            ctx.fillStyle = col;
+            ctx.fillRect(x * scale, y * scale, scale, scale);
+          }
+        }
+      }, [grid, palette, scale]);
+      return <canvas ref={canvasRef} style={{
+        display: 'block', imageRendering: 'pixelated',
+        width: w * scale, height: h * scale,
+      }} />;
+    }
+
+    // ─── Archibo sprite sheet (2-color base + optional accent) ─
+    //   '.' transparent
+    //   '#' dark (primary)
+    //   'o' fill (secondary)
+    //   '*' accent (optional 3rd color — used sparingly for "eye" state)
+    //
+    // Silhouette: boxy robot torso with a monitor-face, short antenna,
+    // two arms (one holding clipboard), stubby legs. 20 wide × 22 tall.
+
+    const ARCHIBO_IDLE = `
+........####........
+........#..#........
+........####........
+........#..#........
+.....##########.....
+....#oooooooooo#....
+....#o########o#....
+....#o#oo**oo#o#....
+....#o#oo**oo#o#....
+....#o########o#....
+....#oooooooooo#....
+..###oooooooooo###..
+..#o#oooooooooo#o#..
+..#o#oooooooooo#o#..
+..###oooooooooo###..
+....##########.....
+....#oo#oo#oo#......
+....#oo#oo#oo#......
+....##############..
+....#oo####oo##oo#..
+....#oo#..#oo#..#...
+....####..######....`;
+
+    // thinking — eye becomes "..." (dots across monitor)
+    const ARCHIBO_THINKING = `
+........####........
+........#..#........
+........####........
+........#..#........
+.....##########.....
+....#oooooooooo#....
+....#o########o#....
+....#o#oooooooo#o#..
+....#o#o*.*.*.o#o#..
+....#o##########o#..
+....#oooooooooo#....
+..###oooooooooo###..
+..#o#oooooooooo#o#..
+..#o#oooooooooo#o#..
+..###oooooooooo###..
+....##########.....
+....#oo#oo#oo#......
+....#oo#oo#oo#......
+....##############..
+....#oo####oo##oo#..
+....#oo#..#oo#..#...
+....####..######....`;
+
+    // working — eye becomes a data stream symbol; left hand holds clipboard
+    const ARCHIBO_WORKING = `
+........####........
+........#..#........
+........####........
+........#oo#........
+.....##########.....
+....#oooooooooo#....
+....#o########o#....
+....#o#o*oo*o#o#....
+....#o#oo**oo#o#....
+....#o########o#....
+....#oooooooooo#....
+.####ooooooooooo####
+.#oo#oooooooooo#**#.
+.#oo#oooooooooo#**#.
+.####oooooooooo#**#.
+....###########**#..
+....#oo#oo#oo#####..
+....#oo#oo#oo#......
+....##############..
+....#oo####oo##oo#..
+....#oo#..#oo#..#...
+....####..######....`;
+
+    // waiting — eye becomes "!" / yellow alert; arms raised slightly
+    const ARCHIBO_WAITING = `
+........####........
+........#**#........
+........####........
+........#**#........
+.....##########.....
+....#oooooooooo#....
+....#o########o#....
+....#o#oo**oo#o#....
+....#o#oo**oo#o#....
+....#o#oo..oo#o#....
+....#o########o#....
+..###oooooooooo###..
+..#o#oooooooooo#o#..
+..#*#oooooooooo#*#..
+..###oooooooooo###..
+....##########.....
+....#oo#oo#oo#......
+....#oo#oo#oo#......
+....##############..
+....#oo####oo##oo#..
+....#oo#..#oo#..#...
+....####..######....`;
+
+    // done — eye becomes smile curve; small check mark at corner
+    const ARCHIBO_DONE = `
+........####........
+........#oo#........
+........####........
+........#..#........
+.....##########.....
+....#oooooooooo#....
+....#o########o#....
+....#o#oo..oo#o#....
+....#o#oo..oo#o#....
+....#o#o****o#o#....
+....#o########o#....
+..###oooooooooo###..
+..#o#oooooooooo#o#..
+..#o#oooooooooo#o#..
+..###oooooooooo###..
+....##########.....
+....#oo#oo#oo#......
+....#oo#oo#oo#......
+....##############..
+....#oo####oo##oo#..
+....#oo#..#oo#..#...
+....####..######....`;
+
+    const SPRITES = {
+      idle:     ARCHIBO_IDLE,
+      thinking: ARCHIBO_THINKING,
+      working:  ARCHIBO_WORKING,
+      waiting:  ARCHIBO_WAITING,
+      done:     ARCHIBO_DONE,
+    };
+
+    const STATES = [
+      { id: 'idle',     label: '待機',     desc: 'メッセージを待っている' },
+      { id: 'thinking', label: '思考中',   desc: 'プランを組み立て中' },
+      { id: 'working',  label: '実行中',   desc: 'ツール呼び出し / 集計' },
+      { id: 'waiting',  label: '承認待ち', desc: '破壊的操作のHITL中' },
+      { id: 'done',     label: '完了',     desc: '結果が返ってきた' },
+    ];
+
+    // ─── 5 palette variations (2–3 colors each) ───
+    // Each maps '.', '#', 'o', '*' to the brand palette.
+    // '#' = primary dark outline  /  'o' = fill  /  '*' = accent (3rd color, used only for eye state)
+    const PALETTES = [
+      {
+        id: 'charcoal-cream',
+        name: 'Charcoal × Cream',
+        note: '2色のみ。輪郭が茶色、内部はクリーム。kintoneの雲ロゴに最も近い落ち着いた組み合わせ。',
+        map: { '.': null, '#': '#231200', 'o': '#faf2dc', '*': '#231200' },
+        chips: ['#231200', '#faf2dc'],
+      },
+      {
+        id: 'amber-dark',
+        name: 'Amber × Charcoal',
+        note: 'kintoneのゴールド #ffbf00 を主役に。暗背景で最も映える。',
+        map: { '.': null, '#': '#231200', 'o': '#ffbf00', '*': '#231200' },
+        chips: ['#ffbf00', '#231200'],
+      },
+      {
+        id: 'amber-charcoal-teal',
+        name: 'Amber × Charcoal + Teal eye',
+        note: '3色。目だけティール#0d9488で "起動している感" を演出。おすすめ。',
+        map: { '.': null, '#': '#231200', 'o': '#ffbf00', '*': '#0d9488' },
+        chips: ['#ffbf00', '#231200', '#0d9488'],
+      },
+      {
+        id: 'cream-teal',
+        name: 'Cream × Teal',
+        note: 'ライト面で沈まない明るい配色。Rich variantのアクセントと完全一致。',
+        map: { '.': null, '#': '#0d9488', 'o': '#faf2dc', '*': '#ffbf00' },
+        chips: ['#0d9488', '#faf2dc', '#ffbf00'],
+      },
+      {
+        id: 'mono-warm',
+        name: 'Warm Mono',
+        note: 'ブラウン一色 + 透過のみ。静謐・業務向け。印刷にも強い。',
+        map: { '.': null, '#': '#231200', 'o': '#6b5f4a', '*': '#231200' },
+        chips: ['#231200', '#6b5f4a'],
+      },
+    ];
+
+    function App() {
+      const [pickedId, setPickedId] = React.useState('amber-charcoal-teal');
+      const picked = PALETTES.find((p) => p.id === pickedId);
+
+      return (
+        <div className="container">
+          <h1>Archibo · 2-3 color palette</h1>
+          <p className="lede">
+            Clawd のように <b>色数を絞った配色</b> で司書ロボット「Archibo」を展開します。
+            シルエットは共通、目の表情（●●／…／▶／!／◡）だけで5つの状態を描き分けます。
+            基本は2色、3色目を使う場合は「目（*）」のみに当ててアクセントにします。
+          </p>
+
+          <div className="palette-row">
+            <span>共通カラーベース:</span>
+            <span className="swatch"><span className="swatch-dot" style={{ background: '#ffbf00' }}></span><span className="swatch-hex">#ffbf00</span></span>
+            <span className="swatch"><span className="swatch-dot" style={{ background: '#231200' }}></span><span className="swatch-hex">#231200</span></span>
+            <span className="swatch"><span className="swatch-dot" style={{ background: '#0d9488' }}></span><span className="swatch-hex">#0d9488</span></span>
+            <span className="swatch"><span className="swatch-dot" style={{ background: '#faf2dc', border: '1px solid rgba(0,0,0,0.1)' }}></span><span className="swatch-hex">#faf2dc</span></span>
+          </div>
+
+          <h2>5 Palettes × 5 States</h2>
+          <p className="sub">同一シルエット・同一状態セットを、異なる2〜3色パレットで5通り。</p>
+
+          <div className="palette-grid">
+            <div className="palette-head intro">PALETTE × STATE</div>
+            {STATES.map((s) => (
+              <div key={s.id} className="palette-head">
+                <span style={{ fontSize: 12 }}>{s.label}</span>
+                <span className="state-desc">{s.desc}</span>
+              </div>
+            ))}
+            {PALETTES.map((p) => (
+              <React.Fragment key={p.id}>
+                <div className="palette-meta">
+                  <div className="palette-name">{p.name}</div>
+                  <div className="palette-chips">
+                    {p.chips.map((c) => (
+                      <div key={c} className="palette-chip" style={{ background: c }} />
+                    ))}
+                  </div>
+                  <div className="palette-note">{p.note}</div>
+                </div>
+                {STATES.map((s) => (
+                  <div key={s.id}>
+                    <PixelSprite grid={SPRITES[s.id]} palette={p.map} scale={5} />
+                  </div>
+                ))}
+              </React.Fragment>
+            ))}
+          </div>
+
+          <h2>Size demo</h2>
+          <p className="sub">チャットパネル内での実サイズ感。小さくても判読できるかの確認。</p>
+          <div className="size-row">
+            {[1, 2, 3, 4, 6].map((scale) => (
+              <div key={scale} className="size-cell">
+                <PixelSprite grid={SPRITES.idle} palette={picked.map} scale={scale} />
+                <span className="label">{scale}×</span>
+              </div>
+            ))}
+          </div>
+
+          <h2>In chat context · {picked.name}</h2>
+          <p className="sub">
+            パレット切替: {PALETTES.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setPickedId(p.id)}
+                style={{
+                  fontFamily: 'Press Start 2P, monospace',
+                  fontSize: 8, padding: '6px 10px', marginRight: 6,
+                  border: '1px solid rgba(35,18,0,0.10)',
+                  borderRadius: 6, cursor: 'pointer',
+                  background: pickedId === p.id ? '#231200' : '#fff',
+                  color: pickedId === p.id ? '#ffbf00' : '#231200',
+                }}
+              >{p.name}</button>
+            ))}
+          </p>
+
+          <div className="chat-preview">
+            {STATES.map((s) => (
+              <div key={s.id} className="chat-card">
+                <div className="chat-card-head">
+                  <PixelSprite grid={SPRITES[s.id]} palette={picked.map} scale={2} />
+                  <div className="chat-card-meta">
+                    <div className="chat-card-name">Archibo</div>
+                    <div className="chat-card-status">{s.label}</div>
+                  </div>
+                  <span className="chat-card-pill">{s.id}</span>
+                </div>
+                <div className="chat-card-bubble">{sampleLine(s.id)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function sampleLine(state) {
+      switch (state) {
+        case 'idle':     return 'こんにちは。今日はどんな作業をお手伝いしましょうか？';
+        case 'thinking': return '関連アプリを確認しています…';
+        case 'working':  return 'レコード取得中（342件）。集計まであと少しです。';
+        case 'waiting':  return '47件を更新します。破壊的操作のため承認をお願いします。';
+        case 'done':     return '集計完了。担当者ごとの結果をお見せします。';
+        default:         return '';
+      }
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

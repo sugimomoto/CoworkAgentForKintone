@@ -1,8 +1,10 @@
 # プロダクト要求定義書 (Product Requirements Document)
 
 **プロダクト名**: Cowork Agent for kintone
-**バージョン**: 0.1 (MVP ドラフト)
-**最終更新日**: 2026-04-22
+**バージョン**: 0.2 (Customizer wedge 戦略追加)
+**最終更新日**: 2026-05-17
+
+> **2026-05-17 アップデート**: プロダクト初期ターゲットを「情シス・カスタマイザー」に定め、wedge 戦略を追加。詳細仕様は [.steering/20260517-customizer-wedge-design/](../.steering/20260517-customizer-wedge-design/) を一次ソースとし、本書は概要をリンクで案内する。V1 完了後に本書を全面的に永続化更新する予定。
 
 ---
 
@@ -24,11 +26,13 @@ Claude Managed Agents API を活用した「バックグラウンドで自律的
 
 ## 2. ターゲットユーザー
 
-| ペルソナ | 役割 | 期待する価値 |
-|----------|------|--------------|
-| **一般業務ユーザー** | 営業、人事、カスタマーサポート等で kintone を日常利用 | レコード操作の手間削減、自然言語での業務指示 |
-| **kintone 管理者** | 社内のアプリ設計・運用担当 | データメンテナンス効率化、一括処理の簡便化 |
-| **kintone 開発者 / パートナー** | JavaScript カスタマイズ・プラグイン開発者 | (フェーズ2以降) カスタマイズコード生成、アプリ設計支援 |
+| ペルソナ | 役割 | 期待する価値 | 戦略上の位置づけ |
+|----------|------|--------------|---------------|
+| **情シス・カスタマイザー** ⭐ | JavaScript カスタマイズ・プラグイン開発を担当する社内開発者 | カスタマイズ JS 生成 → preview → apply → rollback の wedge ループ完結 | **初期 wedge ターゲット** (差別化・GTM・最初のヘビーユーザー獲得の起点) |
+| **一般業務ユーザー** | 営業、人事、カスタマーサポート等で kintone を日常利用 | レコード操作の手間削減、自然言語での業務指示 | wedge 後の **broaden 対象** (MVP から提供継続) |
+| **kintone 管理者** (= Plugin 管理者) | 社内のアプリ設計・運用 + Plugin Config / Settings View での Agent / Skill キュレーション | 業務ユーザーと情シスの両方に最適化された Agent を提供 | **隠れペルソナ** (情シスと兼任ケース多) |
+
+> 初期 wedge ターゲットを情シス側に置く戦略の根拠 (支払い意思 / ユーザー深度 / 差別化 / コミュニティ) は [Issue #9 (umbrella)](https://github.com/sugimomoto/CoworkAgentForKintone/issues/9) および [.steering/20260517-customizer-wedge-design/requirements.md](../.steering/20260517-customizer-wedge-design/requirements.md) Section 2 に詳述。
 
 ---
 
@@ -77,15 +81,37 @@ Claude Managed Agents API を活用した「バックグラウンドで自律的
 | F-09 | ユーザー単位の会話セッション | ユーザーごとに全アプリ横断の単一セッションを維持 |
 | F-10 | プラグイン設定画面 | Anthropic API Key、Vault 登録用 kintone ログイン情報等の管理 UI |
 
-### 5.2 フェーズ 2 以降の候補(スコープ外)
+### 5.2 フェーズ 2 (V1 wedge MVP — 2026-05-17 戦略変更後)
 
-- **B. kintone カスタマイズ/開発支援**: アプリ設計、JS カスタマイズ生成、プラグイン開発支援
-- **C. ドキュメント生成**: 議事録、メール文面、レポート
-- **D. 外部 SaaS 連携**: 優先候補は **Salesforce / Gmail / Slack**
-- **E. 自律ワークフロー**: 複数ステップ業務自動化、定期実行、条件トリガー実行
-- **通知機能拡張**: Slack / MS Teams Webhook によるタスク完了通知
-- **モバイル対応**: スマートフォン版 kintone 画面対応
-- **認証方式拡張**: API トークン、OAuth 認証のサポート
+**ゴール**: 情シス・カスタマイザーが「カスタマイズ JS 生成 → 適用 → ロールバック」を会話だけで完結できる。
+
+| ID | 機能 | 関連 Issue |
+|----|------|-----------|
+| F-11 | **Built-in Agent 3 variant** (業務 / Customizer Opus / Customizer Sonnet) + Header プルダウン切替 | [#39](https://github.com/sugimomoto/CoworkAgentForKintone/issues/39) |
+| F-12 | **Chat Panel Settings View** (admin 専用、Agent 公開トグル / Skill 同期) | [#40](https://github.com/sugimomoto/CoworkAgentForKintone/issues/40) |
+| F-13 | **Plugin Config 縮小** (Skills 同期 UI を Chat Panel に完全移管) | [#41](https://github.com/sugimomoto/CoworkAgentForKintone/issues/41) |
+| F-14 | **Customizer Wedge ループ** (preview → apply → rollback の 5 状態 step bar + FileTree) | [#20](https://github.com/sugimomoto/CoworkAgentForKintone/issues/20) |
+| F-15 | **Custom Skills インフラ** (kintone-customize-js / kintone-plugin-development skill) | [#30](https://github.com/sugimomoto/CoworkAgentForKintone/issues/30) |
+
+詳細仕様: [.steering/20260517-customizer-wedge-design/](../.steering/20260517-customizer-wedge-design/) (requirements.md / design.md / tasklist.md)
+
+### 5.3 フェーズ 3 (V2) 以降の候補
+
+- **GitHub 連携** ([#17](https://github.com/sugimomoto/CoworkAgentForKintone/issues/17)): commit / PR / 履歴管理
+- **Agent 詳細編集 UI**: skill / tool ON-OFF + System Prompt 編集 (admin)
+- **追加 MCP Server 登録**: GitHub MCP / Slack MCP 等の Vault Credential 管理
+- **Memory ON/OFF トグル** ([#15 縮小](https://github.com/sugimomoto/CoworkAgentForKintone/issues/15)): Conversation View の (user × agent) auto-ensure
+- **Custom Agent 新規作成** (V3): system prompt 編集可能 + IconPicker
+- **kintone MCP 機能拡充** ([#24](https://github.com/sugimomoto/CoworkAgentForKintone/issues/24) / [#22](https://github.com/sugimomoto/CoworkAgentForKintone/issues/22) / [#25](https://github.com/sugimomoto/CoworkAgentForKintone/issues/25)): 管理系 / ワークフロー / クエリ拡充
+
+### 5.4 後回し可 / 任意 (V4 以降)
+
+- **ドキュメント生成** ([#10](https://github.com/sugimomoto/CoworkAgentForKintone/issues/10)): 議事録、メール文面、レポート
+- **外部 SaaS 連携** ([#11](https://github.com/sugimomoto/CoworkAgentForKintone/issues/11)): Salesforce / Gmail / Slack
+- **自律ワークフロー** ([#12](https://github.com/sugimomoto/CoworkAgentForKintone/issues/12)): 定期実行 / 条件トリガー
+- **通知機能拡張** ([#13](https://github.com/sugimomoto/CoworkAgentForKintone/issues/13)): Slack / MS Teams Webhook
+- **モバイル対応** ([#4](https://github.com/sugimomoto/CoworkAgentForKintone/issues/4)): スマートフォン版 kintone 画面
+- **Claude Platform on AWS** ([#32〜#38](https://github.com/sugimomoto/CoworkAgentForKintone/issues/32)): AWS 統合 / CloudTrail 監査 (エンタープライズ向け)
 
 ---
 
@@ -227,3 +253,19 @@ Claude Managed Agents API を活用した「バックグラウンドで自律的
 - **Environment**: Claude Managed Agents のエージェント実行環境 (サンドボックス)
 - **Session**: Claude Managed Agents の会話セッション(文脈保持単位)
 - **HITL (Human-in-the-Loop)**: 破壊的操作実行前の人間による承認プロセス
+- **Built-in Agent**: Plugin 同梱の auto-ensure 対象 Agent (V1 では 3 variant)
+- **業務エージェント / カスタマイザーエージェント**: Built-in Agent の用途別呼称
+- **Variant**: 同じ purpose で model だけ違う Agent (例: カスタマイザー Opus / Sonnet)
+- **Settings View**: Chat Panel 内の admin 専用設定画面 (2-pane、Artifact ペインを置き換える)
+- **wedge / wedge ループ**: 情シス向け差別化機能 (カスタマイズ JS 生成 → preview → apply → rollback)
+
+---
+
+## 14. 関連ステアリングドキュメント
+
+特定の機能追加・戦略変更ごとの作業単位ドキュメントは `.steering/[YYYYMMDD]-[タイトル]/` に格納。本書 (永続的) との関係性は [CLAUDE.md](../CLAUDE.md) を参照。
+
+| ステアリング | 内容 | ステータス |
+|---|---|---|
+| [.steering/20260517-customizer-wedge-design/](../.steering/20260517-customizer-wedge-design/) | Customizer wedge 戦略 (情シス向け差別化) の要求 / 実装設計 / タスク分解 | V1 着手中 ([#9 umbrella](https://github.com/sugimomoto/CoworkAgentForKintone/issues/9)) |
+| [docs/design-handoff/customizer-wedge/](design-handoff/customizer-wedge/) | Claude Design ハンドオフバンドル (HTML/JSX プロトタイプ + 設計経緯チャット) | UI 仕様の一次ソース |
