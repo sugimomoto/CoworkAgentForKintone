@@ -39,6 +39,18 @@ describe('apiHeaders', () => {
 
     expect(headers['anthropic-version']).toBe('2023-06-01');
   });
+
+  it('extra の anthropic-beta は MANAGED_AGENTS_BETA を上書きする (kintone proxy が comma 連結値を切るため)', () => {
+    const headers = apiHeaders('GET', { 'anthropic-beta': 'skills-2025-10-02' });
+
+    expect(headers['anthropic-beta']).toBe('skills-2025-10-02');
+  });
+
+  it('extra の anthropic-beta が空文字なら MANAGED_AGENTS_BETA 単独になる', () => {
+    const headers = apiHeaders('GET', { 'anthropic-beta': '' });
+
+    expect(headers['anthropic-beta']).toBe('managed-agents-2026-04-01');
+  });
 });
 
 describe('apiRequest', () => {

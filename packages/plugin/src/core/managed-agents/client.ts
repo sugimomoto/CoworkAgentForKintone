@@ -20,13 +20,19 @@ export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
  *   - anthropic-beta (Beta 機能利用に必須)
  *   - x-api-key (kintone.plugin.app.setProxyConfig で固定登録、JS 側からは付与しない)
  *
+ * `extra['anthropic-beta']` が指定された場合は **そちらで上書き** する。
+ * kintone proxy が comma 区切りの beta 値を split / truncate してしまうため、
+ * 「複数 beta を 1 ヘッダに連結」は実用不可。endpoint ごとに必要な beta だけを
+ * 単独で送る (例: Skills API は `'skills-2025-10-02'` 単独)。
+ *
  * Content-Type はリクエスト body を伴うメソッド (POST 等) のみ付与する。
  */
 export function apiHeaders(method: HttpMethod = 'GET', extra: Headers = {}): Headers {
   const headers: Headers = {
     ...extra,
     'anthropic-version': ANTHROPIC_VERSION,
-    'anthropic-beta': MANAGED_AGENTS_BETA,
+    // extra.anthropic-beta が truthy なら採用、なければ MANAGED_AGENTS_BETA。
+    'anthropic-beta': extra['anthropic-beta'] || MANAGED_AGENTS_BETA,
   };
   if (method !== 'GET' && method !== 'DELETE') {
     headers['Content-Type'] = 'application/json';
@@ -97,13 +103,14 @@ export async function apiRequest<T = unknown>(
   method: HttpMethod,
   path: string,
   body?: unknown,
+  extraHeaders?: Headers,
 ): Promise<T | null> {
   const url = `${apiBase}${path}`;
   // x-api-key は kintone.plugin.app.setProxyConfig で固定ヘッダとして登録され、
   // kintone runtime がリクエスト時に自動付与する (JS 側からは付与しない)
   const init: RequestInit = {
     method,
-    headers: apiHeaders(method),
+    headers: apiHeaders(method, extraHeaders ?? {}),
   };
   if (body !== undefined) {
     init.body = JSON.stringify(body);

@@ -355,17 +355,15 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
         </Banner>
       )}
 
-      {view === 'settings' && isAdmin ? (
-        <SettingsViewBound
-          onClose={handleSettingsClose}
-          {...(onSettingsClick ? { onPluginConfigClick: handlePluginConfigClick } : {})}
-        />
-      ) : view === 'settings' && !isAdmin ? (
+      {view === 'settings' && !isAdmin ? (
         // 安全策: 非 admin が誤って settings に到達したら chat に戻す
         <ChatViewRedirect onRedirect={() => setView('chat')} />
       ) : view === 'history' && agentId ? (
         <HistoryView agentId={agentId} onSelect={handleHistorySelect} />
       ) : (
+        // Conversation を常時マウントし、右ペインに Settings / Artifact を出し分ける。
+        // handoff (wedge-settings.jsx) の "Artifact ペインを置換する形で Side-by-Side で開く" 仕様。
+        // 優先度: Settings > Artifact > 何も出さない。
         <div className="relative flex flex-1 overflow-hidden">
           <div className="flex flex-1 flex-col overflow-hidden lg:min-w-[360px]">
             {messages.length === 0 && sessionId === null ? (
@@ -406,16 +404,26 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
               </>
             )}
           </div>
-          {activeArtifactId && (
-            // 広い時 (≥1024px): 横並び (チャットと artifact が flex-1 で 50/50 + min 幅保証)
-            // 狭い時: オーバーレイ表示
+          {/* 広い時 (≥1024px): 横並び / 狭い時: オーバーレイ表示。
+              SettingsView は 左 192px nav + 右 detail のため、artifact より広めの basis を採る */}
+          {view === 'settings' && isAdmin ? (
+            <div
+              data-settings-pane-wrap
+              className="absolute inset-0 z-10 bg-bg lg:static lg:z-auto lg:flex-1 lg:basis-[560px] lg:min-w-[560px]"
+            >
+              <SettingsViewBound
+                onClose={handleSettingsClose}
+                {...(onSettingsClick ? { onPluginConfigClick: handlePluginConfigClick } : {})}
+              />
+            </div>
+          ) : activeArtifactId ? (
             <div
               data-artifact-pane-wrap
               className="absolute inset-0 z-10 bg-white lg:static lg:z-auto lg:flex-1 lg:basis-[480px] lg:min-w-[480px]"
             >
               <ArtifactPane />
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </div>

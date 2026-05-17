@@ -1,23 +1,26 @@
 // Cowork Agent for kintone — SettingsView と chatStore / Anthropic API のアダプタ
 //
-// ChatPanel.tsx から渡される onClose / onPluginConfigClick を受け取り、SkillsPane と
-// AgentsListPane に必要なハンドラ (同期 / 公開トグル等) を bind する container component。
+// 永続化は Anthropic Workspace に集約する設計 (Plugin Config の skillsMapping は廃止)。
+// 同期状態は SettingsView 開いた時に `/v1/skills?source=custom` を 1 回叩いて
+// display_title で照合し、Anthropic 側に同名 skill があれば 'synced'、無ければ 'pending'
+// として SkillsPane に渡す。
 //
 // 責務:
 //   - chatStore.builtInAgents の購読 + 公開トグル更新後の反映
-//   - Plugin Config 経由で bundledSkills の同期状態を算出
+//   - resolveBundledSkillIds で Plugin 同梱 skill の Anthropic 側 status を取得
 //   - syncBundledSkillsFromChatPanel / syncCustomSkillFromChatPanel の呼出
 //   - setAgentVisibility の呼出 (visibility 更新)
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { getPluginConfig } from '../../core/kintone/pluginConfig';
 import { setAgentVisibility } from '../../core/managed-agents/agentVisibility';
+import { resolveBundledSkillIds } from '../../core/skills/resolveBundledSkillIds';
 import {
   syncBundledSkillsFromChatPanel,
   syncCustomSkillFromChatPanel,
 } from '../../core/skills/chatPanelSkillsSync';
-import { SKILL_BUNDLES, SKILLS_VERSION } from '../../generated/skills-bundle';
+import { SKILL_BUNDLES } from '../../generated/skills-bundle';
 import { useChatStore } from '../../store/chatStore';
 
 import { SettingsView } from './SettingsView';
@@ -41,16 +44,54 @@ export function SettingsViewBound({
   const setBuiltInAgents = useChatStore((s) => s.setBuiltInAgents);
   const pluginId = useChatStore((s) => s.pluginId);
 
-  const cfg = pluginId
-    ? getPluginConfig(pluginId)
-    : { workerUrl: null, skillsMapping: {}, skillsVersion: null };
+  const cfg = pluginId ? getPluginConfig(pluginId) : { workerUrl: null };
 
-  const bundledSkills = makeBundledSkillEntries(cfg);
+  // SettingsView が開いた時点で 1 回 fetch、同期成功時に再 fetch (依存 trigger 用 nonce)
+  const [refetchNonce, setRefetchNonce] = useState(0);
+  const [bundledSkills, setBundledSkills] = useState<BundledSkillEntry[]>(() =>
+    SKILL_BUNDLES.map((b) => ({
+      name: b.name,
+      displayTitle: b.displayTitle,
+      skillId: null,
+      version: null,
+      status: 'pending',
+    })),
+  );
+
+  useEffect(() => {
+    if (!pluginId || !cfg.workerUrl) return;
+    let cancelled = false;
+    void resolveBundledSkillIds()
+      .then((resolved) => {
+        if (cancelled) return;
+        console.debug('[cowork-agent] resolveBundledSkillIds resolved:', resolved);
+        setBundledSkills(
+          resolved.map((r) => ({
+            name: r.name,
+            displayTitle: r.displayTitle,
+            skillId: r.skillId,
+            version: r.latestVersion,
+            status: r.skillId ? 'synced' : 'pending',
+          })),
+        );
+      })
+      .catch((err) => {
+        // 取得失敗時は 'pending' のままにする (admin が同期ボタンを押せば再取得される)
+        console.warn('[cowork-agent] resolveBundledSkillIds failed:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pluginId, cfg.workerUrl, refetchNonce]);
 
   const handleSyncBundled = useCallback(async () => {
     if (!pluginId) throw new Error('Plugin ID が未取得です');
     if (!cfg.workerUrl) throw new Error('Worker URL が未設定です');
     await syncBundledSkillsFromChatPanel({ pluginId, workerUrl: cfg.workerUrl });
+    // Anthropic 側の eventual consistency 待ちで少し遅延を入れてから refetch。
+    // すぐ叩くと list レスポンスに直前の create/update が反映されないことがある。
+    await new Promise((r) => setTimeout(r, 800));
+    setRefetchNonce((n) => n + 1);
   }, [pluginId, cfg.workerUrl]);
 
   const handleAddCustomSkill = useCallback(
@@ -62,6 +103,7 @@ export function SettingsViewBound({
         workerUrl: cfg.workerUrl,
         input,
       });
+      setRefetchNonce((n) => n + 1);
     },
     [pluginId, cfg.workerUrl],
   );
@@ -87,24 +129,4 @@ export function SettingsViewBound({
       onToggleVisibility={handleToggleVisibility}
     />
   );
-}
-
-interface PluginConfigShape {
-  workerUrl: string | null;
-  skillsMapping?: Record<string, { skillId: string; version: string }>;
-  skillsVersion: string | null;
-}
-
-function makeBundledSkillEntries(cfg: PluginConfigShape): BundledSkillEntry[] {
-  const isLatest = cfg.skillsVersion === SKILLS_VERSION;
-  return SKILL_BUNDLES.map((b) => {
-    const mapped = cfg.skillsMapping?.[b.name];
-    return {
-      name: b.name,
-      displayTitle: b.displayTitle,
-      skillId: mapped?.skillId ?? null,
-      version: mapped?.version ?? null,
-      status: mapped?.skillId ? (isLatest ? 'synced' : 'updated') : 'pending',
-    };
-  });
 }

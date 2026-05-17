@@ -300,7 +300,7 @@ export const BUILTIN_AGENT_SPECS: Record<
   },
   'customizer-opus': {
     name: 'カスタマイザーエージェント',
-    description: 'JS カスタマイズ / Plugin 開発 — 高品質 (Opus 4.7)',
+    description: 'JS カスタマイズ / Plugin 開発 — 高品質',
     model: 'claude-opus-4-7',
     modelLabel: 'OPUS',
     modelKind: 'opus',
@@ -316,7 +316,7 @@ export const BUILTIN_AGENT_SPECS: Record<
   },
   'customizer-sonnet': {
     name: 'カスタマイザーエージェント',
-    description: 'JS カスタマイズ / Plugin 開発 — 速度・低コスト (Sonnet 4.6)',
+    description: 'JS カスタマイズ / Plugin 開発 — 速度・低コスト',
     model: 'claude-sonnet-4-6',
     modelLabel: 'SONNET',
     modelKind: 'sonnet',

@@ -302,14 +302,10 @@ export interface ResolveDefaultAgentOptions {
   kintoneDomain?: string;
   /**
    * Issue #30: 同期済 custom skill の id 一覧。あれば DEFAULT_AGENT_SKILLS (Anthropic 製)
-   * に追加で attach される。
+   * に追加で attach される。永続化は Anthropic Workspace に集約しており、bootstrap 側で
+   * `/v1/skills?source=custom` を fetch して解決する (Plugin Config には保存しない)。
    */
   customSkillIds?: ReadonlyArray<string>;
-  /**
-   * Issue #30: 同期済 skill bundle の version 識別子 (sha256 短縮ハッシュ)。
-   * metadata.skillsVersion に含めて、内容変化時に別 Agent 扱いにする。
-   */
-  skillsVersion?: string;
 }
 
 /**
@@ -324,12 +320,11 @@ export interface ResolveDefaultAgentOptions {
 export async function resolveDefaultAgent(
   options: ResolveDefaultAgentOptions = {},
 ): Promise<Agent> {
-  // skillsVersion + sorted custom skill ids も in-flight キーに含める
-  // (skill 入替時に同一 Worker URL でも別 Promise として扱う)
+  // customSkillIds (sorted) も in-flight キーに含める (skill 入替時の Promise 分離)
   const skillsKey = options.customSkillIds
     ? [...options.customSkillIds].sort().join(',')
     : '';
-  const key = `${options.workerUrl ?? ''}|${options.skillsVersion ?? ''}|${skillsKey}`;
+  const key = `${options.workerUrl ?? ''}|${skillsKey}`;
   const cached = inFlightByKey.get(key);
   if (cached) return cached;
 
@@ -353,10 +348,6 @@ async function doResolve(options: ResolveDefaultAgentOptions): Promise<Agent> {
   if (includeMcp) {
     filter['workerUrl'] = options.workerUrl!;
     filter['kintoneDomain'] = options.kintoneDomain!;
-  }
-  // skillsVersion を metadata に含める (内容変化で別 Agent として扱う)
-  if (options.skillsVersion) {
-    filter['skillsVersion'] = options.skillsVersion;
   }
 
   // 1. 既存 Agent を探索
@@ -431,8 +422,6 @@ export interface ResolveBuiltInAgentsOptions {
   kintoneDomain: string;
   /** Plugin 同期済 custom skill の id 一覧。各 variant の customSkillFilter で再 filter される */
   customSkillIds?: ReadonlyArray<string>;
-  /** 同期済 skill bundle の version 識別子。metadata.skillsVersion に含めて内容変化で別 Agent 扱い */
-  skillsVersion?: string;
 }
 
 /** purpose 単位の in-flight Promise (同一プロセス内のレース対策) */
@@ -474,7 +463,6 @@ async function resolveBuiltInOne(
     options.workerUrl,
     options.kintoneDomain,
     spec.promptVersion,
-    options.skillsVersion ?? '',
     skillsKey,
   ].join('|');
 
@@ -505,9 +493,6 @@ async function doResolveBuiltIn(
     workerUrl: options.workerUrl,
     kintoneDomain: options.kintoneDomain,
   };
-  if (options.skillsVersion) {
-    filter['skillsVersion'] = options.skillsVersion;
-  }
 
   // 1. 既存 Agent を探索
   const existing = await findDefaultAgents(filter);

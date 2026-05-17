@@ -16,6 +16,7 @@ import { resolveBootstrapEnvironment } from '../../core/bootstrap/resolveEnviron
 import { createUserSession } from '../../core/bootstrap/resolveSession';
 import { getPluginConfig } from '../../core/kintone/pluginConfig';
 import { getCurrentSessionContext } from '../../core/kintone/user';
+import { resolveBundledSkillIds } from '../../core/skills/resolveBundledSkillIds';
 import { toErrorMessage } from '../../core/utils';
 import { useChatStore } from '../../store/chatStore';
 
@@ -65,16 +66,23 @@ export function useSession(): UseSessionResult {
     (async () => {
       try {
         const pluginId = useChatStore.getState().pluginId;
-        const cfg = pluginId
-          ? getPluginConfig(pluginId)
-          : { workerUrl: null, skillsMapping: {}, skillsVersion: null };
+        const cfg = pluginId ? getPluginConfig(pluginId) : { workerUrl: null };
         const workerUrl = cfg.workerUrl ?? undefined;
         const kctx = getCurrentSessionContext();
 
-        // Issue #30: 同期済 custom skill を Agent に attach
-        const customSkillIds = Object.values(cfg.skillsMapping ?? {})
-          .map((entry) => entry.skillId)
-          .filter((id): id is string => typeof id === 'string' && id.length > 0);
+        // Anthropic 側 source-of-truth から custom skill_id を解決 (Plugin Config は介在しない)。
+        // 失敗時は skill 無しで bootstrap を続行 (admin が同期ボタンを押せば後で attach される)。
+        let customSkillIds: string[] = [];
+        if (workerUrl) {
+          try {
+            const resolved = await resolveBundledSkillIds();
+            customSkillIds = resolved
+              .map((r) => r.skillId)
+              .filter((id): id is string => typeof id === 'string' && id.length > 0);
+          } catch {
+            // 解決失敗時は skill 無し継続 (Settings View 側でも fetch して UI 反映する)
+          }
+        }
 
         // Customizer wedge V1: workerUrl があれば resolveBuiltInAgents (3 variant) を ensure。
         // 無い場合 (Bootstrap 未完了) は従来の resolveDefaultAgent にフォールバック (Phase 1b 互換)。
@@ -88,7 +96,6 @@ export function useSession(): UseSessionResult {
               workerUrl,
               kintoneDomain: kctx.kintoneDomain,
               ...(customSkillIds.length > 0 ? { customSkillIds } : {}),
-              ...(cfg.skillsVersion ? { skillsVersion: cfg.skillsVersion } : {}),
             }),
             envPromise,
           ]);
@@ -113,7 +120,6 @@ export function useSession(): UseSessionResult {
           // workerUrl 無し: 旧 resolveDefaultAgent で 1 つだけ ensure (Phase 1b 互換)
           const agentOptions: Parameters<typeof resolveDefaultAgent>[0] = {
             ...(customSkillIds.length > 0 ? { customSkillIds } : {}),
-            ...(cfg.skillsVersion ? { skillsVersion: cfg.skillsVersion } : {}),
           };
           const [agent, env] = await Promise.all([
             resolveDefaultAgent(agentOptions),
