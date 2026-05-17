@@ -13,6 +13,7 @@ import { ArtifactPane } from './components/ArtifactPane';
 import { Banner } from './components/Banner';
 import { Composer } from './components/Composer';
 import { ConnectKintoneButton } from './components/ConnectKintoneButton';
+import { ConversationUtilityBar } from './components/ConversationUtilityBar';
 import { Header } from './Header';
 import { MessageList } from './components/MessageList';
 import { WelcomeMessage } from './components/WelcomeMessage';
@@ -22,6 +23,7 @@ import { useIsAdmin } from '../core/admin/useIsAdmin';
 import { selectAgent } from './hooks/useSession';
 import { getCurrentSessionContext } from '../core/kintone/user';
 import { getPluginConfig } from '../core/kintone/pluginConfig';
+import { retrieveAgent, updateAgent } from '../core/managed-agents/resources';
 import { SKILL_BUNDLES, SKILLS_VERSION } from '../generated/skills-bundle';
 import type { CustomSkillInput } from './settings/SkillAddModal';
 import type { BundledSkillEntry } from './settings/SkillsPane';
@@ -391,15 +393,23 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
                 onConnect={handleConnect}
               />
             ) : (
-              <Composer
-                onSubmit={handleSubmit}
-                disabled={status !== 'ready' || sessionTerminated}
-                running={isAgentRunning}
-                onCancel={handleCancel}
-                attachedFiles={attachedFiles}
-                onAttach={attach}
-                onRemoveAttachment={removeAttachedFile}
-              />
+              <>
+                <ConversationUtilityBar
+                  onHistoryClick={handleHistoryClick}
+                  onNewConversationClick={handleNewConversationClick}
+                  onReconnectKintone={handleConnect}
+                  bindingStatus={bindingStatus}
+                />
+                <Composer
+                  onSubmit={handleSubmit}
+                  disabled={status !== 'ready' || sessionTerminated}
+                  running={isAgentRunning}
+                  onCancel={handleCancel}
+                  attachedFiles={attachedFiles}
+                  onAttach={attach}
+                  onRemoveAttachment={removeAttachedFile}
+                />
+              </>
             )}
           </div>
           {activeArtifactId && (
@@ -492,19 +502,71 @@ function SettingsViewBound({
     });
   }, [pluginId, cfg.workerUrl]);
 
-  const handleAddCustomSkill = useCallback(async (_input: CustomSkillInput): Promise<void> => {
-    // V1 では同じ /skills/sync エンドポイントに単一 skill を投入する形で動作させる予定
-    // だが、現状の Worker は **同梱 skill バンドル名で識別** するため、カスタム skill 追加は
-    // Worker 側の対応が必要。V1.x で Worker /skills/sync を name 衝突回避ロジック付きに
-    // 拡張してから wire-up する。
-    throw new Error('カスタムスキル追加は V1 配線中です (Worker 拡張待ち、別タスクで実装予定)');
-  }, []);
+  // カスタム skill 追加: 同梱 skill と同じ /skills/sync エンドポイントに 1 bundle で投入。
+  // Worker は display_title でマッチングして create-or-update する (同名上書きは admin 責任)。
+  const handleAddCustomSkill = useCallback(
+    async (input: CustomSkillInput): Promise<void> => {
+      if (!pluginId) throw new Error('Plugin ID が未取得です');
+      if (!cfg.workerUrl) throw new Error('Worker URL が未設定です (Plugin Config で設定してください)');
+      const url = `${cfg.workerUrl.replace(/\/$/, '')}/skills/sync`;
+      const body = {
+        skills: [
+          {
+            name: input.name,
+            displayTitle: input.name, // displayTitle 入力欄を別途持たないので name を流用
+            skillMd: input.skillMd,
+          },
+        ],
+      };
+      const [respBody, status] = await kintone.plugin.app.proxy(
+        pluginId,
+        url,
+        'POST',
+        { 'Content-Type': 'application/json' },
+        JSON.stringify(body),
+      );
+      if (status < 200 || status >= 300) {
+        throw new Error(`skills/sync が ${status} を返しました: ${respBody.slice(0, 200)}`);
+      }
+      const parsed = JSON.parse(respBody) as {
+        results: Array<{ name: string; skillId: string; version: string }>;
+      };
+      const result = parsed.results[0];
+      if (!result) {
+        throw new Error('skills/sync が結果を返しませんでした');
+      }
+      // Plugin Config の skillsMapping に追記 (既存 entry を破壊しない)
+      const currentConfig = kintone.plugin.app.getConfig(pluginId);
+      const currentMapping: Record<string, { skillId: string; version: string }> =
+        currentConfig['skillsMapping']
+          ? (JSON.parse(currentConfig['skillsMapping']) as Record<
+              string,
+              { skillId: string; version: string }
+            >)
+          : {};
+      currentMapping[result.name] = { skillId: result.skillId, version: result.version };
+      const nextConfig: Record<string, string> = {
+        ...currentConfig,
+        skillsMapping: JSON.stringify(currentMapping),
+      };
+      await new Promise<void>((resolve) => {
+        kintone.plugin.app.setConfig(nextConfig, () => resolve());
+      });
+    },
+    [pluginId, cfg.workerUrl],
+  );
 
-  // Agent 公開トグル (Anthropic POST /v1/agents/{id} で metadata.visibility 更新)
+  // Agent 公開トグル: Anthropic POST /v1/agents/{id} で metadata.visibility 更新。
+  // Anthropic は metadata 全体を replace するので、既存 metadata を retrieve してから merge する。
+  // 成功時のみ chatStore を更新 (失敗時はエラーが AgentsListPane に伝播)。
   const handleToggleVisibility = useCallback(
     async (agent: AgentRecord, next: 'public' | 'private') => {
-      // V1 では Anthropic API を直接叩く実装は別タスク (#39 仕上げ) で配線。
-      // 暫定で chatStore のローカル state だけ更新して UI を動かす (再起動で消える)。
+      const existing = await retrieveAgent(agent.id);
+      const mergedMetadata = {
+        ...(existing.metadata ?? {}),
+        visibility: next,
+      };
+      await updateAgent(agent.id, { metadata: mergedMetadata });
       const updated = builtInAgents.map((a) =>
         a.id === agent.id ? { ...a, visibility: next } : a,
       );
