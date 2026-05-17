@@ -19,7 +19,8 @@
     "typecheck": "tsc --noEmit",
     "e2e": "node --env-file=../../.env scripts/e2e.mjs",
     "e2e:ui": "COWORK_E2E_UI=1 node --env-file=../../.env scripts/e2e.mjs",
-    "e2e:install": "playwright install --with-deps chromium"
+    "e2e:install": "playwright install --with-deps chromium",
+    "snapshot": "node --env-file=../../.env scripts/snapshot-wedge.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

@@ -66,8 +66,13 @@ export function Header({
         )}
       </div>
 
-      {/* 下段: フル幅 Agent pill */}
-      <div className="px-[14px] pb-[10px]">
+      {/*
+        下段: Agent pill。
+        パネルが広幅 (ユーザーがリサイズして 800px〜) でも pill は ~420px に収め、
+        左寄せにする。デザイン案 C は 380px パネル前提で幅いっぱいに見せる設計だが、
+        パネル幅が可変なので max-w で固定値を入れる。
+      */}
+      <div className="max-w-[420px] px-[14px] pb-[10px]">
         <AgentPicker
           agents={agents}
           currentId={currentAgentId}

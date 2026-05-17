@@ -64,12 +64,12 @@
     Meiryo,
     sans-serif;
   /*
-   * design ハンドオフ (variant-rich.jsx) は body font-size 13px / line-height 1.5
-   * 前提でレイアウトされている。kintone host (デフォルト 14px / 1.4 等) を継承すると
-   * 全体が大きめ + 行送りも違い、余白計算が狂って見える。明示的に揃える。
+   * design ハンドオフ (variant-rich.jsx) は body font-size 13px / line-height 1.4
+   * (各 component で個別 leading-tight 指定が多く、ベースは詰めめ) 前提。
+   * kintone host (デフォルト 14px / 1.6 等) を継承すると全体がふかふかになる。
    */
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
