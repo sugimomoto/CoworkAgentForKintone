@@ -79,6 +79,25 @@ export function retrieveAgent(id: string): Promise<Agent> {
   return get<Agent>(`/v1/agents/${id}`);
 }
 
+/**
+ * Agent の partial update。`POST /v1/agents/{id}` を呼ぶ。
+ * Anthropic 仕様: 送ったフィールドが新 version で置き換えられる (Agent ID は変わらない)。
+ * `metadata` を含めるなら **既存 metadata との merge を呼出側で行ってから** 送ること
+ * (Anthropic は metadata 全体を replace するので、欠落キーは消える)。
+ */
+export interface UpdateAgentParams {
+  model?: string | { id: string; speed?: 'standard' | 'fast' };
+  name?: string;
+  description?: string;
+  system?: string;
+  tools?: unknown[];
+  metadata?: ManagedAgentsMetadata;
+}
+
+export function updateAgent(id: string, params: UpdateAgentParams): Promise<Agent> {
+  return post<Agent>(`/v1/agents/${id}`, params);
+}
+
 // ----- Environments ---------------------------------------------------------
 
 export interface EnvironmentsListParams {
