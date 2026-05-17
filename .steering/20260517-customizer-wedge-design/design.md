@@ -415,14 +415,21 @@ return (
 ```ts
 // core/admin/useIsAdmin.ts
 export function useIsAdmin(): boolean {
-  return useMemo(() => {
-    const user = window.kintone?.getLoginUser?.();
-    return user?.administrator === true;
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void kintone.isUsersAndSystemAdministrator()
+      .then((result) => { if (!cancelled) setIsAdmin(result === true); })
+      .catch(() => { if (!cancelled) setIsAdmin(false); });
+    return () => { cancelled = true; };
   }, []);
+  return isAdmin;
 }
 ```
 
-> kintone.getLoginUser() は同期。`administrator` フラグは cybozu.com 共通管理者だけ true。Phase 4 でアプリ管理者にも開放する場合はこの hook の中で REST API を呼ぶ async 化 + Suspense ラップに変える。
+> **重要 (2026-05-17 訂正)**: 初期設計案では `kintone.getLoginUser().administrator` を見る同期判定だったが、公式仕様で `getLoginUser()` の戻り値に `administrator` プロパティは存在しない。共通管理者判定は **`kintone.isUsersAndSystemAdministrator()` (Promise を返す async API)** が正解。初回レンダリングは false (= Gear 非表示) で、解決後に true に更新される。
+>
+> Phase 4 でアプリ管理者にも開放する場合は、本 hook 内で `kintone.app.getPermissions()` (`/v1/app/permissions/...`) を追加で叩いて統合判定する。
 
 ### 4.3 SettingsView コンポーネント階層
 

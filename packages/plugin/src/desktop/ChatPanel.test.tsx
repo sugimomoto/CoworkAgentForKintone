@@ -72,10 +72,13 @@ function setBindingStatus(status: 'bound' | 'unbound' | 'binding' | 'error' | 'u
   mockUseUserBinding.mockReturnValue({ status, error, connect: mockConnect });
 }
 
-/** kintone.getLoginUser().administrator フラグを切替 (useIsAdmin で判定される) */
+/**
+ * kintone.isUsersAndSystemAdministrator() の戻り値を切替 (useIsAdmin で判定される)。
+ * 公式仕様: 共通管理者判定は async API (Promise を返す)。
+ */
 function setAdmin(isAdmin: boolean): void {
-  (globalThis as { kintone?: { getLoginUser?: () => { administrator?: boolean } } }).kintone = {
-    getLoginUser: () => ({ administrator: isAdmin }),
+  (globalThis as { kintone?: { isUsersAndSystemAdministrator?: () => Promise<boolean> } }).kintone = {
+    isUsersAndSystemAdministrator: () => Promise.resolve(isAdmin),
   };
 }
 
@@ -335,7 +338,9 @@ describe('ChatPanel', () => {
     render(<ChatPanel onSettingsClick={onSettingsClick} />);
     await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
 
-    await user.click(screen.getByTestId('header-gear'));
+    // admin 判定は async (kintone.isUsersAndSystemAdministrator() Promise) なので findBy で待つ
+    const gear = await screen.findByTestId('header-gear');
+    await user.click(gear);
     expect(useChatStore.getState().view).toBe('settings');
     // Gear クリックでは onSettingsClick (Plugin Config 開く) は呼ばない
     expect(onSettingsClick).not.toHaveBeenCalled();
@@ -349,6 +354,8 @@ describe('ChatPanel', () => {
     render(<ChatPanel onSettingsClick={vi.fn()} />);
     await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
 
+    // admin 判定は async。少し待ってから DOM に Gear が無いことを確認
+    await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByTestId('header-gear')).toBeNull();
   });
 

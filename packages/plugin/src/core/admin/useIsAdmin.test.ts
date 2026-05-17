@@ -1,12 +1,18 @@
-// useIsAdmin / isAdminSync のテスト
+// useIsAdmin / resolveIsAdmin のテスト
 //
-// kintone runtime をモックし、administrator フラグの組み合わせで挙動を検証する。
+// kintone.isUsersAndSystemAdministrator() を mock し、async 解決後に true/false が
+// 反映されるかを検証。
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { isAdminSync } from './useIsAdmin';
+import { resolveIsAdmin, useIsAdmin } from './useIsAdmin';
 
-type KintoneGlobal = { kintone?: { getLoginUser?: () => { administrator?: boolean } } };
+type KintoneGlobal = {
+  kintone?: {
+    isUsersAndSystemAdministrator?: () => Promise<boolean>;
+  };
+};
 
 const g = globalThis as KintoneGlobal;
 let savedKintone: typeof g.kintone;
@@ -19,38 +25,83 @@ afterEach(() => {
   g.kintone = savedKintone;
 });
 
-describe('isAdminSync', () => {
-  it('administrator: true で true', () => {
-    g.kintone = { getLoginUser: () => ({ administrator: true }) };
-    expect(isAdminSync()).toBe(true);
+describe('resolveIsAdmin', () => {
+  it('isUsersAndSystemAdministrator() が true を resolve すると true', async () => {
+    g.kintone = { isUsersAndSystemAdministrator: () => Promise.resolve(true) };
+    await expect(resolveIsAdmin()).resolves.toBe(true);
   });
 
-  it('administrator: false で false', () => {
-    g.kintone = { getLoginUser: () => ({ administrator: false }) };
-    expect(isAdminSync()).toBe(false);
+  it('false を resolve すると false', async () => {
+    g.kintone = { isUsersAndSystemAdministrator: () => Promise.resolve(false) };
+    await expect(resolveIsAdmin()).resolves.toBe(false);
   });
 
-  it('administrator フラグが無いオブジェクトでも false', () => {
-    g.kintone = { getLoginUser: () => ({}) };
-    expect(isAdminSync()).toBe(false);
-  });
-
-  it('kintone グローバルが無い (Vitest デフォルト環境) では false', () => {
+  it('kintone グローバルが無い (Vitest 等) と false', async () => {
     g.kintone = undefined;
-    expect(isAdminSync()).toBe(false);
+    await expect(resolveIsAdmin()).resolves.toBe(false);
   });
 
-  it('kintone.getLoginUser が関数でない場合は false', () => {
-    g.kintone = {} as { getLoginUser?: () => { administrator?: boolean } };
-    expect(isAdminSync()).toBe(false);
+  it('isUsersAndSystemAdministrator が関数でない場合は false', async () => {
+    g.kintone = {} as { isUsersAndSystemAdministrator?: () => Promise<boolean> };
+    await expect(resolveIsAdmin()).resolves.toBe(false);
   });
 
-  it('getLoginUser が throw しても false (例外を伝播しない)', () => {
+  it('reject しても false にフォールバック (例外を伝播しない)', async () => {
     g.kintone = {
-      getLoginUser: (): { administrator?: boolean } => {
-        throw new Error('boom');
-      },
+      isUsersAndSystemAdministrator: () => Promise.reject(new Error('boom')),
     };
-    expect(isAdminSync()).toBe(false);
+    await expect(resolveIsAdmin()).resolves.toBe(false);
+  });
+
+  it('true 以外の値 (truthy だが boolean でない) は false 扱い', async () => {
+    g.kintone = {
+      isUsersAndSystemAdministrator: () => Promise.resolve('yes' as unknown as boolean),
+    };
+    await expect(resolveIsAdmin()).resolves.toBe(false);
+  });
+});
+
+describe('useIsAdmin', () => {
+  it('mount 時は false、解決後に true に更新される', async () => {
+    g.kintone = { isUsersAndSystemAdministrator: () => Promise.resolve(true) };
+    const { result } = renderHook(() => useIsAdmin());
+    // 初回は false
+    expect(result.current).toBe(false);
+    // async 解決後に true
+    await waitFor(() => expect(result.current).toBe(true));
+  });
+
+  it('false を resolve すると false のまま', async () => {
+    g.kintone = { isUsersAndSystemAdministrator: () => Promise.resolve(false) };
+    const { result } = renderHook(() => useIsAdmin());
+    expect(result.current).toBe(false);
+    // 微小な遅延を入れて非変化を確認
+    await new Promise((r) => setTimeout(r, 10));
+    expect(result.current).toBe(false);
+  });
+
+  it('reject しても false のまま (UI が壊れない)', async () => {
+    g.kintone = {
+      isUsersAndSystemAdministrator: () => Promise.reject(new Error('403')),
+    };
+    const { result } = renderHook(() => useIsAdmin());
+    await new Promise((r) => setTimeout(r, 10));
+    expect(result.current).toBe(false);
+  });
+
+  it('unmount 後に解決しても setState を呼ばない (cleanup)', async () => {
+    let resolve!: (v: boolean) => void;
+    g.kintone = {
+      isUsersAndSystemAdministrator: () =>
+        new Promise<boolean>((r) => {
+          resolve = r;
+        }),
+    };
+    const { result, unmount } = renderHook(() => useIsAdmin());
+    unmount();
+    resolve(true);
+    await new Promise((r) => setTimeout(r, 10));
+    // result.current は最後の render 時点 (false)
+    expect(result.current).toBe(false);
   });
 });
