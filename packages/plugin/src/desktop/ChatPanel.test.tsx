@@ -72,6 +72,13 @@ function setBindingStatus(status: 'bound' | 'unbound' | 'binding' | 'error' | 'u
   mockUseUserBinding.mockReturnValue({ status, error, connect: mockConnect });
 }
 
+/** kintone.getLoginUser().administrator フラグを切替 (useIsAdmin で判定される) */
+function setAdmin(isAdmin: boolean): void {
+  (globalThis as { kintone?: { getLoginUser?: () => { administrator?: boolean } } }).kintone = {
+    getLoginUser: () => ({ administrator: isAdmin }),
+  };
+}
+
 /**
  * mid-session 状態 (sessionId + 1 件以上のメッセージ) を render 前にセットする。
  * 「会話途中で起きた事象」(OAuth 失効バナー / terminated バナー / tool retry 等) のテスト用。
@@ -109,11 +116,13 @@ afterEach(() => {
 });
 
 describe('ChatPanel', () => {
-  it.skip('[V1 で書き直し] Header / MessageList / Composer を描画する', async () => {
+  it('新 Header (案 C 2 段) + MessageList + Composer を描画する', async () => {
     setBootstrapOk();
     render(<ChatPanel />);
 
-    expect(screen.getByText('AGENT')).toBeInTheDocument();
+    expect(screen.getByTestId('wedge-header')).toBeInTheDocument();
+    expect(screen.getByText('Cowork Agent')).toBeInTheDocument();
+    expect(screen.getByText('for kintone')).toBeInTheDocument();
     expect(screen.getByRole('textbox')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /送信/ })).toBeInTheDocument();
 
@@ -219,18 +228,19 @@ describe('ChatPanel', () => {
     expect(screen.queryByRole('textbox')).toBeNull();
   });
 
-  it.skip('[V1 で書き直し / 履歴 UI は別所] Header の履歴ボタンで view が chat ⇄ history に切替わる', async () => {
+  it('ConversationUtilityBar の履歴ボタンで view が chat ⇄ history に切替わる', async () => {
     setBootstrapOk();
     const user = userEvent.setup();
     render(<ChatPanel />);
 
     await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
 
-    await user.click(screen.getByLabelText('履歴'));
+    await user.click(screen.getByTestId('utility-history'));
     expect(useChatStore.getState().view).toBe('history');
 
-    await user.click(screen.getByLabelText('履歴'));
-    expect(useChatStore.getState().view).toBe('chat');
+    // history view では utility-bar 自体が描画されないので setView で chat に戻す
+    useChatStore.getState().setView('chat');
+    await waitFor(() => expect(screen.getByTestId('utility-history')).toBeInTheDocument());
   });
 
   it('messages 空 + sessionId 未確立のときは WelcomeMessage を表示する', async () => {
@@ -279,7 +289,7 @@ describe('ChatPanel', () => {
     expect(screen.getByText(/auth failed/)).toBeInTheDocument();
   });
 
-  it.skip('[V1 で書き直し / 再連携 UI は別所] Header の再連携ボタン押下で useUserBinding.connect() が呼ばれる (bound 状態)', async () => {
+  it('ConversationUtilityBar の再連携ボタン押下で useUserBinding.connect() が呼ばれる (bound 状態)', async () => {
     setBootstrapOk();
     setBindingStatus('bound');
     mockConnect.mockClear();
@@ -288,46 +298,61 @@ describe('ChatPanel', () => {
     render(<ChatPanel />);
     await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
 
-    const button = screen.getByLabelText('kintone を再連携');
-    await user.click(button);
+    await user.click(screen.getByTestId('utility-reconnect'));
     expect(mockConnect).toHaveBeenCalledTimes(1);
   });
 
-  it('Header の再連携ボタンは bindingStatus=unbound の時は表示しない (ConnectKintoneButton と重複しない)', async () => {
+  it('ConversationUtilityBar の再連携ボタンは bindingStatus=unbound では表示しない (ConnectKintoneButton と重複回避)', async () => {
     setBootstrapOk();
     setBindingStatus('unbound');
 
     render(<ChatPanel />);
     await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
 
-    expect(screen.queryByLabelText('kintone を再連携')).not.toBeInTheDocument();
+    // unbound では ConnectKintoneButton が大きく出る → utility-bar は描画されない
+    expect(screen.queryByTestId('utility-reconnect')).not.toBeInTheDocument();
   });
 
-  it.skip('[V1 で書き直し / 再連携 UI は別所] Header の再連携ボタンは bindingStatus=binding の時 disabled', async () => {
+  it('ConversationUtilityBar の再連携ボタンは bindingStatus=binding の時 disabled (mid-session)', async () => {
     setBootstrapOk();
     setBindingStatus('binding');
+    // mid-session でないと ConnectKintoneButton が表示されて utility-bar は出ない
+    seedMidSession();
 
     render(<ChatPanel />);
     await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
 
-    const button = screen.getByLabelText('kintone を再連携');
-    expect(button).toBeDisabled();
+    expect(screen.getByTestId('utility-reconnect')).toBeDisabled();
   });
 
-  it.skip('[V1 動作変更 / Gear は view=settings を開く] Header の設定アイコンクリックで onSettingsClick が呼ばれる', async () => {
+  it('新 Header の Gear (admin) クリックで view=settings に切替わる (onSettingsClick prop は Banner CTA 用)', async () => {
     setBootstrapOk();
     setBindingStatus('bound');
+    setAdmin(true);
 
     const onSettingsClick = vi.fn();
     const user = userEvent.setup();
     render(<ChatPanel onSettingsClick={onSettingsClick} />);
     await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
 
-    await user.click(screen.getByLabelText('設定'));
-    expect(onSettingsClick).toHaveBeenCalled();
+    await user.click(screen.getByTestId('header-gear'));
+    expect(useChatStore.getState().view).toBe('settings');
+    // Gear クリックでは onSettingsClick (Plugin Config 開く) は呼ばない
+    expect(onSettingsClick).not.toHaveBeenCalled();
   });
 
-  it.skip('[V1 で書き直し / 新規会話 UI は別所] Header の新規会話ボタンで startNewConversation が呼ばれる (sessionId と messages がクリアされる)', async () => {
+  it('非 admin では Header の Gear ボタンが表示されない', async () => {
+    setBootstrapOk();
+    setBindingStatus('bound');
+    setAdmin(false);
+
+    render(<ChatPanel onSettingsClick={vi.fn()} />);
+    await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+
+    expect(screen.queryByTestId('header-gear')).toBeNull();
+  });
+
+  it('ConversationUtilityBar の新規会話ボタンで sessionId と messages がクリアされる', async () => {
     setBootstrapOk();
     const user = userEvent.setup();
     render(<ChatPanel />);
@@ -335,13 +360,11 @@ describe('ChatPanel', () => {
     await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
     useChatStore.getState().setSessionId('sess_a');
     useChatStore.getState().addMessage({ id: 'm1', kind: 'user', text: 'x' });
-    useChatStore.getState().setView('history');
 
-    await user.click(screen.getByLabelText('新規会話'));
+    await user.click(screen.getByTestId('utility-new-conversation'));
 
     expect(useChatStore.getState().sessionId).toBeNull();
     expect(useChatStore.getState().messages).toEqual([]);
-    expect(useChatStore.getState().view).toBe('chat');
   });
 
   describe('F4-1 キャンセルボタン (Agent ターン中断)', () => {
