@@ -1,15 +1,21 @@
 // Cowork Agent for kintone — Settings View / 🤖 エージェント (V1 P2.3)
 //
 // chatStore.builtInAgents を一覧表示し、各 Agent の公開トグル (visibility) を変更可能。
-// V1 では 「組織のデフォルト」セクションは作らない (requirements.md §15.4)。
+// V1 では 「カスタム エージェント」セクションは V3 機能のため empty placeholder で出す。
 //
 // 公開トグル切替時は POST /v1/agents/{id} で metadata.visibility を更新
 // (Agent ID 安定化のため update、find filter には visibility を含めない設計)。
 //
-// 仕様: requirements.md §15.4 / design.md §4.5
+// 仕様: requirements.md §15.4 / design.md §4.5 / handoff wedge-settings.jsx (AgentListRow)
 
 import { useState } from 'react';
 
+import {
+  BUILTIN_AGENT_SPECS,
+  KINTONE_TOOL_NAMES,
+  type KintoneToolName,
+} from '../../core/bootstrap/builtInAgents';
+import { SKILL_BUNDLES } from '../../generated/skills-bundle';
 import { useChatStore } from '../../store/chatStore';
 
 import { AgentIcon } from '../components/AgentIcon';
@@ -34,25 +40,44 @@ export function AgentsListPane({ onToggleVisibility }: AgentsListPaneProps = {})
       <div className="mb-[14px]">
         <h2 className="mb-[4px] text-[15px] font-semibold text-text">エージェント</h2>
         <p className="text-[11px] text-muted">
-          Plugin が同梱する Built-in エージェント 3 種類。公開トグルで end user の選択肢を制御できます。
-          詳細編集 (skill / tool / system prompt) は V2 で対応予定です。
+          ユーザーが Header から選択できるエージェントの一覧と公開設定。
         </p>
       </div>
 
+      {/* Built-in */}
       <div className="mb-[10px] text-[10px] font-bold uppercase tracking-[0.6px] text-subtle">
-        Built-in
+        Built-in (Plugin 同梱)
       </div>
       {agents.length === 0 ? (
-        <div className="rounded-[8px] border border-dashed border-border p-[16px] text-[12px] text-muted">
+        <div className="mb-[18px] rounded-[8px] border border-dashed border-border p-[16px] text-[12px] text-muted">
           エージェントを読み込み中…
         </div>
       ) : (
-        <ul className="flex flex-col gap-[8px]">
+        <ul className="mb-[18px] flex flex-col gap-[8px]">
           {agents.map((a) => (
             <AgentRow key={a.id} agent={a} onToggleVisibility={onToggleVisibility} />
           ))}
         </ul>
       )}
+
+      {/* Custom Agents (V3 機能 / V1 では placeholder のみ) */}
+      <div className="mb-[10px] text-[10px] font-bold uppercase tracking-[0.6px] text-subtle">
+        カスタム エージェント
+      </div>
+      <div
+        data-testid="custom-agents-empty"
+        className="mb-[12px] rounded-[12px] border border-dashed border-border bg-card-hi px-[18px] py-[22px] text-center"
+      >
+        <div className="mb-[8px] text-[12.5px] text-muted">カスタムエージェントはまだありません</div>
+        <button
+          type="button"
+          disabled
+          title="V3 で実装予定"
+          className="cursor-not-allowed rounded-[7px] bg-accent px-[12px] py-[6px] text-[12px] font-semibold text-white opacity-50"
+        >
+          + 新規エージェント作成
+        </button>
+      </div>
     </div>
   );
 }
@@ -66,9 +91,9 @@ function AgentRow({ agent, onToggleVisibility }: AgentRowProps): JSX.Element {
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleToggle = async (): Promise<void> => {
+  const handleToggle = async (next: 'public' | 'private'): Promise<void> => {
     if (!onToggleVisibility || updating) return;
-    const next: 'public' | 'private' = agent.visibility === 'public' ? 'private' : 'public';
+    if (next === agent.visibility) return;
     setUpdating(true);
     setError(null);
     try {
@@ -81,64 +106,115 @@ function AgentRow({ agent, onToggleVisibility }: AgentRowProps): JSX.Element {
   };
 
   const isPublic = agent.visibility === 'public';
+  const counts = getBuiltInCounts(agent);
+  const variantId = `v_${agent.id.slice(-6)}`;
 
   return (
     <li
       data-testid={`agent-row-${agent.id}`}
-      className="flex items-center gap-[12px] rounded-[10px] border border-border bg-card px-[14px] py-[12px]"
+      className="flex items-center gap-[12px] rounded-[10px] border border-card-border bg-card px-[14px] py-[12px]"
     >
-      <AgentIcon kind={agent.iconKind} color={agent.iconColor} size={32} />
+      <AgentIcon kind={agent.iconKind} color={agent.iconColor} size={36} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-[6px] leading-tight">
+        <div className="mb-[3px] flex items-center gap-[6px] leading-tight">
           <span className="truncate text-[13px] font-semibold text-text">{agent.name}</span>
-          <ModelBadge model={agent.model} size="sm" />
+          <ModelBadge model={agent.model} size="lg" />
           {agent.isDefault && (
-            <span className="rounded-[3px] border border-border px-[4px] text-[8.5px] font-semibold tracking-[0.4px] text-muted">
+            <span className="rounded-[3px] bg-accent-soft px-[5px] py-[1px] text-[9px] font-semibold tracking-[0.4px] text-accent">
               既定
             </span>
           )}
         </div>
-        <div className="mt-[2px] truncate text-[11px] text-muted">{agent.description}</div>
-        {error && (
-          <div className="mt-[4px] text-[10.5px] text-warn">{error}</div>
+        <div className="text-[11px] leading-[1.4] text-muted">{agent.description}</div>
+        {counts && (
+          <div className="mt-[4px] flex items-center gap-[10px] text-[10px] text-subtle">
+            <span>スキル {counts.skillCount}</span>
+            <span>ツール {counts.toolCount}</span>
+            <span className="font-mono">{variantId}</span>
+          </div>
         )}
+        {error && <div className="mt-[4px] text-[10.5px] text-warn">{error}</div>}
       </div>
-      <button
-        type="button"
-        data-testid={`agent-visibility-${agent.id}`}
-        data-visibility={agent.visibility}
-        disabled={updating || !onToggleVisibility}
-        onClick={handleToggle}
-        title={isPublic ? '公開中: end user のプルダウンに出ます' : '非公開: end user に出ません'}
-        className={[
-          'flex shrink-0 items-center gap-[6px] rounded-[7px] border px-[10px] py-[5px] text-[11.5px] font-medium',
-          isPublic
-            ? 'border-accent bg-accent-soft text-accent'
-            : 'border-border bg-card-hi text-muted',
-          updating || !onToggleVisibility ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:opacity-80',
-        ].join(' ')}
-      >
-        {isPublic ? <EyeIcon /> : <EyeOffIcon />}
-        <span>{isPublic ? '公開' : '非公開'}</span>
-      </button>
+      <div className="flex shrink-0 items-center gap-[6px]">
+        <PublishToggle
+          on={isPublic}
+          disabled={updating || !onToggleVisibility}
+          agentId={agent.id}
+          onToggle={handleToggle}
+        />
+        <button
+          type="button"
+          disabled
+          title="V2 で実装予定"
+          data-testid={`agent-edit-${agent.id}`}
+          className="cursor-not-allowed rounded-[7px] border border-border bg-transparent px-[10px] py-[6px] text-[11.5px] font-medium text-text opacity-50"
+        >
+          編集 →
+        </button>
+      </div>
     </li>
   );
 }
 
-function EyeIcon(): JSX.Element {
+interface PublishToggleProps {
+  on: boolean;
+  disabled?: boolean;
+  agentId: string;
+  onToggle: (next: 'public' | 'private') => void | Promise<void>;
+}
+
+/** iOS スタイルの switch トグル (handoff の PublishToggle と同じ見た目) */
+function PublishToggle({ on, disabled, agentId, onToggle }: PublishToggleProps): JSX.Element {
   return (
-    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M1 7s2-4 6-4 6 4 6 4-2 4-6 4S1 7 1 7z" />
-      <circle cx="7" cy="7" r="1.6" />
-    </svg>
+    <label
+      className={`flex select-none items-center gap-[5px] ${
+        disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+      }`}
+    >
+      <input
+        type="checkbox"
+        className="sr-only"
+        checked={on}
+        disabled={disabled}
+        data-testid={`agent-visibility-${agentId}`}
+        data-visibility={on ? 'public' : 'private'}
+        onChange={() => onToggle(on ? 'private' : 'public')}
+      />
+      <span
+        aria-hidden="true"
+        className={`relative inline-block h-[17px] w-[30px] rounded-[9px] transition-colors duration-200 ${
+          on ? 'bg-accent' : 'bg-border'
+        }`}
+      >
+        <span
+          className={`absolute top-[2px] h-[13px] w-[13px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-[left] duration-150 ${
+            on ? 'left-[15px]' : 'left-[2px]'
+          }`}
+        />
+      </span>
+      <span className={`text-[10.5px] font-medium ${on ? 'text-text' : 'text-muted'}`}>
+        {on ? '公開' : '非公開'}
+      </span>
+    </label>
   );
 }
 
-function EyeOffIcon(): JSX.Element {
-  return (
-    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M1 1l12 12" />
-      <path d="M5.5 5.5a1.6 1.6 0 002.2 2.2M3 4c-1 1-2 3-2 3s2 4 6 4c1.2 0 2.2-.3 3-.7M11 9.6c1-.7 1.7-1.8 2-2.6 0 0-2-4-6-4-.6 0-1.2.1-1.7.3" />
-    </svg>
-  );
+interface BuiltInCounts {
+  skillCount: number;
+  toolCount: number;
+}
+
+/**
+ * Built-in Agent (purpose=business/customizer-*) の skill / tool 数を
+ * BUILTIN_AGENT_SPECS から静的に計算する。Custom Agent (V3) は null を返す。
+ */
+function getBuiltInCounts(agent: AgentRecord): BuiltInCounts | null {
+  if (agent.purpose === 'custom') return null;
+  const spec = BUILTIN_AGENT_SPECS[agent.purpose];
+  const customSkillCount = SKILL_BUNDLES.filter((b) => spec.customSkillFilter(b.name)).length;
+  const skillCount = spec.anthropicSkillIds.length + customSkillCount;
+  const toolCount = KINTONE_TOOL_NAMES.filter((name: KintoneToolName) =>
+    spec.mcpToolFilter(name),
+  ).length;
+  return { skillCount, toolCount };
 }

@@ -87,14 +87,15 @@ describe('AgentsListPane', () => {
     );
   });
 
-  it('visibility=private の Agent は "非公開" バッジが表示される', () => {
+  it('visibility=private の Agent は "非公開" ラベルが表示され toggle が off', () => {
     useChatStore.getState().setBuiltInAgents([
       makeAgent({ id: 'biz', visibility: 'private' }),
     ]);
     render(<AgentsListPane />);
-    const btn = screen.getByTestId('agent-visibility-biz');
-    expect(btn.getAttribute('data-visibility')).toBe('private');
-    expect(btn.textContent).toContain('非公開');
+    const toggle = screen.getByTestId('agent-visibility-biz') as HTMLInputElement;
+    expect(toggle.getAttribute('data-visibility')).toBe('private');
+    expect(toggle.checked).toBe(false);
+    expect(screen.getByText('非公開')).toBeInTheDocument();
   });
 
   it('onToggleVisibility 未指定ならトグルは disabled', () => {
@@ -110,5 +111,34 @@ describe('AgentsListPane', () => {
     render(<AgentsListPane onToggleVisibility={onToggle} />);
     await user.click(screen.getByTestId('agent-visibility-biz'));
     expect(await screen.findByText('403 forbidden')).toBeInTheDocument();
+  });
+
+  it('Built-in Agent には skill/tool count + variant id footer が表示される', () => {
+    useChatStore.getState().setBuiltInAgents([
+      makeAgent({ id: 'agent_01HXabcd123', purpose: 'business' }),
+    ]);
+    render(<AgentsListPane />);
+    // skill count = anthropicSkillIds (4: xlsx/docx/pdf/pptx) + customSkillFilter (business は 0)
+    expect(screen.getByText(/スキル\s+\d+/)).toBeInTheDocument();
+    expect(screen.getByText(/ツール\s+\d+/)).toBeInTheDocument();
+    // variant id = agent.id の末尾 6 文字に v_ prefix
+    expect(screen.getByText(/v_[a-zA-Z0-9]{6}/)).toBeInTheDocument();
+  });
+
+  it('編集→ ボタンは V2 用 placeholder として disabled で描画される', () => {
+    useChatStore.getState().setBuiltInAgents([makeAgent({ id: 'biz' })]);
+    render(<AgentsListPane />);
+    const editBtn = screen.getByTestId('agent-edit-biz');
+    expect(editBtn).toBeDisabled();
+    expect(editBtn.textContent).toContain('編集');
+  });
+
+  it('カスタム エージェント section の empty placeholder と新規作成 disabled ボタンが表示される', () => {
+    useChatStore.getState().setBuiltInAgents([makeAgent({ id: 'biz' })]);
+    render(<AgentsListPane />);
+    expect(screen.getByTestId('custom-agents-empty')).toBeInTheDocument();
+    expect(screen.getByText('カスタムエージェントはまだありません')).toBeInTheDocument();
+    const newBtn = screen.getByRole('button', { name: /新規エージェント作成/ });
+    expect(newBtn).toBeDisabled();
   });
 });
