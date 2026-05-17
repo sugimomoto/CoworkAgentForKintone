@@ -18,9 +18,11 @@ import {
   DEFAULT_KINTONE_OAUTH_SCOPE,
 } from '../core/constants';
 import { setProxyConfigAsync } from '../core/kintone/setProxyConfigAsync';
-import { syncSkills, SkillSyncError } from '../core/skills/skillsSyncClient';
+// skillsSyncClient は ConfigScreen からは呼ばない (Customizer wedge V1 #41 で Chat Panel
+// SkillsPane に移管)。skillsSyncClient 自体は packages/plugin/src/core/skills/ に残置し、
+// Chat Panel から消費される。
 import { joinUrl, sleep, toErrorMessage } from '../core/utils';
-import { SKILL_BUNDLES, SKILLS_VERSION } from '../generated/skills-bundle';
+// SKILL_BUNDLES / SKILLS_VERSION も Chat Panel SkillsPane 側で参照される (#41)
 import { WORKER_BUNDLE_JS, WORKER_BUNDLE_VERSION } from '../generated/worker-bundle';
 
 export interface ConfigScreenProps {
@@ -32,8 +34,8 @@ const CONFIG_KEY_SAVED = 'saved';
 const CONFIG_KEY_WORKER_URL = 'workerUrl';
 const CONFIG_KEY_OAUTH_CLIENT_ID = 'oauthClientId';
 const CONFIG_KEY_OAUTH_SCOPE = 'oauthScope';
-const CONFIG_KEY_SKILLS_MAPPING = 'skillsMapping';
-const CONFIG_KEY_SKILLS_VERSION = 'skillsVersion';
+// CONFIG_KEY_SKILLS_MAPPING / SKILLS_VERSION は Chat Panel SkillsPane 側で setConfig するので
+// ConfigScreen 側からは触らない (#41 で移管)
 
 const WORKER_URL_RE = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+(\/.*)?$/i;
 
@@ -75,12 +77,9 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
   const [cfDeployMessage, setCfDeployMessage] = useState<string | null>(null);
   const [cfDeployError, setCfDeployError] = useState<string | null>(null);
 
-  // Issue #30: Skills 同期
-  const existingSkillsVersion = existing[CONFIG_KEY_SKILLS_VERSION] ?? null;
-  const skillsSynced = existingSkillsVersion === SKILLS_VERSION;
-  const [skillsSyncing, setSkillsSyncing] = useState(false);
-  const [skillsSyncMessage, setSkillsSyncMessage] = useState<string | null>(null);
-  const [skillsSyncError, setSkillsSyncError] = useState<string | null>(null);
+  // Issue #30 Phase1 で Plugin Config 上に置いていた「Skills 同期」UI は
+  // Customizer wedge V1 (Issue #41) で Chat Panel Settings (🧠 スキル) へ移管した。
+  // Worker /skills/sync 経由の proxy 設定は残置 (Chat Panel から叩く)。
 
   const cfTokenTrimmed = cfApiToken.trim();
   const cfAccountIdTrimmed = cfAccountId.trim();
@@ -269,68 +268,8 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
     history.back();
   }
 
-  /**
-   * Issue #30: 「Skills 同期」ボタンのハンドラ。
-   * 同梱されている SKILL_BUNDLES を Worker /skills/sync 経由で Anthropic にアップロード、
-   * 返ってきた skill_id mapping を plugin config に保存する。
-   *
-   * 注意: Config 画面では `kintone.plugin.app.proxy` が使えないため、`kintone.proxy()` を
-   *   経由する → setProxyConfig 固定ヘッダは効かない → API Key を form 入力から
-   *   明示的に渡す必要がある。Plugin 設定の「保存」より先に API Key を入力する必要あり。
-   */
-  async function handleSyncSkills(): Promise<void> {
-    if (skillsSyncing) return;
-    if (!workerUrlValid) {
-      setSkillsSyncError('Worker URL が未設定です');
-      return;
-    }
-    if (!apiKeyTrimmed) {
-      setSkillsSyncError(
-        'Anthropic API Key を入力してから同期してください (フォーム上の値を直接使います)',
-      );
-      return;
-    }
-    if (SKILL_BUNDLES.length === 0) {
-      setSkillsSyncError('同期する skill がありません');
-      return;
-    }
-    setSkillsSyncing(true);
-    setSkillsSyncMessage(null);
-    setSkillsSyncError(null);
-    try {
-      const finalWorkerUrl = workerUrlTrimmed.replace(/\/$/, '');
-      const result = await syncSkills({
-        workerUrl: finalWorkerUrl,
-        anthropicApiKey: apiKeyTrimmed,
-        bundles: SKILL_BUNDLES,
-      });
-      const mapping: Record<string, { skillId: string; version: string }> = {};
-      for (const r of result.results) {
-        mapping[r.name] = { skillId: r.skillId, version: r.version };
-      }
-      // setConfig: 既存 config + skill mapping + skillsVersion を保存
-      const next: Record<string, string> = {
-        ...existing,
-        [CONFIG_KEY_SKILLS_MAPPING]: JSON.stringify(mapping),
-        [CONFIG_KEY_SKILLS_VERSION]: SKILLS_VERSION,
-      };
-      await new Promise<void>((resolve) => {
-        kintone.plugin.app.setConfig(next, () => resolve());
-      });
-      const summary = result.results
-        .map((r) => `${r.name} (${r.action})`)
-        .join(', ');
-      setSkillsSyncMessage(`✓ ${result.results.length} skill を同期: ${summary}`);
-    } catch (err) {
-      if (err instanceof SkillSyncError) {
-        setSkillsSyncError(`Worker /skills/sync が ${err.status} を返しました: ${err.responseBody.slice(0, 200)}`);
-      } else {
-        setSkillsSyncError(toErrorMessage(err));
-      }
-    } finally {
-      setSkillsSyncing(false);
-    }
-  }
+  // 旧 handleSyncSkills は #41 で Chat Panel に移管 (skillsSyncClient.syncSkills は
+  // SkillsPane から呼ばれる) のため削除した。
 
   return (
     <div className="cowork-agent-root max-w-[720px] p-[24px]">
@@ -587,61 +526,23 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
 
       </section>
 
-      {/* Step 4: kintone 固有 custom skill の Anthropic workspace への同期 (Issue #30) */}
+      {/*
+        Skills 同期 UI は Customizer wedge V1 (#41) で Chat Panel Settings (🧠 スキル)
+        に完全移管されました。admin はチャットパネルのヘッダー ⚙ から開く Settings View で
+        skill の同期 / カスタム skill の追加を行えます。
+      */}
       <section
-        className={`mb-[20px] rounded-[12px] border border-card-border bg-card p-[16px] ${
-          isSaved ? '' : 'pointer-events-none opacity-50'
-        }`}
-        aria-disabled={!isSaved}
+        data-testid="skills-migrated-callout"
+        className="mb-[20px] rounded-[12px] border border-card-border bg-accent-soft/30 p-[14px]"
       >
-        <h2 className="mb-[4px] text-[14px] font-semibold">
-          Step 4. kintone 固有 Skills を Anthropic workspace に同期 <span className="text-[11px] font-normal text-muted">(任意)</span>
+        <h2 className="mb-[4px] text-[13px] font-semibold text-text">
+          Skills の管理について
         </h2>
-        <p className="mb-[10px] text-[11px] leading-[1.6] text-muted">
-          kintone カスタマイズ / Plugin 開発の定石をまとめた skill (<code>kintone-customize-js</code> / <code>kintone-plugin-development</code> 等) を Anthropic workspace にアップロードします。Agent がタスクに応じて自動ロードし、より kintone 固有の精度で回答できるようになります。Plugin 設定保存後に実行してください。
+        <p className="text-[11px] leading-[1.6] text-muted">
+          Plugin 同梱 skill の同期 / カスタム skill の追加は、<strong>チャットパネルのヘッダー ⚙ →
+          設定 → 🧠 スキル</strong> から行います。Plugin Config 画面ではなく Chat Panel で
+          完結する設計に V1 (#41) で変更しました。
         </p>
-        <div className="mb-[8px] flex items-center gap-[6px] text-[11px] text-muted">
-          <span>同梱 skill:</span>
-          {SKILL_BUNDLES.map((b) => (
-            <code
-              key={b.name}
-              className="rounded-[6px] bg-bg px-[6px] py-[2px] font-mono text-[10px]"
-            >
-              {b.name}
-            </code>
-          ))}
-          <span className="ml-[6px] opacity-70">version: {SKILLS_VERSION}</span>
-          {skillsSynced && (
-            <span className="ml-[6px] rounded-[6px] bg-accent-soft px-[6px] py-[1px] text-[10px] text-accent">
-              ✓ 最新版が同期済
-            </span>
-          )}
-        </div>
-        <button
-          type="button"
-          data-testid="skills-sync-button"
-          onClick={() => void handleSyncSkills()}
-          disabled={!isSaved || skillsSyncing}
-          className="rounded-[8px] border border-card-border bg-bg px-[12px] py-[6px] text-[12px] font-medium text-text shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:border-accent disabled:opacity-50"
-        >
-          {skillsSyncing ? '同期中…' : 'Skills を同期'}
-        </button>
-        {skillsSyncMessage && (
-          <p
-            data-testid="skills-sync-message"
-            className="mt-[8px] rounded-[8px] bg-accent-soft px-[12px] py-[8px] text-[11px] leading-[1.6] text-accent"
-          >
-            {skillsSyncMessage}
-          </p>
-        )}
-        {skillsSyncError && (
-          <p
-            data-testid="skills-sync-error"
-            className="mt-[8px] rounded-[8px] border border-warn/40 bg-warn-soft px-[12px] py-[8px] text-[11px] leading-[1.6] text-warn"
-          >
-            ⚠ {skillsSyncError}
-          </p>
-        )}
       </section>
 
       {errorMessage && (
