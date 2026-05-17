@@ -1,0 +1,279 @@
+// resolveBuiltInAgents のテスト
+//
+// 3 variant の並行 ensure / 既存検出 / レース対策 / kintoneDomain 分離 を検証。
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { jsonResponse, makeAgent } from '../../test/fixtures';
+
+import {
+  _resetResolveBuiltInAgentsCache,
+  resolveBuiltInAgents,
+} from './resolveAgent';
+
+import type { Agent, ListResponse } from '../managed-agents/types';
+
+let fetchMock: ReturnType<typeof vi.fn>;
+
+beforeEach(() => {
+  fetchMock = vi.fn();
+  vi.stubGlobal('fetch', fetchMock);
+  _resetResolveBuiltInAgentsCache();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  _resetResolveBuiltInAgentsCache();
+});
+
+const OPTIONS = {
+  workerUrl: 'https://w.example.com',
+  kintoneDomain: 'tenant.cybozu.com',
+};
+
+/**
+ * 3 variant 全部について「既存なし → POST で作成」のシナリオで mock を組み立てる。
+ *
+ * Promise.all で 3 並行に走るため、fetchMock の呼出順序は実行時の race に依存する。
+ * よって個別にレスポンスを mock するのではなく、URL とメソッドで分岐する mockImplementation を使う。
+ */
+function mockAllVariantsCreate(idMap: Record<string, string>): void {
+  fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+    const u = new URL(url);
+    if (u.pathname === '/v1/agents' && (!init?.method || init.method === 'GET')) {
+      // list (検索)
+      const empty: ListResponse<Agent> = { data: [], next_page: null };
+      return Promise.resolve(jsonResponse(empty));
+    }
+    if (u.pathname === '/v1/agents' && init?.method === 'POST') {
+      const body = JSON.parse(init.body as string) as { metadata: { purpose: string } };
+      const purpose = body.metadata.purpose;
+      const id = idMap[purpose] ?? `agent_${purpose}`;
+      return Promise.resolve(jsonResponse(makeAgent({ id, metadata: body.metadata })));
+    }
+    throw new Error(`unexpected fetch: ${url} ${init?.method}`);
+  });
+}
+
+describe('resolveBuiltInAgents', () => {
+  it('3 variant が並行 ensure される (新規作成)', async () => {
+    mockAllVariantsCreate({
+      business: 'agent_biz',
+      'customizer-opus': 'agent_co',
+      'customizer-sonnet': 'agent_cs',
+    });
+
+    const result = await resolveBuiltInAgents(OPTIONS);
+
+    expect(result.business.id).toBe('agent_biz');
+    expect(result.customizerOpus.id).toBe('agent_co');
+    expect(result.customizerSonnet.id).toBe('agent_cs');
+  });
+
+  it('各 variant の POST body に正しい purpose / model / iconKind / variantGroup が含まれる', async () => {
+    mockAllVariantsCreate({
+      business: 'a1',
+      'customizer-opus': 'a2',
+      'customizer-sonnet': 'a3',
+    });
+
+    await resolveBuiltInAgents(OPTIONS);
+
+    const posts = fetchMock.mock.calls.filter((c) => c[1]?.method === 'POST');
+    expect(posts).toHaveLength(3);
+
+    const bodies = posts.map((c) => JSON.parse(c[1].body));
+    const businessBody = bodies.find((b) => b.metadata.purpose === 'business');
+    const opusBody = bodies.find((b) => b.metadata.purpose === 'customizer-opus');
+    const sonnetBody = bodies.find((b) => b.metadata.purpose === 'customizer-sonnet');
+
+    expect(businessBody.model).toBe('claude-sonnet-4-6');
+    expect(businessBody.metadata.iconKind).toBe('biz');
+    expect(businessBody.metadata.iconColor).toBe('accentSoft');
+    expect(businessBody.metadata.variantGroup).toBeUndefined();
+    expect(businessBody.metadata.isDefault).toBe('0');
+    expect(businessBody.metadata.visibility).toBe('public');
+
+    expect(opusBody.model).toBe('claude-opus-4-7');
+    expect(opusBody.metadata.iconKind).toBe('cust');
+    expect(opusBody.metadata.iconColor).toBe('accent');
+    expect(opusBody.metadata.variantGroup).toBe('customizer');
+    expect(opusBody.metadata.isDefault).toBe('1');
+
+    expect(sonnetBody.model).toBe('claude-sonnet-4-6');
+    expect(sonnetBody.metadata.variantGroup).toBe('customizer');
+    expect(sonnetBody.metadata.isDefault).toBe('0');
+  });
+
+  it('promptVersion v20-business / v20-customizer が metadata.promptVersion に入る', async () => {
+    mockAllVariantsCreate({
+      business: 'a1',
+      'customizer-opus': 'a2',
+      'customizer-sonnet': 'a3',
+    });
+    await resolveBuiltInAgents(OPTIONS);
+    const posts = fetchMock.mock.calls.filter((c) => c[1]?.method === 'POST');
+    const bodies = posts.map((c) => JSON.parse(c[1].body));
+    const businessBody = bodies.find((b) => b.metadata.purpose === 'business');
+    const opusBody = bodies.find((b) => b.metadata.purpose === 'customizer-opus');
+    expect(businessBody.metadata.promptVersion).toBe('v20-business');
+    expect(opusBody.metadata.promptVersion).toBe('v20-customizer');
+  });
+
+  it('既存 Agent が見つかれば再利用 (POST 呼出 0 回)', async () => {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = new URL(url);
+      if (u.pathname === '/v1/agents' && (!init?.method || init.method === 'GET')) {
+        // 各 variant の既存 Agent を返す (filter は body に含まれないが、本テストでは全 GET に同じ entity を返す)
+        // 実際には findByMetadata がクライアント側で metadata.purpose で絞るので、3 つの異なる purpose を含む list を返せばよい
+        const list: ListResponse<Agent> = {
+          data: [
+            makeAgent({
+              id: 'biz_existing',
+              metadata: {
+                source: 'cowork-agent-for-kintone',
+                type: 'default',
+                purpose: 'business',
+                promptVersion: 'v20-business',
+                workerUrl: OPTIONS.workerUrl,
+                kintoneDomain: OPTIONS.kintoneDomain,
+              },
+            }),
+            makeAgent({
+              id: 'opus_existing',
+              metadata: {
+                source: 'cowork-agent-for-kintone',
+                type: 'default',
+                purpose: 'customizer-opus',
+                promptVersion: 'v20-customizer',
+                workerUrl: OPTIONS.workerUrl,
+                kintoneDomain: OPTIONS.kintoneDomain,
+              },
+            }),
+            makeAgent({
+              id: 'sonnet_existing',
+              metadata: {
+                source: 'cowork-agent-for-kintone',
+                type: 'default',
+                purpose: 'customizer-sonnet',
+                promptVersion: 'v20-customizer',
+                workerUrl: OPTIONS.workerUrl,
+                kintoneDomain: OPTIONS.kintoneDomain,
+              },
+            }),
+          ],
+          next_page: null,
+        };
+        return Promise.resolve(jsonResponse(list));
+      }
+      throw new Error('should not POST');
+    });
+
+    const result = await resolveBuiltInAgents(OPTIONS);
+    expect(result.business.id).toBe('biz_existing');
+    expect(result.customizerOpus.id).toBe('opus_existing');
+    expect(result.customizerSonnet.id).toBe('sonnet_existing');
+    expect(fetchMock.mock.calls.filter((c) => c[1]?.method === 'POST')).toHaveLength(0);
+  });
+
+  it('kintoneDomain が違うと別 Agent として扱われる', async () => {
+    mockAllVariantsCreate({
+      business: 'biz_dev',
+      'customizer-opus': 'opus_dev',
+      'customizer-sonnet': 'sonnet_dev',
+    });
+    const result = await resolveBuiltInAgents({
+      ...OPTIONS,
+      kintoneDomain: 'dev.cybozu.com',
+    });
+
+    // 全 POST body の kintoneDomain が 'dev.cybozu.com'
+    const posts = fetchMock.mock.calls.filter((c) => c[1]?.method === 'POST');
+    const bodies = posts.map((c) => JSON.parse(c[1].body));
+    for (const b of bodies) {
+      expect(b.metadata.kintoneDomain).toBe('dev.cybozu.com');
+    }
+    expect(result.business.id).toBe('biz_dev');
+  });
+
+  it('レース対策: 作成直後の再 list で 2 件出たら最古を返す', async () => {
+    let postCount = 0;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = new URL(url);
+      if (u.pathname === '/v1/agents' && (!init?.method || init.method === 'GET')) {
+        if (postCount > 0) {
+          // 作成直後の再 list: business のみ 2 件 (重複) として返す
+          const list: ListResponse<Agent> = {
+            data: [
+              makeAgent({
+                id: 'biz_my_post',
+                created_at: '2026-04-25T00:00:01Z',
+                metadata: {
+                  source: 'cowork-agent-for-kintone',
+                  type: 'default',
+                  purpose: 'business',
+                  promptVersion: 'v20-business',
+                  workerUrl: OPTIONS.workerUrl,
+                  kintoneDomain: OPTIONS.kintoneDomain,
+                },
+              }),
+              makeAgent({
+                id: 'biz_other_tab_older',
+                created_at: '2026-04-25T00:00:00Z', // older
+                metadata: {
+                  source: 'cowork-agent-for-kintone',
+                  type: 'default',
+                  purpose: 'business',
+                  promptVersion: 'v20-business',
+                  workerUrl: OPTIONS.workerUrl,
+                  kintoneDomain: OPTIONS.kintoneDomain,
+                },
+              }),
+            ],
+            next_page: null,
+          };
+          return Promise.resolve(jsonResponse(list));
+        }
+        const empty: ListResponse<Agent> = { data: [], next_page: null };
+        return Promise.resolve(jsonResponse(empty));
+      }
+      if (u.pathname === '/v1/agents' && init?.method === 'POST') {
+        postCount++;
+        const body = JSON.parse(init.body as string) as { metadata: { purpose: string } };
+        return Promise.resolve(
+          jsonResponse(
+            makeAgent({
+              id: `${body.metadata.purpose}_my_post`,
+              metadata: body.metadata,
+            }),
+          ),
+        );
+      }
+      throw new Error(`unexpected: ${url}`);
+    });
+
+    const result = await resolveBuiltInAgents(OPTIONS);
+
+    // business だけ別タブとの race で重複作成、最古を返す
+    expect(result.business.id).toBe('biz_other_tab_older');
+  });
+
+  it('in-flight キャッシュは purpose 単位 (連続呼出で重複 POST しない)', async () => {
+    mockAllVariantsCreate({
+      business: 'a1',
+      'customizer-opus': 'a2',
+      'customizer-sonnet': 'a3',
+    });
+
+    // 同時に 2 回呼ぶ (await せず Promise.all)
+    const [r1, r2] = await Promise.all([
+      resolveBuiltInAgents(OPTIONS),
+      resolveBuiltInAgents(OPTIONS),
+    ]);
+
+    expect(r1.business.id).toBe(r2.business.id);
+    // POST は variant ごとに 1 回ずつ = 計 3 回 (2 回呼出でも重複しない)
+    const posts = fetchMock.mock.calls.filter((c) => c[1]?.method === 'POST');
+    expect(posts).toHaveLength(3);
+  });
+});
