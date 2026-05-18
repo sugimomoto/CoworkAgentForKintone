@@ -516,6 +516,7 @@ requirements.md Section 10 の受け入れ条件と整合:
 V2:
 - #40 Agent 詳細編集 UI (skill/tool ON-OFF + System Prompt 編集)
 - V2-新規 (Custom Skill 編集 / 削除) Chat Panel Settings → Skills でカスタム skill の本文 (SKILL.md) 編集 + 削除。Anthropic API: `POST /v1/skills/{id}/versions` (新 version) と `DELETE /v1/skills/{id}`
+- V2-新規 (Customizer FileTree 動的化 + multi-file 対応) FileTree を `/k/v1/preview/app/customize.json` から動的構築し、desktop.js / mobile.js / desktop.css / 各 URL+FILE リンクを編集可能に。Customizer Agent が複数ファイル (JS / CSS / mobile.js) を生成→ apply 一括 PUT + deploy で反映 (V1 は desktop.js 1 本のみ、FileTree は hardcoded)
 - V2-新規 (MCP 登録) 追加 MCP Server 登録 (Plugin Config Step 4 + Chat Panel 接続 + Vault Credential)
 - #15 (縮小) Conversation View に Memory ON/OFF トグル + (user × agent) auto-ensure
 - #17 GitHub MCP

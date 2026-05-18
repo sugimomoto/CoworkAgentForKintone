@@ -752,6 +752,7 @@ const isAdmin = kintone.getLoginUser().administrator === true
 | 🔥 **#17** | GitHub 連携 (repo / commit / PR) + Chat Panel Settings → MCP に GitHub MCP server 登録 UI |
 | 🔥 **V2-新規 (Agent 詳細編集)** | Chat Panel Settings → Agents の skill / tool ON-OFF 編集機能 |
 | 🔥 **V2-新規 (Custom Skill 編集 / 削除)** | Chat Panel Settings → Skills でカスタム skill の本文 (SKILL.md) 編集 + 削除。Anthropic API: `POST /v1/skills/{id}/versions` (新 version) と `DELETE /v1/skills/{id}` |
+| 🔥 **V2-新規 (Customizer FileTree 動的化 + multi-file 対応)** | FileTree を kintone `/k/v1/preview/app/customize.json` から動的構築。desktop.js / mobile.js / desktop.css / 各 URL+FILE リンクを表示・編集可能に。Customizer Agent の生成出力を **複数ファイル (JS / CSS / mobile.js)** に拡張、apply は一括 PUT + deploy で反映。V1 は desktop.js 1 本のみの hardcoded |
 | ⚙️ **V2-新規 (MCP 登録)** | Chat Panel Settings → MCP の追加 MCP server 登録 + Vault Credential 管理 |
 | ⚙️ Plugin pack/upload | cli-kintone 相当の MCP ツール (新規 Issue or #17 拡張) |
 | 💾 **#15 (縮小)** | Conversation View に Memory ON/OFF トグル + (user × agent) 単位の auto-ensure (Section 6.7) |
@@ -921,6 +922,7 @@ const isAdmin = kintone.getLoginUser().administrator === true
 | **#40** | **Chat Panel Settings View インフラ** (View 切替 + admin 判定 + Agents/Skills サブセクション) | V1 — 本要求のコア |
 | **#40** | Chat Panel Settings → Agents の skill / tool ON-OFF 編集 | V2 |
 | **V2-新規 (Custom Skill 編集 / 削除)** | Chat Panel Settings → Skills でカスタム skill 本文 (SKILL.md) の編集 + 削除 (`POST /v1/skills/{id}/versions` / `DELETE /v1/skills/{id}`) | V2 |
+| **V2-新規 (Customizer FileTree 動的化)** | FileTree を `/k/v1/preview/app/customize.json` から動的構築、Agent が multi-file (JS / CSS / mobile.js) を生成・編集できるよう Customizer wedge を拡張 (V1 は desktop.js 1 本 + hardcoded ファイル一覧) | V2 |
 | **V2-新規 (MCP 登録)** | Chat Panel Settings → MCP の追加 MCP server 登録 + Vault Credential 管理 | V2 |
 | **#41** | Custom Agent 新規作成 UI (system prompt 編集) | V3 |
 | **V2-新規 (Plugin pack)** | Plugin pack / upload を Agent から実行 (cli-kintone 同等 MCP) | V2 |
