@@ -751,6 +751,7 @@ const isAdmin = kintone.getLoginUser().administrator === true
 |---|---|
 | 🔥 **#17** | GitHub 連携 (repo / commit / PR) + Chat Panel Settings → MCP に GitHub MCP server 登録 UI |
 | 🔥 **V2-新規 (Agent 詳細編集)** | Chat Panel Settings → Agents の skill / tool ON-OFF 編集機能 |
+| 🔥 **V2-新規 (Custom Skill 編集 / 削除)** | Chat Panel Settings → Skills でカスタム skill の本文 (SKILL.md) 編集 + 削除。Anthropic API: `POST /v1/skills/{id}/versions` (新 version) と `DELETE /v1/skills/{id}` |
 | ⚙️ **V2-新規 (MCP 登録)** | Chat Panel Settings → MCP の追加 MCP server 登録 + Vault Credential 管理 |
 | ⚙️ Plugin pack/upload | cli-kintone 相当の MCP ツール (新規 Issue or #17 拡張) |
 | 💾 **#15 (縮小)** | Conversation View に Memory ON/OFF トグル + (user × agent) 単位の auto-ensure (Section 6.7) |
@@ -919,6 +920,7 @@ const isAdmin = kintone.getLoginUser().administrator === true
 | **#39** | Built-in Agent 3 variant + Header 切替 UI | V1 — Default + Customizer(Opus) + Customizer(Sonnet) の自動 ensure / Plugin UI / resolveAgent 拡張 (Section 6.4.1) |
 | **#40** | **Chat Panel Settings View インフラ** (View 切替 + admin 判定 + Agents/Skills サブセクション) | V1 — 本要求のコア |
 | **#40** | Chat Panel Settings → Agents の skill / tool ON-OFF 編集 | V2 |
+| **V2-新規 (Custom Skill 編集 / 削除)** | Chat Panel Settings → Skills でカスタム skill 本文 (SKILL.md) の編集 + 削除 (`POST /v1/skills/{id}/versions` / `DELETE /v1/skills/{id}`) | V2 |
 | **V2-新規 (MCP 登録)** | Chat Panel Settings → MCP の追加 MCP server 登録 + Vault Credential 管理 | V2 |
 | **#41** | Custom Agent 新規作成 UI (system prompt 編集) | V3 |
 | **V2-新規 (Plugin pack)** | Plugin pack / upload を Agent から実行 (cli-kintone 同等 MCP) | V2 |
