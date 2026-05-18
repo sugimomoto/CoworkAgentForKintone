@@ -142,7 +142,7 @@ export function SkillsPane({
         ) : (
           <ul className="flex flex-col gap-[6px]">
             {customSkills.map((s) => (
-              <SkillRow key={s.name} skill={s} />
+              <SkillRow key={s.name} skill={s} showStatus={false} />
             ))}
           </ul>
         )}
@@ -161,14 +161,21 @@ export function SkillsPane({
   );
 }
 
-function SkillRow({ skill }: { skill: BundledSkillEntry }): JSX.Element {
+function SkillRow({
+  skill,
+  showStatus = true,
+}: {
+  skill: BundledSkillEntry;
+  /** false にすると StatusDot と「同期済/未同期」バッジを非表示にする (カスタム skill 一覧用) */
+  showStatus?: boolean;
+}): JSX.Element {
   return (
     <li
       data-testid={`skill-row-${skill.name}`}
       data-status={skill.status}
       className="flex items-center gap-[10px] rounded-[8px] border border-border bg-card px-[12px] py-[8px]"
     >
-      <StatusDot status={skill.status} />
+      {showStatus && <StatusDot status={skill.status} />}
       <div className="min-w-0 flex-1">
         <div className="truncate text-[12px] font-semibold text-text">{skill.displayTitle}</div>
         <div className="mt-[1px] flex items-center gap-[6px] font-mono text-[10px] text-subtle">
@@ -176,18 +183,20 @@ function SkillRow({ skill }: { skill: BundledSkillEntry }): JSX.Element {
           {skill.version && <span className="opacity-60">v{skill.version}</span>}
         </div>
       </div>
-      <span
-        className={[
-          'shrink-0 rounded-[3px] px-[5px] py-[1px] text-[9.5px] font-semibold',
-          skill.status === 'synced'
-            ? 'bg-ok-soft text-ok'
-            : skill.status === 'updated'
-              ? 'bg-warn-soft text-warn'
-              : 'bg-card-hi text-muted',
-        ].join(' ')}
-      >
-        {skill.status === 'synced' ? '同期済' : skill.status === 'updated' ? '更新あり' : '未同期'}
-      </span>
+      {showStatus && (
+        <span
+          className={[
+            'shrink-0 rounded-[3px] px-[5px] py-[1px] text-[9.5px] font-semibold',
+            skill.status === 'synced'
+              ? 'bg-ok-soft text-ok'
+              : skill.status === 'updated'
+                ? 'bg-warn-soft text-warn'
+                : 'bg-card-hi text-muted',
+          ].join(' ')}
+        >
+          {skill.status === 'synced' ? '同期済' : skill.status === 'updated' ? '更新あり' : '未同期'}
+        </span>
+      )}
     </li>
   );
 }
