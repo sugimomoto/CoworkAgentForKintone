@@ -1,8 +1,8 @@
-// Cowork Agent for kintone — Plugin 同梱 skill の Anthropic 側 skill_id 解決ヘルパー
+// Cowork Agent for kintone — Anthropic Workspace の custom skill 解決ヘルパー
 //
 // 永続化は Anthropic Workspace に一元化する設計のため、Plugin 側はバージョンも
 // skillsMapping も保持しない。bootstrap / Settings View が必要なときに
-// `/v1/skills?source=custom` を 1 回叩いて display_title で match するだけ。
+// `/v1/skills?source=custom` を 1 回叩いて display_title で照合するだけ。
 //
 // 経路 (Issue #31): 全 Anthropic API 呼出は Worker `/anthropic/*` 経由が標準。
 // managed-agents/client.ts の `apiRequest` を使うことで:
@@ -10,16 +10,18 @@
 //   - transport が kintone.plugin.app.proxy に切替済 (起動時 setTransport で注入)
 //   - apiHeaders が anthropic-version / anthropic-beta を自動付与
 //
-// 仕様:
-//   - SKILL_BUNDLES[].displayTitle と Anthropic 側 display_title が一致するものを採用
-//   - 一致がなければ skillId=null (= 未同期、SettingsViewBound が UI に反映する)
-//   - バージョン比較はしない。最新版がほしいなら admin が「同期」ボタンを押す
-//     (Worker /skills/sync が常に新 version を作る)
+// 返却値の構造:
+//   - bundled: Plugin 同梱 (SKILL_BUNDLES) の各 entry に対する skillId 解決結果
+//   - custom : SKILL_BUNDLES に無い (= admin が SkillAddModal から追加した) skill
+//
+// 同期判定:
+//   bundled[].skillId が null = 未同期 / not null = synced
+//   custom[]            = 常に skillId あり (Anthropic に存在)
 
 import { apiRequest } from '../managed-agents/client';
 import { SKILL_BUNDLES, type SkillBundle } from '../../generated/skills-bundle';
 
-/** Skills API 用 beta (apiHeaders で managed-agents-* と comma-join される) */
+/** Skills API 用 beta (apiHeaders で MANAGED_AGENTS_BETA を上書き) */
 const SKILLS_BETA = 'skills-2025-10-02';
 
 interface AnthropicSkillEntry {
@@ -36,9 +38,9 @@ interface AnthropicSkillsListResponse {
 }
 
 export interface BundledSkillResolution {
-  /** Plugin 同梱 skill 名 (例: 'kintone-customize-js') */
+  /** Plugin 同梱 skill 名 (= bundled では SKILL_BUNDLES.name / custom では display_title) */
   name: string;
-  /** Anthropic display_title (現状 name と同じ) */
+  /** Anthropic display_title */
   displayTitle: string;
   /** 一致した Anthropic skill_id。未同期なら null */
   skillId: string | null;
@@ -46,19 +48,25 @@ export interface BundledSkillResolution {
   latestVersion: string | null;
 }
 
+export interface ResolvedSkillSet {
+  /** SKILL_BUNDLES と display_title 一致するもの (未同期は skillId=null) */
+  bundled: BundledSkillResolution[];
+  /** SKILL_BUNDLES に無い = admin が手動追加した custom skill */
+  custom: BundledSkillResolution[];
+}
+
 /**
- * Anthropic `/v1/skills?source=custom` をページネーション展開して
- * SKILL_BUNDLES と display_title で照合し、結果を返す。
- *
- * 呼出経路は managed-agents/client の apiRequest なので、起動時に
- * setApiBase / setTransport で Worker 経由に切替済の前提。
+ * Anthropic `/v1/skills?source=custom` をページネーション展開し、
+ * 同梱 (bundled) と admin 追加 (custom) を分類して返す。1 リクエスト = 1 fetch。
  */
-export async function resolveBundledSkillIds(): Promise<BundledSkillResolution[]> {
+export async function resolveSkillSet(): Promise<ResolvedSkillSet> {
   const existing = await listAllCustomSkills();
   const byTitle = new Map<string, AnthropicSkillEntry>();
   for (const s of existing) byTitle.set(s.display_title, s);
 
-  return SKILL_BUNDLES.map((b: SkillBundle): BundledSkillResolution => {
+  const bundledTitles = new Set(SKILL_BUNDLES.map((b) => b.displayTitle));
+
+  const bundled = SKILL_BUNDLES.map((b: SkillBundle): BundledSkillResolution => {
     const matched = byTitle.get(b.displayTitle);
     return {
       name: b.name,
@@ -67,6 +75,28 @@ export async function resolveBundledSkillIds(): Promise<BundledSkillResolution[]
       latestVersion: matched?.latest_version ?? null,
     };
   });
+
+  const custom = existing
+    .filter((s) => !bundledTitles.has(s.display_title))
+    .map(
+      (s): BundledSkillResolution => ({
+        name: s.display_title,
+        displayTitle: s.display_title,
+        skillId: s.id,
+        latestVersion: s.latest_version,
+      }),
+    );
+
+  return { bundled, custom };
+}
+
+/**
+ * bootstrap (useSession) 用 — bundled の skill_id 配列だけが欲しいケース。
+ * resolveSkillSet().bundled の skillId を取り出した配列を返す。
+ */
+export async function resolveBundledSkillIds(): Promise<BundledSkillResolution[]> {
+  const { bundled } = await resolveSkillSet();
+  return bundled;
 }
 
 /** ページネーション全展開 (安全装置: 最大 50 ページ = 5000 skill) */

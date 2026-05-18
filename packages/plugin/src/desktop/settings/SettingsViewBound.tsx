@@ -15,7 +15,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { getPluginConfig } from '../../core/kintone/pluginConfig';
 import { setAgentVisibility } from '../../core/managed-agents/agentVisibility';
-import { resolveBundledSkillIds } from '../../core/skills/resolveBundledSkillIds';
+import { resolveSkillSet } from '../../core/skills/resolveBundledSkillIds';
 import {
   syncBundledSkillsFromChatPanel,
   syncCustomSkillFromChatPanel,
@@ -57,16 +57,16 @@ export function SettingsViewBound({
       status: 'pending',
     })),
   );
+  const [customSkills, setCustomSkills] = useState<BundledSkillEntry[]>([]);
 
   useEffect(() => {
     if (!pluginId || !cfg.workerUrl) return;
     let cancelled = false;
-    void resolveBundledSkillIds()
-      .then((resolved) => {
+    void resolveSkillSet()
+      .then(({ bundled, custom }) => {
         if (cancelled) return;
-        console.debug('[cowork-agent] resolveBundledSkillIds resolved:', resolved);
         setBundledSkills(
-          resolved.map((r) => ({
+          bundled.map((r) => ({
             name: r.name,
             displayTitle: r.displayTitle,
             skillId: r.skillId,
@@ -74,10 +74,19 @@ export function SettingsViewBound({
             status: r.skillId ? 'synced' : 'pending',
           })),
         );
+        setCustomSkills(
+          custom.map((r) => ({
+            name: r.name,
+            displayTitle: r.displayTitle,
+            skillId: r.skillId,
+            version: r.latestVersion,
+            status: 'synced',
+          })),
+        );
       })
       .catch((err) => {
         // 取得失敗時は 'pending' のままにする (admin が同期ボタンを押せば再取得される)
-        console.warn('[cowork-agent] resolveBundledSkillIds failed:', err);
+        console.warn('[cowork-agent] resolveSkillSet failed:', err);
       });
     return () => {
       cancelled = true;
@@ -124,6 +133,7 @@ export function SettingsViewBound({
       onClose={onClose}
       {...(onPluginConfigClick ? { onPluginConfigClick } : {})}
       bundledSkills={bundledSkills}
+      customSkills={customSkills}
       onSyncBundled={handleSyncBundled}
       onAddCustomSkill={handleAddCustomSkill}
       onToggleVisibility={handleToggleVisibility}

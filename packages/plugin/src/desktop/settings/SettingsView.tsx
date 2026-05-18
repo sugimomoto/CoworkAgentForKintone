@@ -22,8 +22,10 @@ export interface SettingsViewProps {
   onClose: () => void;
   /** Plugin Config (kintone admin 画面) を新タブで開く */
   onPluginConfigClick?: () => void;
-  /** Plugin 同梱 skill 一覧 (ChatPanel 側で Plugin Config から算出して渡す) */
+  /** Plugin 同梱 skill 一覧 (Anthropic Workspace から resolve して渡す) */
   bundledSkills?: BundledSkillEntry[];
+  /** admin が SkillAddModal から追加した custom skill 一覧 (Anthropic から resolve) */
+  customSkills?: BundledSkillEntry[];
   /** Plugin 同梱 skill を Anthropic に同期 */
   onSyncBundled?: () => Promise<void>;
   /** カスタム skill 追加 (admin が SkillAddModal で投入) */
@@ -36,6 +38,7 @@ export function SettingsView({
   onClose,
   onPluginConfigClick,
   bundledSkills,
+  customSkills,
   onSyncBundled,
   onAddCustomSkill,
   onToggleVisibility,
@@ -82,6 +85,7 @@ export function SettingsView({
           {section === 'skills' && (
             <SkillsPane
               {...(bundledSkills ? { bundledSkills } : {})}
+              {...(customSkills ? { customSkills } : {})}
               {...(onSyncBundled ? { onSyncBundled } : {})}
               {...(onAddCustomSkill ? { onAddCustomSkill } : {})}
             />

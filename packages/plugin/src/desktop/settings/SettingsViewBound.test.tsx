@@ -28,6 +28,7 @@ vi.mock('../../core/kintone/pluginConfig', () => ({
 }));
 vi.mock('../../core/skills/resolveBundledSkillIds', () => ({
   resolveBundledSkillIds: vi.fn().mockResolvedValue([]),
+  resolveSkillSet: vi.fn().mockResolvedValue({ bundled: [], custom: [] }),
 }));
 
 import {
