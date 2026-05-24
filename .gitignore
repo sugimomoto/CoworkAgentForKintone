@@ -58,3 +58,6 @@ packages/plugin/.keys/
 .env.local
 .env.*.local
 .devcontainer/
+
+# 検証スクリプト (scripts/verify-customize-rest-api.mjs) の出力
+scripts/.verify-output/

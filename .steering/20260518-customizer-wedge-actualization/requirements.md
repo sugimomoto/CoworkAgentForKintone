@@ -65,6 +65,56 @@
 
 ---
 
+## 2.5 実機 REST API 検証結果 (2026-05-24)
+
+設計判断の前提を固めるため、`scripts/verify-customize-rest-api.mjs` でテスト用アプリ (`KINTONE_TEST_APP_ID=5`) に対し実機検証を実施。確定事項:
+
+### 2.5.1 認証
+- kintone REST API のパスワード認証は **`X-Cybozu-Authorization: Basic <base64(user:pass)>`** ヘッダ (kintone 独自、`Authorization` ではない)。OAuth でも本機能を呼ぶ場合 `Authorization: Bearer ...` でよい
+
+### 2.5.2 customize.json の構造 (実レスポンス)
+```json
+{
+  "scope": "ALL" | "ADMIN" | "NONE",
+  "desktop": { "js": [...], "css": [...] },
+  "mobile":  { "js": [...], "css": [...] },   // mobile にも css がある
+  "revision": "183"                            // 楽観ロック用
+}
+```
+各 entry: `{ "type": "URL" | "FILE", "url"?: string, "file"?: { "fileKey", "name", "contentType", "size" } }`
+
+### 2.5.3 file.json upload
+- `POST /k/v1/file.json` (multipart, field 名 `file`) → `{ "fileKey": "<UUID-36>" }`
+- UUID 形式: `6b0d0a0f-6aad-43ff-a0d6-5b4f4e2e0cab` (8-4-4-4-12 hex)
+
+### 2.5.4 **fileKey の 2 種類 (重要)**
+- **upload 直後の UUID 形式** (`6b0d0a0f-...`, 36 chars) — `file.json` レスポンスで取得、`customize.json` PUT 時にこれを渡す
+- **kintone 内部 ID 形式** (`20260524004722FF081EA2DAED41078C20674226A20993017`, 49 chars hex) — `customize.json` を GET したときに返ってくる。**preview と live で別 ID** (= 同じ JS でも kintone 側で別管理)
+- → **PUT/deploy 後の cleanup を fileKey で filter するのは難** (name 一致 or 配列インデックスベースで識別する必要)
+
+### 2.5.5 PUT customize.json
+- **全置換** (差分更新ではない)、新しい全体を渡す
+- `revision` を渡せば楽観ロック (一致しないと 409、`"-1"` で skip)
+- 成功時 `revision` が +1
+
+### 2.5.6 deploy.json
+- `POST /k/v1/preview/app/deploy.json {apps:[{app, revision?}], revert?}` → 即 `{}` を返す (非同期)
+- 進捗は `GET /k/v1/preview/app/deploy.json?apps[0]=<id>` でポーリング
+- 状態: `PROCESSING` → `SUCCESS` / `FAIL` / `CANCEL`
+- 検証アプリ (空 customize) では 2 秒で SUCCESS
+
+### 2.5.7 **`revert: true` の正確な挙動 (重要 / 既存 #20 spec 誤解の訂正)**
+- 公式仕様: 「**preview のアプリの設定を本番環境の設定と同じにする**」 = **preview の編集を破棄して live と同期**
+- **「直前 deploy を取消す」ではない**
+- 実機確認: deploy 完了後に `revert: true` を呼んでも live は変わらない (live にカスタマイズが残ったまま)
+- → **deploy 後の rollback は revert では不可能**。**snapshot を保持して旧 customize を再 PUT + deploy する必要あり**
+
+### 2.5.8 fileKey の cleanup
+- file.json upload した fileKey は **削除 API なし** (孤児として残る、容量のみ消費)
+- customize.json に登録された fileKey は次の PUT で参照を外せば不要 (内部 ID は GC されるかもしれないが保証なし)
+
+---
+
 ## 3. 主要設計論点 (要決定)
 
 > 各論点について Plugin・Agent・Worker の役割分担と実装方針を design.md で詰める。**ここでは選択肢と暫定案だけ列挙**。
@@ -116,15 +166,28 @@
 
 ### 3.5 rollback snapshot の永続化
 
-**論点**: V1 は in-memory なので Plugin リロードで失われる。V2 で永続化すべきだが、kintone DB を使うか、Plugin Config か、他の場所か。
+**論点**: V1 は in-memory なので Plugin リロードで失われる。**§2.5.7 で確定した通り `revert: true` は deploy 後の rollback には使えない** ため、必ず snapshot が必要。永続化先の選択。
 
-| 案 | 内容 |
-|---|---|
-| A. **kintone 自身の revert 機能を使う** — `POST /k/v1/preview/app/deploy.json {revert: true}` で deploy 前に戻す。snapshot 不要 | kintone 公式機能、最も信頼できる |
-| B. **kintone レコード保存** — 専用アプリ or 既存アプリのレコードに snapshot を JSON で保存 | 永続化、kintone 内完結 |
-| C. **iframe localStorage / Anthropic Memory Store** | 簡易だが消える可能性あり |
+| 案 | 内容 | Pros | Cons |
+|---|---|---|---|
+| ~~A. revert で snapshot 撤廃~~ | **不可** (§2.5.7) | - | - |
+| B. **kintone レコード保存** — 専用アプリ or 既存アプリのレコードに snapshot を JSON で保存 | 永続化、kintone 内完結、他 admin も復元可能 | 専用アプリのスキーマ管理が要る |
+| C. **Plugin Config (setConfig) に保存** — `kintone.plugin.app.setConfig` で snapshot JSON を保存 | kintone DB に永続化、Plugin に閉じる | setConfig は **設定画面でしか動かない** (V1 同期問題と同根) — apply 時 (record-list 画面) には呼べないため不適 |
+| D. **localStorage** — ブラウザに保存 | 実装最小 | ブラウザ依存、他端末からは復元不可、ストレージサイズ制限 |
+| E. **Anthropic Memory Store** — Agent の memory に保存 | session 横断で永続、Plugin 自身で管理不要 | Agent 経由のアクセスが必要 (admin 操作と非対称) |
+| F. **Worker KV (or D1)** — Worker に保存して REST 経由で読み書き | 永続、admin 端末非依存 | Worker 側に新エンドポイント、認証経路、データ保管責任 |
 
-**暫定案**: **A**。`revert: true` の deploy で apply 前の状態に戻せる ([#20 既存 spec で確認済](../../packages/plugin/src/chat/workflow/kintoneCustomizeApi.ts))。snapshot を取らずに済む。
+**暫定案**: **B (kintone レコード保存)** — admin 自身が管理する kintone データ空間内に閉じるのが運用的に最も clean (Plugin が消えても admin が手動でアクセス可能、データ漏洩リスクが低い)。専用アプリは Plugin 初回 install 時に admin に作成案内 or auto-provision。
+
+**B のスキーマ案** (専用アプリ `cowork-agent-customize-history`):
+| フィールド | 型 | 内容 |
+|---|---|---|
+| `appId` | SINGLE_LINE_TEXT | 対象アプリ ID |
+| `appliedAt` | DATETIME | apply 実施時刻 |
+| `actor` | USER_SELECT | apply した admin |
+| `snapshot` | MULTI_LINE_TEXT | apply 直前の customize.json (JSON 文字列) |
+| `appliedJsContent` | MULTI_LINE_TEXT | apply した artifact 内容 (= rollback 対象を識別する用) |
+| `status` | DROP_DOWN | `applied` / `rolled-back` |
 
 ### 3.6 Customizer Agent prompt の拡張
 
@@ -141,8 +204,8 @@
 ### 4.1 修正
 
 - `packages/plugin/src/chat/workflow/FileTree.tsx` — hardcoded を撤廃、props で files を受ける
-- `packages/plugin/src/chat/workflow/kintoneCustomizeApi.ts` — `buildCustomizeUpdate` 実装 + file.json upload + revert 対応
-- `packages/plugin/src/chat/workflow/useApplyWorkflow.ts` — rollback を kintone revert API 経由に変更 (snapshot 撤廃)
+- `packages/plugin/src/chat/workflow/kintoneCustomizeApi.ts` — `buildCustomizeUpdate` 実装 + file.json upload + 旧 customize の snapshot 保存
+- `packages/plugin/src/chat/workflow/useApplyWorkflow.ts` — rollback を **snapshot レコードから再 PUT+deploy** で実装 (§3.5 案 B、`revert: true` は使わない)
 - `packages/plugin/src/desktop/components/ArtifactPane/index.tsx` — FileTree state 管理 / active file 切替
 - `packages/plugin/src/core/bootstrap/builtInAgents.ts` — `CUSTOMIZER_WORKFLOW_PROMPT` を multi-file 対応
 - `packages/plugin/src/skills/kintone-customize-js/SKILL.md` — multi-file 編集の指示追記
@@ -151,6 +214,7 @@
 
 - `packages/plugin/src/chat/workflow/useCustomizeFiles.ts` — `GET customize.json` を fetch して FileTree 用 entry に整形する hook
 - `packages/plugin/src/chat/workflow/previewSandbox.tsx` — iframe sandbox component
+- `packages/plugin/src/chat/workflow/customizeHistoryRepo.ts` — snapshot を kintone レコード (専用アプリ) に保存/取得する repo
 - (任意) `packages/plugin/src/chat/workflow/CustomizeFileUploader.ts` — file.json upload ヘルパー
 
 ### 4.3 OAuth scope
@@ -174,12 +238,16 @@
 
 ## 6. 未決事項 (ユーザー確認待ち)
 
-- [ ] **論点 3.1 — ファイル保管方式**: kintone FILE upload (案 A) で進めて良いか
-- [ ] **論点 3.2 — multi-file artifact**: 1 artifact = 1 ファイル (案 A) で進めて良いか
-- [ ] **論点 3.4 — preview sandbox**: 完全 mock (案 A) で進めて良いか、それとも実環境プレビュー (kintone admin preview URL を別タブで開く) を主軸にするか
-- [ ] **論点 3.5 — rollback**: kintone revert API (案 A) を使うことで snapshot を完全撤廃して良いか
+実機検証 (§2.5) で確定した事項は除外。残る未決:
+
+- [x] **論点 3.1 — ファイル保管方式**: kintone FILE upload (案 A) → ✅ 検証で動作確認、確定
+- [ ] **論点 3.2 — multi-file artifact**: 1 artifact = 1 ファイル (案 A) で進めて良いか (B/C も検討余地あり)
+- [ ] **論点 3.4 — preview sandbox**: 完全 mock (案 A) で進めるか、実環境プレビュー (`/k/admin/preview/<appId>/` を別タブ) を主軸にするか
+- [x] **論点 3.5 — rollback**: ~~revert API で snapshot 撤廃 (案 A)~~ → ✅ §2.5.7 で **不可** 確定。**案 B (kintone 専用アプリレコードに snapshot 保存)** で進めるか確認
+- [ ] **専用アプリの provision**: §3.5 案 B の snapshot 保存先アプリ `cowork-agent-customize-history` を Plugin 初回 install 時に自動作成 (REST API で創設) するか、admin に手動作成案内するか
 - [ ] **MVP の段階分割**: 全機能を一度にやらず、まず desktop.js のみで実 deploy → 後で multi-file 拡張、という段階的リリースは可能か?
-- [ ] **OAuth 再連携 UX**: 既存ユーザに対する追加 scope 取得タイミング (Customizer Agent 初回利用時に prompt? それとも初回 Plugin install 時から)
+- [ ] **OAuth 再連携 UX**: 既存ユーザに対する追加 scope 取得タイミング (Customizer Agent 初回利用時に prompt? それとも Plugin install 時から)
+- [ ] **「適用前に動作テスト環境画面で実機確認」UX**: §3.4 案 A (sandbox mock) を採用したとしても、admin が実 kintone で動作確認したいケースに対応するか (= `/k/admin/preview/<appId>/` を別タブで開くボタンの位置づけ)
 
 ---
 
