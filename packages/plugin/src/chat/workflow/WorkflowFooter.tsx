@@ -16,10 +16,16 @@ export interface WorkflowFooterProps {
   artifactId: string;
   /** kintone アプリ名 (status line の "{appName} に適用済" 表示用) */
   appName?: string;
-  /** I/O コールバック (preview / apply / rollback の実装) */
+  /** I/O コールバック (preview / apply / rollback / cancel の実装) */
   callbacks: WorkflowCallbacks;
   /** 初期状態 (画面再表示時の復元用)。default: 'ready' */
   initialState?: WorkflowState;
+  /**
+   * 動作テスト環境 URL (`https://<sub>.cybozu.com/k/admin/preview/<appId>/`)。
+   * previewed 状態のとき「動作テスト環境を開く」ボタンの href として使う。
+   * 省略時はボタンを非表示。
+   */
+  previewUrl?: string;
 }
 
 export function WorkflowFooter({
@@ -27,6 +33,7 @@ export function WorkflowFooter({
   appName = 'アプリ',
   callbacks,
   initialState = 'ready',
+  previewUrl,
 }: WorkflowFooterProps): JSX.Element {
   const wf = useApplyWorkflow({ artifactId, initialState, callbacks });
   const statusLine = makeStatusLine(wf.state, appName);
@@ -59,7 +66,7 @@ export function WorkflowFooter({
             statusLine.label
           )}
         </div>
-        <WorkflowAction wf={wf} />
+        <WorkflowAction wf={wf} previewUrl={previewUrl} />
       </div>
 
       {/* ヒント */}
@@ -239,9 +246,10 @@ function StatusDot({ tone }: { tone: StatusTone }): JSX.Element {
 
 interface WorkflowActionProps {
   wf: ApplyWorkflowApi;
+  previewUrl?: string;
 }
 
-function WorkflowAction({ wf }: WorkflowActionProps): JSX.Element {
+function WorkflowAction({ wf, previewUrl }: WorkflowActionProps): JSX.Element {
   if (wf.state === 'ready') {
     return (
       <PrimaryButton
@@ -254,14 +262,31 @@ function WorkflowAction({ wf }: WorkflowActionProps): JSX.Element {
     );
   }
   if (wf.state === 'previewed') {
+    const handleCancel = (): void => {
+      if (typeof window !== 'undefined' && !window.confirm('動作テスト環境の変更を破棄します。よろしいですか?')) {
+        return;
+      }
+      void wf.cancel();
+    };
     return (
       <div className="flex items-center gap-[6px]">
+        {previewUrl && (
+          <a
+            data-testid="workflow-action-open-preview"
+            href={previewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-[4px] rounded-[7px] border border-border bg-transparent px-[11px] py-[6px] text-[11.5px] font-medium text-text hover:bg-card-hi"
+          >
+            <ExternalLinkIcon /> 動作テスト環境を開く
+          </a>
+        )}
         <GhostButton
-          testId="workflow-action-preview-again"
-          onClick={() => void wf.preview()}
+          testId="workflow-action-cancel"
+          onClick={handleCancel}
           disabled={wf.inFlight !== null}
         >
-          もう一度プレビュー
+          キャンセル
         </GhostButton>
         <PrimaryButton
           testId="workflow-action-apply"
@@ -426,6 +451,15 @@ function UploadIcon(): JSX.Element {
     <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M6 8V2M3.5 4.5L6 2l2.5 2.5" />
       <path d="M2 9v1h8V9" />
+    </svg>
+  );
+}
+
+function ExternalLinkIcon(): JSX.Element {
+  return (
+    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M7 2h3v3M10 2L5.5 6.5" />
+      <path d="M9 7v3H2V3h3" />
     </svg>
   );
 }

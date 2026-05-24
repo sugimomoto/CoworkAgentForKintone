@@ -28,7 +28,7 @@ export type WorkflowState =
 /** 状態遷移が許される組み合わせ表 (state machine の transition function) */
 const ALLOWED_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
   ready: ['previewed'],
-  previewed: ['previewed', 'applying'], // 再プレビュー (self-loop) or 適用
+  previewed: ['previewed', 'applying', 'ready'], // 再プレビュー / 適用 / キャンセル (= ready)
   applying: ['applied', 'previewed'], // 適用成功 or 失敗で previewed に戻る
   applied: ['rolled-back', 'applying'], // ロールバック or 同じ artifact をもう一度適用
   'rolled-back': ['applying'], // もう一度適用
@@ -38,19 +38,26 @@ const ALLOWED_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
  * useApplyWorkflow の I/O コールバック。
  * 呼出側 (CustomizerArtifactCard) で kintone REST API 呼出を実装する。
  *
- * - preview: iframe sandbox で artifact.content を実行 (host kintone には触れない)
- * - apply: 旧 customize.js を snapshot → preview/app/customize/js → deploy
- * - rollback: snapshot を書き戻し → deploy
+ * - preview: `PUT /k/v1/preview/app/customize.json` で動作テスト環境に反映 (live は無傷)。
+ *            admin は別タブで `/k/admin/preview/<appId>/` から実機確認する
+ * - apply: 旧 customize.js を snapshot (chatStore.workflowHistory) → PUT customize.json
+ *          → POST deploy.json で live に反映
+ * - rollback: chatStore.workflowHistory から snapshot を取り出し PUT + deploy で復元
+ *             (Phase 1 は in-memory のみ、Plugin リロードで失効、Phase 2 で git に永続化予定)
+ * - cancel: `POST deploy.json {revert: true}` で preview を live と同期 (= 編集破棄)。
+ *           previewed 状態のときだけ呼べる、ready 状態に戻る
  *
  * いずれも reject すると state は遷移前に戻り、エラーは `errorMessage` に保持される。
  */
 export interface WorkflowCallbacks {
-  /** プレビュー実行 (sandbox)。成功時 resolve、失敗時 reject */
+  /** プレビュー実行 (preview customize.json PUT)。成功時 resolve、失敗時 reject */
   preview: () => Promise<void>;
-  /** 本番適用。成功時 resolve、失敗時 reject */
+  /** 本番適用 (snapshot 保存 + deploy)。成功時 resolve、失敗時 reject */
   apply: () => Promise<void>;
-  /** ロールバック実行。成功時 resolve、失敗時 reject */
+  /** ロールバック実行 (snapshot から復元)。成功時 resolve、失敗時 reject */
   rollback: () => Promise<void>;
+  /** キャンセル (deploy 前の preview を破棄、revert: true で live と同期)。成功時 resolve、失敗時 reject */
+  cancel: () => Promise<void>;
 }
 
 export interface UseApplyWorkflowOptions {
@@ -65,8 +72,8 @@ export interface UseApplyWorkflowOptions {
 export interface ApplyWorkflowApi {
   /** 現在の状態 */
   state: WorkflowState;
-  /** 進行中の操作 (preview / apply / rollback / null) — UI で spinner や disabled に使う */
-  inFlight: 'preview' | 'apply' | 'rollback' | null;
+  /** 進行中の操作 (preview / apply / rollback / cancel / null) — UI で spinner や disabled に使う */
+  inFlight: 'preview' | 'apply' | 'rollback' | 'cancel' | null;
   /** 最新の操作で reject した時のエラーメッセージ (null = エラー無し) */
   errorMessage: string | null;
   /** プレビュー実行: 'ready' / 'previewed' でのみ呼べる */
@@ -75,6 +82,8 @@ export interface ApplyWorkflowApi {
   apply: () => Promise<void>;
   /** ロールバック: 'applied' でのみ呼べる */
   rollback: () => Promise<void>;
+  /** キャンセル (preview を live と同期): 'previewed' でのみ呼べる */
+  cancel: () => Promise<void>;
 }
 
 function canTransition(from: WorkflowState, to: WorkflowState): boolean {
@@ -97,7 +106,7 @@ export function useApplyWorkflow({
   callbacks,
 }: UseApplyWorkflowOptions): ApplyWorkflowApi {
   const [state, setState] = useState<WorkflowState>(initialState);
-  const [inFlight, setInFlight] = useState<'preview' | 'apply' | 'rollback' | null>(null);
+  const [inFlight, setInFlight] = useState<'preview' | 'apply' | 'rollback' | 'cancel' | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // artifactId が変わったら state をリセット (別 artifact 切替時の安全策)
@@ -109,7 +118,7 @@ export function useApplyWorkflow({
 
   const run = useCallback(
     async (
-      operation: 'preview' | 'apply' | 'rollback',
+      operation: 'preview' | 'apply' | 'rollback' | 'cancel',
       nextState: WorkflowState,
       callback: () => Promise<void>,
     ): Promise<void> => {
@@ -151,9 +160,15 @@ export function useApplyWorkflow({
     await run('rollback', 'rolled-back', callbacks.rollback);
   }, [state, callbacks, run]);
 
+  const cancel = useCallback(async () => {
+    // cancel は previewed → ready の遷移のみ許可
+    if (state !== 'previewed') return;
+    await run('cancel', 'ready', callbacks.cancel);
+  }, [state, callbacks, run]);
+
   return useMemo(
-    () => ({ state, inFlight, errorMessage, preview, apply, rollback }),
-    [state, inFlight, errorMessage, preview, apply, rollback],
+    () => ({ state, inFlight, errorMessage, preview, apply, rollback, cancel }),
+    [state, inFlight, errorMessage, preview, apply, rollback, cancel],
   );
 }
 

@@ -16,17 +16,24 @@ function makeCallbacks(overrides: Partial<WorkflowCallbacks> = {}): WorkflowCall
     preview: vi.fn().mockResolvedValue(undefined),
     apply: vi.fn().mockResolvedValue(undefined),
     rollback: vi.fn().mockResolvedValue(undefined),
+    cancel: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
 
-function renderFooter(state: WorkflowState, callbacks: WorkflowCallbacks = makeCallbacks()): void {
+interface RenderOptions {
+  callbacks?: WorkflowCallbacks;
+  previewUrl?: string;
+}
+
+function renderFooter(state: WorkflowState, options: RenderOptions = {}): void {
   render(
     <WorkflowFooter
       artifactId="art_1"
       appName="案件管理"
-      callbacks={callbacks}
+      callbacks={options.callbacks ?? makeCallbacks()}
       initialState={state}
+      {...(options.previewUrl ? { previewUrl: options.previewUrl } : {})}
     />,
   );
 }
@@ -59,9 +66,17 @@ describe('WorkflowFooter', () => {
       expect(screen.getByTestId('workflow-step-apply').getAttribute('data-status')).toBe('current');
     });
 
-    it('"もう一度プレビュー" + "kintone に適用" の 2 ボタン', () => {
+    it('previewUrl があれば "動作テスト環境を開く" + "キャンセル" + "kintone に適用" の 3 ボタン', () => {
+      renderFooter('previewed', { previewUrl: 'https://example.cybozu.com/k/admin/preview/3/' });
+      expect(screen.getByTestId('workflow-action-open-preview')).toBeInTheDocument();
+      expect(screen.getByTestId('workflow-action-cancel')).toBeInTheDocument();
+      expect(screen.getByTestId('workflow-action-apply')).toBeInTheDocument();
+    });
+
+    it('previewUrl 未指定なら "動作テスト環境を開く" ボタンは出ない', () => {
       renderFooter('previewed');
-      expect(screen.getByTestId('workflow-action-preview-again')).toBeInTheDocument();
+      expect(screen.queryByTestId('workflow-action-open-preview')).not.toBeInTheDocument();
+      expect(screen.getByTestId('workflow-action-cancel')).toBeInTheDocument();
       expect(screen.getByTestId('workflow-action-apply')).toBeInTheDocument();
     });
 
@@ -110,7 +125,7 @@ describe('WorkflowFooter', () => {
     it('ready → プレビュー → callbacks.preview', async () => {
       const callbacks = makeCallbacks();
       const user = userEvent.setup();
-      renderFooter('ready', callbacks);
+      renderFooter('ready', { callbacks });
       await user.click(screen.getByTestId('workflow-action-preview'));
       expect(callbacks.preview).toHaveBeenCalledOnce();
     });
@@ -118,7 +133,7 @@ describe('WorkflowFooter', () => {
     it('previewed → 適用 → callbacks.apply', async () => {
       const callbacks = makeCallbacks();
       const user = userEvent.setup();
-      renderFooter('previewed', callbacks);
+      renderFooter('previewed', { callbacks });
       await user.click(screen.getByTestId('workflow-action-apply'));
       expect(callbacks.apply).toHaveBeenCalledOnce();
     });
@@ -126,9 +141,41 @@ describe('WorkflowFooter', () => {
     it('applied → ロールバック → callbacks.rollback', async () => {
       const callbacks = makeCallbacks();
       const user = userEvent.setup();
-      renderFooter('applied', callbacks);
+      renderFooter('applied', { callbacks });
       await user.click(screen.getByTestId('workflow-action-rollback'));
       expect(callbacks.rollback).toHaveBeenCalledOnce();
+    });
+
+    it('previewed → キャンセル → 確認 OK で callbacks.cancel が呼ばれ ready に戻る', async () => {
+      const callbacks = makeCallbacks();
+      const user = userEvent.setup();
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      renderFooter('previewed', { callbacks });
+      await user.click(screen.getByTestId('workflow-action-cancel'));
+      expect(confirmSpy).toHaveBeenCalledOnce();
+      expect(callbacks.cancel).toHaveBeenCalledOnce();
+      confirmSpy.mockRestore();
+    });
+
+    it('previewed → キャンセル → 確認 NG で callbacks.cancel は呼ばれない', async () => {
+      const callbacks = makeCallbacks();
+      const user = userEvent.setup();
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      renderFooter('previewed', { callbacks });
+      await user.click(screen.getByTestId('workflow-action-cancel'));
+      expect(confirmSpy).toHaveBeenCalledOnce();
+      expect(callbacks.cancel).not.toHaveBeenCalled();
+      confirmSpy.mockRestore();
+    });
+
+    it('previewed の "動作テスト環境を開く" は previewUrl を href に持つ anchor', () => {
+      renderFooter('previewed', {
+        previewUrl: 'https://example.cybozu.com/k/admin/preview/3/',
+      });
+      const link = screen.getByTestId('workflow-action-open-preview') as HTMLAnchorElement;
+      expect(link.tagName.toLowerCase()).toBe('a');
+      expect(link.href).toBe('https://example.cybozu.com/k/admin/preview/3/');
+      expect(link.target).toBe('_blank');
     });
   });
 
@@ -138,7 +185,7 @@ describe('WorkflowFooter', () => {
         preview: vi.fn().mockRejectedValue(new Error('sandbox boom')),
       });
       const user = userEvent.setup();
-      renderFooter('ready', callbacks);
+      renderFooter('ready', { callbacks });
       await act(async () => {
         await user.click(screen.getByTestId('workflow-action-preview'));
       });
@@ -158,7 +205,7 @@ describe('WorkflowFooter', () => {
         ),
       });
       const user = userEvent.setup();
-      renderFooter('previewed', callbacks);
+      renderFooter('previewed', { callbacks });
       await act(async () => {
         await user.click(screen.getByTestId('workflow-action-apply'));
       });

@@ -16,6 +16,7 @@ function makeCallbacks(overrides: Partial<WorkflowCallbacks> = {}): WorkflowCall
     preview: vi.fn().mockResolvedValue(undefined),
     apply: vi.fn().mockResolvedValue(undefined),
     rollback: vi.fn().mockResolvedValue(undefined),
+    cancel: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -246,6 +247,49 @@ describe('useApplyWorkflow', () => {
     expect(result.current.state).toBe('previewed');
     rerender({ id: 'art_2' });
     expect(result.current.state).toBe('previewed'); // initialState のまま
+  });
+
+  // ── cancel (#20 V2 Phase 1) ──────────────────────────────────────────────
+
+  it('cancel は previewed → ready に遷移する', async () => {
+    const cancelFn = vi.fn().mockResolvedValue(undefined);
+    const callbacks = makeCallbacks({ cancel: cancelFn });
+    const { result } = renderHook(() =>
+      useApplyWorkflow({ artifactId: 'art_1', initialState: 'previewed', callbacks }),
+    );
+    await act(async () => {
+      await result.current.cancel();
+    });
+    expect(result.current.state).toBe('ready');
+    expect(cancelFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancel は previewed 以外の状態では no-op (state 変化なし、callback 呼ばれず)', async () => {
+    const cancelFn = vi.fn().mockResolvedValue(undefined);
+    const callbacks = makeCallbacks({ cancel: cancelFn });
+    for (const initialState of ['ready', 'applying', 'applied', 'rolled-back'] as const) {
+      const { result } = renderHook(() =>
+        useApplyWorkflow({ artifactId: `art_${initialState}`, initialState, callbacks }),
+      );
+      await act(async () => {
+        await result.current.cancel();
+      });
+      expect(result.current.state).toBe(initialState);
+    }
+    expect(cancelFn).not.toHaveBeenCalled();
+  });
+
+  it('cancel が reject すると state は previewed に戻り errorMessage が入る', async () => {
+    const cancelFn = vi.fn().mockRejectedValue(new Error('revert failed'));
+    const callbacks = makeCallbacks({ cancel: cancelFn });
+    const { result } = renderHook(() =>
+      useApplyWorkflow({ artifactId: 'art_1', initialState: 'previewed', callbacks }),
+    );
+    await act(async () => {
+      await result.current.cancel();
+    });
+    expect(result.current.state).toBe('previewed');
+    expect(result.current.errorMessage).toBe('revert failed');
   });
 });
 
