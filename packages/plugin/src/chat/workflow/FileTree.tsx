@@ -1,13 +1,12 @@
-// Cowork Agent for kintone — Customizer wedge FileTree (#20)
+// Cowork Agent for kintone — Customizer wedge FileTree (#20 V2 Phase 1)
 //
-// Customizer Agent が生成した kintone-customize-js artifact カードの左サイドバーに
+// Customizer Agent が生成した kintone-customize-bundle artifact の左サイドバーに
 // 表示する 200px 幅のファイルツリー。
 //
-// V1 は **hardcoded ファイル一覧** (customize/ 配下の典型構成)。
-// V2 で kintone-get-customize-js MCP ツールから動的取得に置き換える。
+// V1 までは hardcoded だったが、V2 Phase 1 で **props で files を受け取る動的化**。
+// 呼出側 (CustomizerArtifactView) が bundle.content.files から entry を構築して渡す。
 //
-// 詳細仕様: .steering/20260517-customizer-wedge-design/requirements.md §15.5
-//          .steering/20260517-customizer-wedge-design/design.md §6.4
+// 詳細仕様: .steering/20260518-customizer-wedge-actualization/design.md §3.4
 
 import { useMemo } from 'react';
 
@@ -36,54 +35,39 @@ export interface FileTreeEntry {
 }
 
 /**
- * V1 用 hardcoded ファイル構成。Customizer Agent が「kintone JS カスタマイズ」を
- * 生成する典型ケース。
+ * Bundle artifact の files[] から FileTreeEntry[] を構築するヘルパー。
+ * Customizer モードで CustomizerArtifactView から呼ばれる。
+ *
+ * 構造: `customize/` フォルダの下に各 path のファイル (Phase 1 では desktop.js 1 件)。
+ * Phase 1 では全ファイル `modified` 扱い (= bundle に含まれる = 編集中)。
  */
-export const DEFAULT_CUSTOMIZE_FILES: readonly FileTreeEntry[] = [
-  { type: 'folder', name: 'customize', level: 0, open: true },
-  {
-    type: 'file',
-    name: 'desktop.js',
-    kind: 'js',
-    level: 1,
-    path: 'customize/desktop.js',
-    active: true,
-    status: 'modified',
-  },
-  {
-    type: 'file',
-    name: 'mobile.js',
-    kind: 'js',
-    level: 1,
-    path: 'customize/mobile.js',
-    status: 'unchanged',
-  },
-  {
-    type: 'file',
-    name: 'desktop.css',
-    kind: 'css',
-    level: 1,
-    path: 'customize/desktop.css',
-    status: 'modified',
-  },
-  { type: 'folder', name: 'libs', level: 1, open: false },
-  {
-    type: 'file',
-    name: 'manifest.json',
-    kind: 'json',
-    level: 0,
-    path: 'manifest.json',
-    status: 'unchanged',
-  },
-  {
-    type: 'file',
-    name: 'README.md',
-    kind: 'md',
-    level: 0,
-    path: 'README.md',
-    status: 'new',
-  },
-] as const;
+export function bundleFilesToTreeEntries(
+  files: ReadonlyArray<{ path: string; content: string }>,
+  activePath: string | null,
+): FileTreeEntry[] {
+  const entries: FileTreeEntry[] = [
+    { type: 'folder', name: 'customize', level: 0, open: true },
+  ];
+  for (const f of files) {
+    entries.push({
+      type: 'file',
+      name: f.path,
+      kind: kindFromPath(f.path),
+      level: 1,
+      path: f.path,
+      active: f.path === activePath,
+      status: 'modified',
+    });
+  }
+  return entries;
+}
+
+function kindFromPath(path: string): FileKind {
+  if (path.endsWith('.js')) return 'js';
+  if (path.endsWith('.css')) return 'css';
+  if (path.endsWith('.json')) return 'json';
+  return 'md';
+}
 
 /** kind バッジの背景色 (Tailwind class) */
 const KIND_COLOR: Record<FileKind, string> = {
@@ -101,9 +85,13 @@ const STATUS_INFO: Record<FileStatus, { color: string; symbol: string; title: st
 };
 
 export interface FileTreeProps {
-  /** 表示するファイル一覧 (V1 は DEFAULT_CUSTOMIZE_FILES) */
+  /**
+   * 表示するファイル一覧 (CustomizerArtifactView が bundleFilesToTreeEntries で構築)。
+   * Phase 1 の中間状態として未渡し時は空配列を表示。T6 (ArtifactPane Customizer モード)
+   * 完成後は呼出側が必ず渡す想定。
+   */
   files?: readonly FileTreeEntry[];
-  /** active ファイルクリックハンドラ (V2 で実装、V1 は no-op) */
+  /** ファイル選択ハンドラ */
   onSelect?: (path: string) => void;
   /** バンドル名 (header に表示)。default: 'customize' */
   bundleName?: string;
@@ -118,7 +106,7 @@ export interface FileTreeProps {
  * - Footer: "プレビュー環境 と同期" インジケータ
  */
 export function FileTree({
-  files = DEFAULT_CUSTOMIZE_FILES,
+  files = [],
   onSelect,
   bundleName = 'customize',
 }: FileTreeProps): JSX.Element {
