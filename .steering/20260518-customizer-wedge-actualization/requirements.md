@@ -245,11 +245,19 @@ type CustomizeBundleArtifact = {
 
 ### 3.6 Customizer Agent prompt の拡張
 
-**論点**: Agent が multi-file 生成できるよう system prompt と skill を拡張する。
+**論点**: Agent が bundle artifact を生成できるよう system prompt と skill を拡張する。**Phase 1 と Phase 2 で制約レベルが異なる**:
 
-- `CUSTOMIZER_WORKFLOW_PROMPT` ([builtInAgents.ts](../../packages/plugin/src/core/bootstrap/builtInAgents.ts) L185-222) を multi-file 対応に
-- `kintone-customize-js` skill に「desktop.js / mobile.js / desktop.css の関係性」を追記
-- 「特定 file を更新したいときは create_artifact の id を `customize:desktop.js` のように file path にして 1 ファイル 1 artifact」と指示
+**Phase 1 (本 requirements の対象)**:
+- `CUSTOMIZER_WORKFLOW_PROMPT` ([builtInAgents.ts](../../packages/plugin/src/core/bootstrap/builtInAgents.ts) L185-222) を **bundle artifact 規約** に書き換え
+  - `create_artifact({kind:'kintone-customize-bundle', content:{files:[{path, content}]}})` の使い方
+  - 同一 customize を更新する場合は同じ artifact id で再 create (= 新バージョン)
+- **Phase 1 限定の制約**: 「現状は `path` に **`desktop.js` のみ** 含めること。`mobile.js` / `desktop.css` / `mobile.css` は Phase 2 で対応予定のため生成しないこと」と明示
+- `kintone-customize-js` skill は既存ベース、変更最小限
+
+**Phase 2 (#17 統合時、本 requirements 対象外):**
+- 上記制約を解除、4 path 全て生成可能に拡張
+- `kintone-customize-js` skill に CSS / mobile.js の指針を追記
+- GitHub MCP との連携で apply 時に git commit するロジックを追加
 
 ---
 
@@ -302,15 +310,58 @@ type CustomizeBundleArtifact = {
 - [x] **論点 3.4 — preview sandbox**: ~~完全 mock (案 A)~~ → ✅ 実機検証で **案 C (kintone 動作テスト環境 URL を新タブで開く)** に確定。iframe sandbox / mock は実装不要
 - [x] **論点 3.5 — rollback**: ~~revert API で snapshot 撤廃 (案 A)~~ → ✅ §2.5.7 で **不可** 確定 → ~~kintone 専用アプリ案 (案 B)~~ → ✅ **2 段階リリース確定** (Phase 1: chatStore in-memory、Phase 2 で #17 GitHub 連携統合時に git repo へ永続化)
 - [x] ~~専用アプリの provision~~ → ✅ **論点ごと消滅** (kintone 専用アプリ案を廃止し、永続化は Phase 2 で GitHub 連携と統合する方針)
-- [ ] **MVP の段階分割**: bundle artifact 採用後の修正版 — Phase 1 は bundle 構造で実装するが、Agent prompt で desktop.js 1 件だけ生成するよう制約、Phase 2 で multi-file (CSS / mobile.js) 解禁、という段階で進めて良いか
+- [x] **MVP の段階分割**: ✅ **Phase 1 (B' 単独) + Phase 2 (#17 統合) の 2 段階リリース** に確定 (§7 で詳細)
 - [ ] **OAuth 再連携 UX**: 既存ユーザに対する追加 scope 取得タイミング (Customizer Agent 初回利用時に prompt? それとも Plugin install 時から)
 - [ ] **「キャンセル」ボタンの UX**: 「適用」前に admin が動作テスト環境を見て「やめる」と判断したケースで `POST deploy.json {revert: true}` を呼んで preview を live と同期 (= 編集破棄) するボタンを置くか
 
 ---
 
-## 7. 次のステップ
+## 7. Phase 分割
 
-1. **本 requirements.md のユーザーレビュー** — 特に Section 6 の未決事項を確定
-2. 確定後 → `design.md` で実装アーキテクチャ詳細 (データフロー / コンポーネント分割 / テスト戦略)
-3. design.md 確定後 → `tasklist.md` で Phase 分割
+本 requirements は **B' (Customizer wedge 実用化)** の Phase 1 のみを対象とする。
+Phase 2 は #17 GitHub 連携と統合され、別 requirements / design で扱う。
+
+### 7.1 Phase 1 — 本 requirements 対象 (B' 単独)
+
+**ゴール**: admin が会話で **desktop.js 1 ファイル** のカスタマイズを作って、動作確認 → 本番反映 → (同セッション内なら) ロールバック までを完結できる状態。
+
+**含む:**
+- bundle artifact (新 kind `kintone-customize-bundle`) 導入、FileTree 動的化
+- apply: bundle.files を upload (`POST /k/v1/file.json`) → `PUT customize.json` → `POST deploy.json`
+- preview: `PUT customize.json (preview)` + kintone 動作テスト環境 URL を新タブで開く
+- rollback: chatStore.workflowHistory (in-memory) から snapshot を取り出して PUT + deploy
+- OAuth scope 追加 (`k:app_settings:write` / `k:file:write`)、初回利用時に再連携トリガー
+- Customizer Agent system prompt を bundle 規約 + 「desktop.js のみ」制約
+
+**含まない (Phase 2 で対応):**
+- CSS / mobile.js / mobile.css の生成・編集
+- snapshot の GitHub 永続化
+- セッション横断の rollback
+- git commit / PR 自動化
+
+**Phase 1 限定の admin 向け制約説明 (UI 上で明示):**
+> 「現状の Customizer は **デスクトップ JavaScript のみ** 編集できます。CSS / モバイル JS は今後のリリース (Phase 2、GitHub 連携統合時) で対応します。<br>
+> ロールバックは **同じセッション** (Plugin を閉じる前) のみ可能です。Plugin リロード後はロールバック履歴が失われます。長期的な履歴管理は Phase 2 で GitHub 連携にて対応予定です」
+
+**工数想定**: M (1-2 週間)
+
+### 7.2 Phase 2 — 別 requirements で扱う (B' + #17 統合)
+
+**追加項目**:
+- Customizer Agent system prompt から「desktop.js のみ」制約を解除、4 path (desktop.js / mobile.js / desktop.css / mobile.css) 全て生成可能に
+- bundle artifact のデータ構造は Phase 1 と同じ (= 既に多 file 対応済)、prompt 解禁だけで自然に multi-file が出るように
+- `kintone-customize-js` skill に CSS / mobile.js の指針を追記
+- apply 時に snapshot を GitHub repo にコミット (`customize/<appId>/*.js`, `customize.json`)
+- rollback は git commit log から選択して PUT + deploy
+- #17 GitHub MCP 統合 (Agent から直接 GitHub 操作可能)
+
+**着手タイミング**: B' Phase 1 リリース + #17 GitHub 連携完了後
+
+---
+
+## 8. 次のステップ
+
+1. **本 requirements.md のユーザーレビュー** — 残未決事項 (§6 の 2 件: OAuth 再連携 UX / キャンセルボタン UX) の確定
+2. 確定後 → `design.md` で Phase 1 の実装アーキテクチャ詳細 (データフロー / コンポーネント分割 / テスト戦略)
+3. design.md 確定後 → `tasklist.md` で Phase 1 のタスク分解
 4. 着手
