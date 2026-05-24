@@ -77,6 +77,14 @@ export type CustomizeFilePath = 'desktop.js' | 'mobile.js' | 'desktop.css' | 'mo
 
 /** kintone-customize-bundle artifact の content (JSON.stringify して Artifact.content に格納) */
 export interface CustomizeBundleContent {
+  /**
+   * 対象 kintone アプリ ID。
+   * Customizer Agent が `kintone-get-apps` 等で確認した「カスタマイズしたいアプリ」の ID を
+   * ここに含める。省略時は Plugin が動いている host アプリ (`kintone.app.getId()`) を使う。
+   * admin が複数アプリを切り替えながら作業する場合、Plugin host と Agent 想定の app が
+   * ずれて preview URL が誤ったアプリを指してしまうのを防ぐため、Agent は積極的に明示する。
+   */
+  appId?: number;
   files: Array<{
     path: CustomizeFilePath;
     content: string;
@@ -107,7 +115,8 @@ export function getBundleContent(artifact: Artifact): CustomizeBundleContent | n
     return null;
   }
   if (!parsed || typeof parsed !== 'object') return null;
-  const files = (parsed as { files?: unknown }).files;
+  const obj = parsed as { files?: unknown; appId?: unknown };
+  const files = obj.files;
   if (!Array.isArray(files)) return null;
   const validFiles: CustomizeBundleContent['files'] = [];
   const allowedPaths = new Set<string>(ALL_CUSTOMIZE_PATHS);
@@ -119,7 +128,14 @@ export function getBundleContent(artifact: Artifact): CustomizeBundleContent | n
     if (!allowedPaths.has(p)) continue;
     validFiles.push({ path: p as CustomizeFilePath, content: c });
   }
-  return { files: validFiles };
+  const result: CustomizeBundleContent = { files: validFiles };
+  if (typeof obj.appId === 'number' && Number.isFinite(obj.appId)) {
+    result.appId = obj.appId;
+  } else if (typeof obj.appId === 'string' && /^\d+$/.test(obj.appId)) {
+    // Agent が文字列で渡してきた場合 (typical な誤り) も救う
+    result.appId = Number(obj.appId);
+  }
+  return result;
 }
 
 /**

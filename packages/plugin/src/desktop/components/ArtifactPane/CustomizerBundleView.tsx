@@ -23,7 +23,7 @@ import type { KintoneApiFn } from '../../../chat/workflow/kintoneCustomizeApi';
 
 export interface CustomizerBundleViewProps {
   artifact: Artifact;
-  /** kintone アプリ ID (kintone.app.getId() の結果) */
+  /** Plugin が動いている host アプリの ID (kintone.app.getId() の結果)。bundle.appId が指定されていればそちらを優先 */
   appId: number;
   /** kintone REST API 呼出ラッパー */
   apiFn: KintoneApiFn;
@@ -33,7 +33,7 @@ export interface CustomizerBundleViewProps {
 
 export function CustomizerBundleView({
   artifact,
-  appId,
+  appId: hostAppId,
   apiFn,
   baseUrl,
 }: CustomizerBundleViewProps): JSX.Element {
@@ -41,6 +41,11 @@ export function CustomizerBundleView({
   const [activeFilePath, setActiveFilePath] = useState<CustomizeFilePath | null>(
     bundle?.files[0]?.path ?? null,
   );
+
+  // 対象アプリ ID: bundle.appId が明示されていればそちらを優先 (Agent が
+  // 別アプリ向けに生成したケース)、なければ host アプリ (= 現在 admin が
+  // 開いているアプリ)。
+  const targetAppId = bundle?.appId ?? hostAppId;
 
   // bundle のリビジョン (artifact.version) が変わったら activeFilePath を最初に戻す
   // → Agent が新版を出した場合に「無くなった path」を見続けないように
@@ -55,7 +60,7 @@ export function CustomizerBundleView({
   const callbacks = useKintoneCustomizeWorkflow({
     artifactId: artifact.id,
     bundle: bundle ?? { files: [] },
-    appId,
+    appId: targetAppId,
     apiFn,
     uploadFile: defaultFileUpload,
   });
@@ -72,10 +77,21 @@ export function CustomizerBundleView({
 
   const treeEntries = bundleFilesToTreeEntries(bundle.files, activeFilePath);
   const activeFile = bundle.files.find((f) => f.path === activeFilePath);
-  const previewUrl = getPreviewUrl(appId, baseUrl);
+  const previewUrl = getPreviewUrl(targetAppId, baseUrl);
+
+  // host アプリと bundle 対象アプリの相違を admin に明示
+  const showTargetAppHint = bundle.appId !== undefined && bundle.appId !== hostAppId;
 
   return (
     <div data-testid="customizer-bundle-view" className="flex h-full flex-col overflow-hidden">
+      {showTargetAppHint && (
+        <div
+          data-testid="customizer-bundle-target-app-hint"
+          className="shrink-0 border-b border-border bg-warn-soft px-[12px] py-[6px] text-[11px] text-warn"
+        >
+          ⚠ 対象アプリ ID = <strong>{targetAppId}</strong> (現在開いているアプリ {hostAppId} とは別です)
+        </div>
+      )}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <FileTree
           files={treeEntries}
@@ -93,7 +109,7 @@ export function CustomizerBundleView({
       </div>
       <WorkflowFooter
         artifactId={artifact.id}
-        appName="アプリ"
+        appName={`アプリ ${targetAppId}`}
         callbacks={callbacks}
         previewUrl={previewUrl}
       />

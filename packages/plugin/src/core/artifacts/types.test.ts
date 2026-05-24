@@ -129,4 +129,43 @@ describe('kintone-customize-bundle (#20 V2 Phase 1)', () => {
     const a = makeArtifact({ content: serializeBundleContent(original) });
     expect(getBundleContent(a)).toEqual(original);
   });
+
+  it('appId が数値で含まれていれば取り出す', () => {
+    const a = makeArtifact({
+      content: JSON.stringify({
+        appId: 3,
+        files: [{ path: 'desktop.js', content: 'JS' }],
+      }),
+    });
+    expect(getBundleContent(a)?.appId).toBe(3);
+  });
+
+  it('appId が数値文字列でも取り出す (Agent が文字列で渡してきた誤りを救う)', () => {
+    const a = makeArtifact({
+      content: JSON.stringify({
+        appId: '5',
+        files: [{ path: 'desktop.js', content: 'JS' }],
+      }),
+    });
+    expect(getBundleContent(a)?.appId).toBe(5);
+  });
+
+  it('appId が無ければ undefined', () => {
+    const a = makeArtifact({
+      content: JSON.stringify({
+        files: [{ path: 'desktop.js', content: 'JS' }],
+      }),
+    });
+    expect(getBundleContent(a)?.appId).toBeUndefined();
+  });
+
+  it('appId が不正な型 (object 等) なら undefined', () => {
+    const a = makeArtifact({
+      content: JSON.stringify({
+        appId: { not: 'a number' },
+        files: [{ path: 'desktop.js', content: 'JS' }],
+      }),
+    });
+    expect(getBundleContent(a)?.appId).toBeUndefined();
+  });
 });

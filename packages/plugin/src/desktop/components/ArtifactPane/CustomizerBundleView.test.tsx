@@ -78,4 +78,39 @@ describe('CustomizerBundleView', () => {
     // ready 状態なので anchor は出ない (= 確認は previewed 時に WorkflowFooter.test.tsx 側でカバー済)
     expect(screen.queryByTestId('workflow-action-open-preview')).not.toBeInTheDocument();
   });
+
+  it('bundle.appId が指定されていれば host appId より優先される (= 警告バナー表示)', () => {
+    // host = 5 (Plugin が動いている画面), bundle.appId = 3 (Agent が対象に指定したアプリ)
+    const artifact = makeBundleArtifact(
+      JSON.stringify({
+        appId: 3,
+        files: [{ path: 'desktop.js', content: '// for app 3' }],
+      }),
+    );
+    render(<CustomizerBundleView artifact={artifact} appId={5} apiFn={NULL_API} />);
+    const hint = screen.getByTestId('customizer-bundle-target-app-hint');
+    expect(hint.textContent).toContain('3');
+    expect(hint.textContent).toContain('5');
+  });
+
+  it('bundle.appId == host appId なら警告バナーは出ない', () => {
+    const artifact = makeBundleArtifact(
+      JSON.stringify({
+        appId: 5,
+        files: [{ path: 'desktop.js', content: '// for app 5' }],
+      }),
+    );
+    render(<CustomizerBundleView artifact={artifact} appId={5} apiFn={NULL_API} />);
+    expect(screen.queryByTestId('customizer-bundle-target-app-hint')).not.toBeInTheDocument();
+  });
+
+  it('bundle.appId 未指定なら host appId を使い、警告バナーは出ない', () => {
+    const artifact = makeBundleArtifact(
+      serializeBundleContent({
+        files: [{ path: 'desktop.js', content: '// js' }],
+      }),
+    );
+    render(<CustomizerBundleView artifact={artifact} appId={5} apiFn={NULL_API} />);
+    expect(screen.queryByTestId('customizer-bundle-target-app-hint')).not.toBeInTheDocument();
+  });
 });
