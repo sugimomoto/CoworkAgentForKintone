@@ -4,13 +4,11 @@ import { useMemo, useState } from 'react';
 
 import { useChatStore } from '../../../store/chatStore';
 
-import { FileTree } from '../../../chat/workflow/FileTree';
-import { WorkflowFooter } from '../../../chat/workflow/WorkflowFooter';
-import { makeKintoneCustomizeWorkflow } from '../../../chat/workflow/kintoneCustomizeApi';
 import { isCustomizerPurpose, useCurrentAgentPurpose } from '../../hooks/useCurrentAgentPurpose';
 
 import { ArtifactFooter } from './ArtifactFooter';
 import { ArtifactHeader } from './ArtifactHeader';
+import { CustomizerBundleView } from './CustomizerBundleView';
 import { BinaryArtifact } from './renderers/BinaryArtifact';
 import { CodeArtifact } from './renderers/CodeArtifact';
 import { CsvArtifact } from './renderers/CsvArtifact';
@@ -23,6 +21,7 @@ import { ReactArtifact } from './renderers/ReactArtifact';
 import { SvgArtifact } from './renderers/SvgArtifact';
 
 import type { Artifact } from '../../../core/artifacts/types';
+import type { KintoneApiFn } from '../../../chat/workflow/kintoneCustomizeApi';
 
 function renderBody(artifact: Artifact): JSX.Element {
   // version でキー再生成 → 同じ id の更新でも iframe / state を作り直して安全にリロード
@@ -52,16 +51,14 @@ function renderBody(artifact: Artifact): JSX.Element {
 }
 
 /**
- * Customizer wedge: artifact が「カスタマイズ JS」かつ現在の Agent が Customizer なら
- * FileTree + WorkflowFooter を表示する Customizer モードに切替。
+ * Customizer wedge V2 Phase 1: artifact が kind='kintone-customize-bundle' かつ
+ * 現在の Agent が Customizer なら CustomizerBundleView で表示 (FileTree + Workflow)。
  */
-function isCustomizerJsArtifact(
+function isCustomizerBundleArtifact(
   artifact: Artifact,
   purpose: ReturnType<typeof useCurrentAgentPurpose>,
 ): boolean {
-  if (artifact.kind !== 'code') return false;
-  const lang = (artifact.language ?? '').toLowerCase();
-  if (lang !== 'javascript' && lang !== 'js') return false;
+  if (artifact.kind !== 'kintone-customize-bundle') return false;
   return isCustomizerPurpose(purpose);
 }
 
@@ -73,20 +70,15 @@ export function ArtifactPane(): JSX.Element | null {
   // プレビュー / 原文の切替。Agent が想定外の content を返したときの確認用。
   const [showRaw, setShowRaw] = useState(false);
 
-  // Customizer Workflow callbacks (V1 では preview の sandbox は no-op、apply/rollback は
-  // kintone REST を叩く)。
-  const workflowCallbacks = useMemo(() => {
-    if (!activeArtifactId) return null;
+  // 現在の kintone アプリ ID と REST API 関数 (Customizer モードで使う)
+  const kintoneContext = useMemo(() => {
     const appId = readKintoneAppId();
     if (appId === null) return null;
-    return makeKintoneCustomizeWorkflow(activeArtifactId, {
-      apiFn: (url, method, params) =>
-        // global kintone API。テスト環境では window.kintone が無いので null fallback。
-        (window as { kintone?: { api?: typeof kintoneApi } }).kintone?.api?.(url, method, params as Parameters<typeof kintoneApi>[2]) ??
-        Promise.reject(new Error('kintone.api is not available')),
+    return {
       appId,
-    });
-  }, [activeArtifactId]);
+      apiFn: kintoneApiFn,
+    };
+  }, []);
 
   if (!activeArtifactId) return null;
   const active = artifacts.get(activeArtifactId);
@@ -94,7 +86,7 @@ export function ArtifactPane(): JSX.Element | null {
 
   // セレクタには直近更新順 (= updatedAt 降順) で並べる
   const all = Array.from(artifacts.values()).sort((a, b) => b.updatedAt - a.updatedAt);
-  const customizerMode = isCustomizerJsArtifact(active, purpose);
+  const customizerMode = isCustomizerBundleArtifact(active, purpose);
 
   return (
     <aside
@@ -108,52 +100,52 @@ export function ArtifactPane(): JSX.Element | null {
         onSelect={setActiveArtifact}
         onClose={() => setActiveArtifact(null)}
       />
-      <div className="flex flex-1 min-h-0 overflow-hidden" data-artifact-view={showRaw ? 'raw' : 'preview'}>
-        {customizerMode && <FileTree />}
-        <div className="flex-1 overflow-auto">
-          {showRaw ? <RawContent artifact={active} /> : renderBody(active)}
-        </div>
+      <div
+        className="flex flex-1 min-h-0 overflow-hidden"
+        data-artifact-view={showRaw ? 'raw' : 'preview'}
+      >
+        {customizerMode && kintoneContext && !showRaw ? (
+          <CustomizerBundleView
+            artifact={active}
+            appId={kintoneContext.appId}
+            apiFn={kintoneContext.apiFn}
+          />
+        ) : (
+          <div className="flex-1 overflow-auto">
+            {showRaw ? <RawContent artifact={active} /> : renderBody(active)}
+          </div>
+        )}
       </div>
-      {customizerMode && workflowCallbacks ? (
-        <WorkflowFooter
-          artifactId={active.id}
-          appName={readKintoneAppName()}
-          callbacks={workflowCallbacks}
-        />
-      ) : null}
-      <ArtifactFooter artifact={active} showRaw={showRaw} onToggleRaw={() => setShowRaw((v) => !v)} />
+      <ArtifactFooter
+        artifact={active}
+        showRaw={showRaw}
+        onToggleRaw={() => setShowRaw((v) => !v)}
+      />
     </aside>
   );
 }
 
 // ─── kintone host bridge ────────────────────────────────────────────────
 
-type KintoneApiUrl = string;
-type KintoneApiMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
-type KintoneApiBody = unknown;
-declare function kintoneApi(
-  url: KintoneApiUrl,
-  method: KintoneApiMethod,
-  body: KintoneApiBody,
-): Promise<unknown>;
-
-interface KintoneAppGlobals {
+interface KintoneGlobals {
   app?: {
     getId?: () => number | null;
-    getName?: () => string | null;
   };
+  api?: (url: string, method: string, params: unknown) => Promise<unknown>;
 }
 
 function readKintoneAppId(): number | null {
-  const k = (window as { kintone?: KintoneAppGlobals }).kintone;
+  const k = (window as { kintone?: KintoneGlobals }).kintone;
   return k?.app?.getId?.() ?? null;
 }
 
-function readKintoneAppName(): string {
-  // kintone runtime に app 名取得 API は無いので、暫定でデフォルト文字列を返す。
-  // 必要なら kintone-get-app MCP 経由で取得して props で渡す形に拡張。
-  return 'アプリ';
-}
+const kintoneApiFn: KintoneApiFn = async (url, method, params) => {
+  const k = (window as { kintone?: KintoneGlobals }).kintone;
+  if (!k?.api) {
+    throw new Error('kintone.api is not available (Plugin context 外)');
+  }
+  return k.api(url, method, params);
+};
 
 function RawContent({ artifact }: { artifact: Artifact }): JSX.Element {
   return (
