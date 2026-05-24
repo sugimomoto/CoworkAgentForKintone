@@ -259,6 +259,35 @@ type CustomizeBundleArtifact = {
 - `kintone-customize-js` skill に CSS / mobile.js の指針を追記
 - GitHub MCP との連携で apply 時に git commit するロジックを追加
 
+### 3.7 OAuth scope 追加と再連携 UX
+
+**確定方針**: V1 #28 既存の再連携 UX を再利用。
+
+- V1 の Customizer wedge は preview/apply/rollback 共に kintone 公式機能を呼ばないモック実装だったが、本実装では `PUT customize.json` / `POST file.json` / `POST deploy.json` の各 API が **管理者権限 + 追加 scope** を要求する
+- 追加必要 scope: `k:app_settings:write`, `k:file:write`
+- **取得タイミング**: Customizer Agent の [プレビュー] ボタン初回押下時に scope 不足エラー (HTTP 403) を検出 → V1 #28 既存の **OAuth 再認可** UX をトリガー
+- Plugin install 時に全 scope を強制取得する案は不採用 (= **既存ユーザに強制再連携ダイアログ** が出て UX 悪化、業務 Agent ユーザーには無関係な scope)
+- Header 既存の「OAuth 再認可」ボタンも継続提供 (admin が明示的に取得したいケース)
+
+### 3.8 キャンセルボタンの UX
+
+**確定方針**: WorkflowFooter `previewed` 状態に [キャンセル] ボタンを追加。
+
+**ボタン配置と挙動**:
+```
+[<<戻る]  artifact 編集中
+   ↓ [プレビュー]
+preview customize.json PUT 済 (動作テスト環境に反映、live は無傷)
+   │
+   ├── [適用] → POST deploy.json → 本番反映 → applied 状態
+   │
+   └── [キャンセル] → POST deploy.json {revert:true} → preview を live と同期 (=編集破棄) → ready 状態に戻る
+```
+
+- 押し間違い対策: [キャンセル] 押下時に確認ダイアログ (「動作テスト環境の変更を破棄します。よろしいですか?」)
+- ボタン文言: 「破棄」も検討余地あるが、admin の動作テスト感覚に合わせて「キャンセル」を採用
+- 失敗時: revert API の HTTP エラーを WorkflowFooter の status line に表示
+
 ---
 
 ## 4. 影響範囲 (実装ファイル)
@@ -311,8 +340,8 @@ type CustomizeBundleArtifact = {
 - [x] **論点 3.5 — rollback**: ~~revert API で snapshot 撤廃 (案 A)~~ → ✅ §2.5.7 で **不可** 確定 → ~~kintone 専用アプリ案 (案 B)~~ → ✅ **2 段階リリース確定** (Phase 1: chatStore in-memory、Phase 2 で #17 GitHub 連携統合時に git repo へ永続化)
 - [x] ~~専用アプリの provision~~ → ✅ **論点ごと消滅** (kintone 専用アプリ案を廃止し、永続化は Phase 2 で GitHub 連携と統合する方針)
 - [x] **MVP の段階分割**: ✅ **Phase 1 (B' 単独) + Phase 2 (#17 統合) の 2 段階リリース** に確定 (§7 で詳細)
-- [ ] **OAuth 再連携 UX**: 既存ユーザに対する追加 scope 取得タイミング (Customizer Agent 初回利用時に prompt? それとも Plugin install 時から)
-- [ ] **「キャンセル」ボタンの UX**: 「適用」前に admin が動作テスト環境を見て「やめる」と判断したケースで `POST deploy.json {revert: true}` を呼んで preview を live と同期 (= 編集破棄) するボタンを置くか
+- [x] **OAuth 再連携 UX**: ✅ Customizer Agent 初回 [プレビュー] 押下時に scope 不足検出 → V1 #28 既存の再連携 UX をトリガー (Plugin install 時の全 scope 強制取得は admin/end user 双方に再連携ダイアログ強要する UX 悪化のため不採用)
+- [x] **「キャンセル」ボタンの UX**: ✅ WorkflowFooter の `previewed` 状態時に [適用] と並列で [キャンセル] ボタンを配置、押下で `POST deploy.json {revert: true}` を呼んで preview を live と同期 (= 編集破棄)
 
 ---
 
