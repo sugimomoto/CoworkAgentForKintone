@@ -180,6 +180,32 @@ describe('makeKintoneCustomizeWorkflow.rollback', () => {
     // rollback 後 snapshot がクリアされる
     expect(useChatStore.getState().workflowHistory.has('art_1')).toBe(false);
   });
+
+  it('rollback の PUT body は snapshot の古い revision を含めない (= 楽観ロック skip)', async () => {
+    const snapshotCustomize: CustomizeJsonResponse = {
+      scope: 'ALL',
+      desktop: { js: [], css: [] },
+      mobile: { js: [], css: [] },
+      revision: '5', // apply 直前の古い revision
+    };
+    useChatStore.getState().saveWorkflowSnapshot(
+      'art_1',
+      JSON.stringify({ customize: snapshotCustomize, capturedAt: Date.now() }),
+    );
+    const { apiFn, deps } = makeDeps();
+    const cb = makeKintoneCustomizeWorkflow(
+      { artifactId: 'art_1', bundle: SAMPLE_BUNDLE },
+      deps,
+    );
+    await cb.rollback();
+
+    const putCall = apiFn.mock.calls.find(
+      (c) => c[0] === '/k/v1/preview/app/customize.json' && c[1] === 'PUT',
+    );
+    const body = putCall![2] as { revision?: string };
+    // rollback の PUT には revision を含めない (skip = '-1' 相当)
+    expect(body.revision).toBeUndefined();
+  });
 });
 
 describe('makeKintoneCustomizeWorkflow.cancel', () => {

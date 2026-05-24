@@ -111,7 +111,12 @@ export function makeKintoneCustomizeWorkflow(
           'ロールバック履歴が見つかりません (Plugin リロードで失われた可能性があります)。永続的なロールバックは Phase 2 で GitHub 連携と統合予定です。',
         );
       }
-      await putCustomize(deps, snap.customize);
+      // snapshot 内の revision は apply 直前 (= 古い) の値なので、そのまま PUT に
+      // 渡すと楽観ロック失敗 (409 Conflict) になる。rollback は「強制的に過去状態を
+      // 書き戻す」操作なので revision を skip (= '-1' 相当) で上書きする。
+      const { revision: _staleRevision, ...customizeWithoutRevision } = snap.customize;
+      void _staleRevision;
+      await putCustomize(deps, customizeWithoutRevision as CustomizeJsonResponse);
       await deployAndWait(deps);
       // 1 回 rollback したら snapshot を消す (再 apply で別 snapshot を取り直す)
       clearSnapshot(artifactId);
