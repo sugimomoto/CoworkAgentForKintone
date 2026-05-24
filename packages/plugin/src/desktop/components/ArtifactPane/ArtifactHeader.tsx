@@ -1,6 +1,6 @@
 import type { Artifact, ArtifactKind } from '../../../core/artifacts/types';
 
-const KIND_LABEL: Record<ArtifactKind, string> = {
+const KIND_LABEL: Partial<Record<ArtifactKind, string>> = {
   markdown: 'Markdown',
   code: 'Code',
   json: 'JSON',
@@ -9,7 +9,9 @@ const KIND_LABEL: Record<ArtifactKind, string> = {
   svg: 'SVG',
   html: 'HTML',
   'kintone-customize-js': 'kintone JS',
+  'kintone-customize-bundle': 'kintone カスタマイズ',
   csv: 'CSV',
+  binary: 'File',
 };
 
 export interface ArtifactHeaderProps {

@@ -21,6 +21,7 @@ const KIND_LABEL: Record<ArtifactKind, string> = {
   svg: 'SVG',
   html: 'HTML',
   'kintone-customize-js': 'kintone JS',
+  'kintone-customize-bundle': 'kintone カスタマイズ',
   csv: 'CSV',
   binary: 'ファイル',
 };

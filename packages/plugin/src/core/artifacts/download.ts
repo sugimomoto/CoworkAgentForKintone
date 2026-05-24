@@ -16,6 +16,9 @@ const KIND_EXT: Record<ArtifactKind, ExtMime> = {
   svg: { ext: 'svg', mime: 'image/svg+xml' },
   html: { ext: 'html', mime: 'text/html' },
   'kintone-customize-js': { ext: 'js', mime: 'application/javascript' },
+  // V2 Phase 1: bundle artifact は JSON 文字列で content を持つので json 拡張子で download。
+  //   Phase 1+ で zip 化 (各 file を別個のファイルとして) を検討。
+  'kintone-customize-bundle': { ext: 'json', mime: 'application/json' },
   csv: { ext: 'csv', mime: 'text/csv' },
   // binary は filename / mime を artifact 側のフィールドから取るので fallback のみ
   binary: { ext: 'bin', mime: 'application/octet-stream' },

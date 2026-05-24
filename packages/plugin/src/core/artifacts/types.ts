@@ -5,8 +5,10 @@
 
 /**
  * Step 1 で実装する kind: markdown / code / json / react
- * Step 2 以降向けの kind: mermaid / svg / html / kintone-customize-js / csv
- *   (受け取ったら PlaceholderArtifact で raw 表示する)
+ * Step 2 以降: mermaid / svg / html / csv
+ * #20 V2 Phase 1: `kintone-customize-bundle` — kintone カスタマイズの複数ファイル束。
+ *   旧 `kintone-customize-js` は legacy として残し (V1 までに生成された artifact 表示用)、
+ *   新規生成は bundle を使う。
  */
 export type ArtifactKind =
   | 'markdown'
@@ -16,7 +18,8 @@ export type ArtifactKind =
   | 'mermaid'
   | 'svg'
   | 'html'
-  | 'kintone-customize-js'
+  | 'kintone-customize-js'        // legacy (V1)、表示のみサポート
+  | 'kintone-customize-bundle'    // V2 Phase 1 で導入、多ファイル束
   | 'csv'
   | 'binary';
 
@@ -29,6 +32,7 @@ export const SUPPORTED_ARTIFACT_KINDS: readonly ArtifactKind[] = [
   'svg',
   'html',
   'kintone-customize-js',
+  'kintone-customize-bundle',
   'csv',
   'binary',
 ] as const;
@@ -42,6 +46,7 @@ export const RENDERABLE_ARTIFACT_KINDS = new Set<ArtifactKind>([
   'mermaid',
   'svg',
   'html',
+  'kintone-customize-bundle',
   'csv',
   'binary',
 ]);
@@ -49,6 +54,8 @@ export const RENDERABLE_ARTIFACT_KINDS = new Set<ArtifactKind>([
 /**
  * `binary` 以外の create_artifact 用 kind 一覧。Agent が create_artifact で指定できるのはこれだけ。
  * `binary` artifact は plugin が Files API から自動生成するため Agent は呼ばない。
+ * V2 Phase 1 以降、Customizer Agent は新規 customize 生成では `kintone-customize-bundle` を使う
+ * (`kintone-customize-js` は legacy だが、Agent が誤って指定しないようリストには残す)。
  */
 export const AGENT_CREATABLE_ARTIFACT_KINDS: readonly ArtifactKind[] = [
   'markdown',
@@ -59,8 +66,69 @@ export const AGENT_CREATABLE_ARTIFACT_KINDS: readonly ArtifactKind[] = [
   'svg',
   'html',
   'kintone-customize-js',
+  'kintone-customize-bundle',
   'csv',
 ] as const;
+
+// ─── kintone-customize-bundle 専用型定義 (#20 V2 Phase 1) ───────────────────────
+
+/** customize.json 配下の単一 file path (Phase 1 では desktop.js のみ実用、Phase 2 で 4 path 解禁) */
+export type CustomizeFilePath = 'desktop.js' | 'mobile.js' | 'desktop.css' | 'mobile.css';
+
+/** kintone-customize-bundle artifact の content (JSON.stringify して Artifact.content に格納) */
+export interface CustomizeBundleContent {
+  files: Array<{
+    path: CustomizeFilePath;
+    content: string;
+  }>;
+}
+
+/** Phase 1 で Customizer Agent に生成を許可する path (= desktop.js のみ) */
+export const PHASE1_ALLOWED_CUSTOMIZE_PATHS: readonly CustomizeFilePath[] = ['desktop.js'];
+
+/** Phase 2 以降で許可される全 path */
+export const ALL_CUSTOMIZE_PATHS: readonly CustomizeFilePath[] = [
+  'desktop.js',
+  'mobile.js',
+  'desktop.css',
+  'mobile.css',
+];
+
+/**
+ * Artifact (kind=kintone-customize-bundle) から bundle content を取り出す。
+ * 不正な JSON や型不整合の場合は null を返す。
+ */
+export function getBundleContent(artifact: Artifact): CustomizeBundleContent | null {
+  if (artifact.kind !== 'kintone-customize-bundle') return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(artifact.content);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const files = (parsed as { files?: unknown }).files;
+  if (!Array.isArray(files)) return null;
+  const validFiles: CustomizeBundleContent['files'] = [];
+  const allowedPaths = new Set<string>(ALL_CUSTOMIZE_PATHS);
+  for (const f of files) {
+    if (!f || typeof f !== 'object') continue;
+    const p = (f as { path?: unknown }).path;
+    const c = (f as { content?: unknown }).content;
+    if (typeof p !== 'string' || typeof c !== 'string') continue;
+    if (!allowedPaths.has(p)) continue;
+    validFiles.push({ path: p as CustomizeFilePath, content: c });
+  }
+  return { files: validFiles };
+}
+
+/**
+ * bundle content を Artifact.content (JSON 文字列) に直す。
+ * Agent から受け取った content のバリデーション / 新規 artifact 作成時に使う。
+ */
+export function serializeBundleContent(bundle: CustomizeBundleContent): string {
+  return JSON.stringify(bundle);
+}
 
 export interface Artifact {
   /** 安定識別子。create_artifact 由来は Agent 指定、binary 由来は `file:<file_id>` を使う */
