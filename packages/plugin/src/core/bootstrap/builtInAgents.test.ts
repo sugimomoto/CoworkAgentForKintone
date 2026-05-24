@@ -81,8 +81,8 @@ describe('BUILTIN_AGENT_SPECS — 3 variant', () => {
       expect(spec.modelKind).toBe('opus');
     });
 
-    it('promptVersion v20-customizer / systemPrompt は CUSTOMIZER_SYSTEM_PROMPT', () => {
-      expect(spec.promptVersion).toBe('v20-customizer');
+    it('promptVersion v21-customizer / systemPrompt は CUSTOMIZER_SYSTEM_PROMPT', () => {
+      expect(spec.promptVersion).toBe('v21-customizer');
       expect(spec.systemPrompt).toBe(CUSTOMIZER_SYSTEM_PROMPT);
     });
 

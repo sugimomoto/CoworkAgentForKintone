@@ -105,7 +105,7 @@ describe('resolveBuiltInAgents', () => {
     expect(sonnetBody.metadata.isDefault).toBe('0');
   });
 
-  it('promptVersion v20-business / v20-customizer が metadata.promptVersion に入る', async () => {
+  it('promptVersion v20-business / v21-customizer が metadata.promptVersion に入る', async () => {
     mockAllVariantsCreate({
       business: 'a1',
       'customizer-opus': 'a2',
@@ -117,7 +117,7 @@ describe('resolveBuiltInAgents', () => {
     const businessBody = bodies.find((b) => b.metadata.purpose === 'business');
     const opusBody = bodies.find((b) => b.metadata.purpose === 'customizer-opus');
     expect(businessBody.metadata.promptVersion).toBe('v20-business');
-    expect(opusBody.metadata.promptVersion).toBe('v20-customizer');
+    expect(opusBody.metadata.promptVersion).toBe('v21-customizer');
   });
 
   it('既存 Agent が見つかれば再利用 (POST 呼出 0 回)', async () => {
@@ -145,7 +145,7 @@ describe('resolveBuiltInAgents', () => {
                 source: 'cowork-agent-for-kintone',
                 type: 'default',
                 purpose: 'customizer-opus',
-                promptVersion: 'v20-customizer',
+                promptVersion: 'v21-customizer',
                 workerUrl: OPTIONS.workerUrl,
                 kintoneDomain: OPTIONS.kintoneDomain,
               },
@@ -156,7 +156,7 @@ describe('resolveBuiltInAgents', () => {
                 source: 'cowork-agent-for-kintone',
                 type: 'default',
                 purpose: 'customizer-sonnet',
-                promptVersion: 'v20-customizer',
+                promptVersion: 'v21-customizer',
                 workerUrl: OPTIONS.workerUrl,
                 kintoneDomain: OPTIONS.kintoneDomain,
               },
