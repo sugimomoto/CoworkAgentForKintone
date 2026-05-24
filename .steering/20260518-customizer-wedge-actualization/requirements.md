@@ -135,13 +135,48 @@
 
 **論点**: Customizer Agent が「desktop.js と desktop.css の両方を更新したい」と言ったとき、どう create_artifact するか。
 
+**前提**: FileTree が存在する = 「1 編集セッション = 多ファイル」を扱うのが本来の設計意図。1 artifact = 1 ファイルだと FileTree が複数 artifact を統合する責任を持つことになり、active file 切替時に「どの artifact を表示しているか」「全体として 1 つの編集セッションなのか」が曖昧になる。
+
 | 案 | 内容 |
 |---|---|
-| A. **1 artifact = 1 ファイル**、Agent が複数 artifact を 1 turn で生成 | シンプル、既存 artifact 仕組みをそのまま |
-| B. **1 artifact = 多ファイル束 (bundle artifact)**、新 kind `kintone-customize-bundle` を導入 | 1 ターン = 1 変更単位として綺麗、apply / rollback の粒度が明確 |
-| C. **既存 desktop.js 単一 artifact + FileTree で対象 file を選んで artifact 上書き** | 既存 UI に近い |
+| A. ~~1 artifact = 1 ファイル~~ | FileTree との対応関係が不安定、却下 |
+| **B. 1 artifact = 多ファイル束 (bundle artifact)** ⭐ | 1 turn = 1 編集セッション = 1 bundle artifact。内部に複数 file を持ち、apply / rollback が atomic |
+| C. 既存 desktop.js 単一 artifact + FileTree で上書き | Agent が複数 file 同時更新を表現できない、却下 |
 
-**暫定案**: **A (1 artifact = 1 ファイル)**。Agent prompt を「変更が必要なファイル各々を create_artifact で個別生成」と指示。FileTree が複数 artifact をまとめて選択して 1 つの apply 操作にまとめる。
+**確定案: B (bundle artifact)**。
+
+**新 artifact 種別 `kintone-customize-bundle`**:
+```ts
+type CustomizeBundleArtifact = {
+  kind: 'kintone-customize-bundle';
+  id: string;                     // artifact id (例: 'customize-deal-color-v1')
+  title: string;                  // 'カスタマイズ案件 v1' などの表示用タイトル
+  content: {
+    files: Array<{
+      path: 'desktop.js' | 'mobile.js' | 'desktop.css' | 'mobile.css';
+      content: string;            // 各ファイルの本文
+    }>;
+  };
+  // 既存 Artifact 共通: createdAt, updatedAt, version, ...
+};
+```
+
+**ArtifactPane の Customizer モード**:
+- 上記 bundle artifact を 1 つ受け取り、FileTree は `bundle.content.files` を表示
+- 内部 state で `activeFilePath` を管理 (どの file の content を表示するか)
+- Agent が「desktop.js を更新して」と言うと、**同じ bundle artifact id を更新** (= files 配列の該当 path の content を差し替え、ArtifactVersion +1)
+- 「新しい customize を作る」場合は別 id の bundle を生成
+
+**apply 動作**:
+- bundle.content.files を順次 `POST /k/v1/file.json` で upload → 各 fileKey 取得
+- bundle 内に存在しない既存 customize.json エントリ (URL タイプ / 別 FILE) は **そのまま保持**
+- bundle 内のファイルパスに対応する既存エントリは置換 (= 同じ path で再 upload)
+- 最後に `PUT customize.json` で全 entry をまとめて反映、`POST deploy.json`
+
+**Agent prompt 拡張**:
+- system prompt に「kintone カスタマイズは `kind: 'kintone-customize-bundle'` で **1 つの bundle に複数 file をまとめる**」と明記
+- 「同じ customize を更新する場合は同じ artifact id で create_artifact (新規版になる)」
+- 「path は `desktop.js` / `mobile.js` / `desktop.css` / `mobile.css` のいずれか」
 
 ### 3.3 apply の atomic 性
 
@@ -185,28 +220,28 @@
 
 ### 3.5 rollback snapshot の永続化
 
-**論点**: V1 は in-memory なので Plugin リロードで失われる。**§2.5.7 で確定した通り `revert: true` は deploy 後の rollback には使えない** ため、必ず snapshot が必要。永続化先の選択。
+**論点**: V1 は in-memory なので Plugin リロードで失われる。**§2.5.7 で確定した通り `revert: true` は deploy 後の rollback には使えない** ため、必ず snapshot が必要。
 
-| 案 | 内容 | Pros | Cons |
+**確定方針: 2 段階リリース**
+
+| Phase | 条件 | snapshot 保存先 | rollback の範囲 |
 |---|---|---|---|
-| ~~A. revert で snapshot 撤廃~~ | **不可** (§2.5.7) | - | - |
-| B. **kintone レコード保存** — 専用アプリ or 既存アプリのレコードに snapshot を JSON で保存 | 永続化、kintone 内完結、他 admin も復元可能 | 専用アプリのスキーマ管理が要る |
-| C. **Plugin Config (setConfig) に保存** — `kintone.plugin.app.setConfig` で snapshot JSON を保存 | kintone DB に永続化、Plugin に閉じる | setConfig は **設定画面でしか動かない** (V1 同期問題と同根) — apply 時 (record-list 画面) には呼べないため不適 |
-| D. **localStorage** — ブラウザに保存 | 実装最小 | ブラウザ依存、他端末からは復元不可、ストレージサイズ制限 |
-| E. **Anthropic Memory Store** — Agent の memory に保存 | session 横断で永続、Plugin 自身で管理不要 | Agent 経由のアクセスが必要 (admin 操作と非対称) |
-| F. **Worker KV (or D1)** — Worker に保存して REST 経由で読み書き | 永続、admin 端末非依存 | Worker 側に新エンドポイント、認証経路、データ保管責任 |
+| **Phase 1 (B' 単独、本 requirements の対象)** | GitHub 連携の有無に関わらず | **chatStore (in-memory)** — V1 の `workflowHistory` Map を継承 | **同じ Plugin セッション内のみ** (Plugin リロードで snapshot が失われ rollback 不能) |
+| **Phase 2 (#17 GitHub 連携と統合)** | GitHub 連携済 | **git repo にコミット** (`customize/<appId>/desktop.js` 等の file + `customize.json` を新 commit で push) | **永続** (git commit log から任意の過去版を選んで PUT + deploy で復元) |
 
-**暫定案**: **B (kintone レコード保存)** — admin 自身が管理する kintone データ空間内に閉じるのが運用的に最も clean (Plugin が消えても admin が手動でアクセス可能、データ漏洩リスクが低い)。専用アプリは Plugin 初回 install 時に admin に作成案内 or auto-provision。
+**Phase 1 で in-memory に留める根拠:**
+- 別途 kintone 専用アプリを provision するのは、admin の信頼を損なう (Plugin が勝手にアプリを増やす)、スキーマ管理コスト、その他選択肢 (Plugin Config setConfig / localStorage / Worker KV) はそれぞれ別の制約があり、**いずれも次フェーズ #17 GitHub 連携完了で解決する** ため Phase 1 で複雑な永続化に投資しない判断
+- 実用上 admin の典型ユースケースは「適用 → 即動作確認 → ダメなら即ロールバック」なので、**同じセッション内に閉じる rollback で十分**
+- Phase 2 で GitHub 連携が入ったタイミングで「永続的なロールバック履歴管理は GitHub repo で」と自然に誘導
 
-**B のスキーマ案** (専用アプリ `cowork-agent-customize-history`):
-| フィールド | 型 | 内容 |
-|---|---|---|
-| `appId` | SINGLE_LINE_TEXT | 対象アプリ ID |
-| `appliedAt` | DATETIME | apply 実施時刻 |
-| `actor` | USER_SELECT | apply した admin |
-| `snapshot` | MULTI_LINE_TEXT | apply 直前の customize.json (JSON 文字列) |
-| `appliedJsContent` | MULTI_LINE_TEXT | apply した artifact 内容 (= rollback 対象を識別する用) |
-| `status` | DROP_DOWN | `applied` / `rolled-back` |
+**Phase 1 admin への説明文 (UI 上で表示する想定):**
+> 「適用後にロールバックしたい場合、**同じセッション** (= Plugin を閉じる前) なら戻せます。Plugin をリロードするとロールバック履歴が失われるため、ロールバックが必要な可能性があれば作業中に実行してください。永続的なロールバック履歴管理は今後の GitHub 連携 (#17) で提供予定です」
+
+**実装方針 (Phase 1):**
+- 既存 V1 の `chatStore.workflowHistory` (artifactId → snapshot Map) をそのまま継承
+- `kintoneCustomizeApi.apply()` 内で apply 直前に `GET /k/v1/preview/app/customize.json` を呼び snapshot を Map に保存
+- `kintoneCustomizeApi.rollback()` で snapshot を取り出し `PUT customize.json` + `POST deploy.json` で復元
+- `revert: true` は **使わない** (deploy 後の rollback には機能しないため)
 
 ### 3.6 Customizer Agent prompt の拡張
 
@@ -222,19 +257,22 @@
 
 ### 4.1 修正
 
-- `packages/plugin/src/chat/workflow/FileTree.tsx` — hardcoded を撤廃、props で files を受ける
-- `packages/plugin/src/chat/workflow/kintoneCustomizeApi.ts` — `buildCustomizeUpdate` 実装 + file.json upload + 旧 customize の snapshot 保存
-- `packages/plugin/src/chat/workflow/useApplyWorkflow.ts` — rollback を **snapshot レコードから再 PUT+deploy** で実装 (§3.5 案 B、`revert: true` は使わない)
-- `packages/plugin/src/desktop/components/ArtifactPane/index.tsx` — FileTree state 管理 / active file 切替
-- `packages/plugin/src/core/bootstrap/builtInAgents.ts` — `CUSTOMIZER_WORKFLOW_PROMPT` を multi-file 対応
-- `packages/plugin/src/skills/kintone-customize-js/SKILL.md` — multi-file 編集の指示追記
+- `packages/plugin/src/core/artifacts/types.ts` — 新 kind `kintone-customize-bundle` を ArtifactKind 列挙に追加、bundle content の型 (`{files: [{path, content}]}`) を定義
+- `packages/plugin/src/chat/workflow/FileTree.tsx` — hardcoded を撤廃、`bundle.content.files` から動的構築 + activeFilePath ハイライト
+- `packages/plugin/src/chat/workflow/kintoneCustomizeApi.ts` — `buildCustomizeUpdate` を bundle ベースで実装 (bundle.files を upload + customize.json PUT、既存 entry は path 一致で置換 / それ以外は保持) + apply 直前に旧 customize を chatStore.workflowHistory (in-memory) に snapshot 保存
+- `packages/plugin/src/chat/workflow/useApplyWorkflow.ts` — rollback を **chatStore.workflowHistory の snapshot から再 PUT+deploy** で実装 (§3.5 Phase 1、`revert: true` は使わない、永続化は Phase 2 で対応)
+- `packages/plugin/src/desktop/components/ArtifactPane/index.tsx` — kind=bundle の Customizer モード分岐、activeFilePath state、選択 file の content を内部エディタ/表示に渡す
+- `packages/plugin/src/core/bootstrap/builtInAgents.ts` — `CUSTOMIZER_WORKFLOW_PROMPT` を bundle artifact 対応に書き換え (`create_artifact({kind:'kintone-customize-bundle', content:{files:[...]}})` の規約)
+- `packages/plugin/src/skills/kintone-customize-js/SKILL.md` — bundle 構造の説明 + multi-file (desktop.js/mobile.js/desktop.css/mobile.css) の関係性追記
+- `packages/plugin/src/core/artifacts/download.ts` — bundle artifact の zip ダウンロード (任意、各 file を 1 zip にまとめ)
 
 ### 4.2 新規
 
 - `packages/plugin/src/chat/workflow/useCustomizeFiles.ts` — `GET customize.json` を fetch して FileTree 用 entry に整形する hook
 - ~~`packages/plugin/src/chat/workflow/previewSandbox.tsx`~~ — **§3.4 確定により不要** (動作テスト環境 URL に飛ばす方式に変更)
-- `packages/plugin/src/chat/workflow/customizeHistoryRepo.ts` — snapshot を kintone レコード (専用アプリ) に保存/取得する repo
 - (任意) `packages/plugin/src/chat/workflow/CustomizeFileUploader.ts` — file.json upload ヘルパー
+
+> ※ §3.5 確定により **snapshot 用の専用 kintone アプリ / customizeHistoryRepo は作らない**。Phase 1 は chatStore.workflowHistory (in-memory) のみ、永続化は Phase 2 (#17 GitHub 連携統合時) で対応。
 
 ### 4.3 OAuth scope
 
@@ -260,11 +298,11 @@
 実機検証 (§2.5) で確定した事項は除外。残る未決:
 
 - [x] **論点 3.1 — ファイル保管方式**: kintone FILE upload (案 A) → ✅ 検証で動作確認、確定
-- [ ] **論点 3.2 — multi-file artifact**: 1 artifact = 1 ファイル (案 A) で進めて良いか (B/C も検討余地あり)
+- [x] **論点 3.2 — multi-file artifact**: ~~1 artifact = 1 ファイル (案 A)~~ → ✅ FileTree 前提と合致しないため **案 B (bundle artifact、新 kind `kintone-customize-bundle`)** に確定
 - [x] **論点 3.4 — preview sandbox**: ~~完全 mock (案 A)~~ → ✅ 実機検証で **案 C (kintone 動作テスト環境 URL を新タブで開く)** に確定。iframe sandbox / mock は実装不要
-- [x] **論点 3.5 — rollback**: ~~revert API で snapshot 撤廃 (案 A)~~ → ✅ §2.5.7 で **不可** 確定。**案 B (kintone 専用アプリレコードに snapshot 保存)** で進めるか確認
-- [ ] **専用アプリの provision**: §3.5 案 B の snapshot 保存先アプリ `cowork-agent-customize-history` を Plugin 初回 install 時に自動作成 (REST API で創設) するか、admin に手動作成案内するか
-- [ ] **MVP の段階分割**: 全機能を一度にやらず、まず desktop.js のみで実 deploy → 後で multi-file 拡張、という段階的リリースは可能か?
+- [x] **論点 3.5 — rollback**: ~~revert API で snapshot 撤廃 (案 A)~~ → ✅ §2.5.7 で **不可** 確定 → ~~kintone 専用アプリ案 (案 B)~~ → ✅ **2 段階リリース確定** (Phase 1: chatStore in-memory、Phase 2 で #17 GitHub 連携統合時に git repo へ永続化)
+- [x] ~~専用アプリの provision~~ → ✅ **論点ごと消滅** (kintone 専用アプリ案を廃止し、永続化は Phase 2 で GitHub 連携と統合する方針)
+- [ ] **MVP の段階分割**: bundle artifact 採用後の修正版 — Phase 1 は bundle 構造で実装するが、Agent prompt で desktop.js 1 件だけ生成するよう制約、Phase 2 で multi-file (CSS / mobile.js) 解禁、という段階で進めて良いか
 - [ ] **OAuth 再連携 UX**: 既存ユーザに対する追加 scope 取得タイミング (Customizer Agent 初回利用時に prompt? それとも Plugin install 時から)
 - [ ] **「キャンセル」ボタンの UX**: 「適用」前に admin が動作テスト環境を見て「やめる」と判断したケースで `POST deploy.json {revert: true}` を呼んで preview を live と同期 (= 編集破棄) するボタンを置くか
 
