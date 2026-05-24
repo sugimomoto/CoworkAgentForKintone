@@ -154,15 +154,34 @@
 
 ### 3.4 preview sandbox の実装
 
-**論点**: 「プレビュー」ボタンで artifact JS を iframe で実行する際、kintone API はどう扱う?
+**論点**: 「プレビュー」ボタンで生成された JS をどうやって live に影響させずに動作確認できるようにするか。
 
-| 案 | 内容 |
-|---|---|
-| A. **完全 mock** — sandbox 内で `kintone.api` / `kintone.events` を no-op or 簡易 mock | 安全、コード実行が単独で完結 |
-| B. **postMessage 経由で host kintone API を proxy** | リアルな挙動が見える | sandbox の意義が薄れる、複雑 |
-| C. **iframe を kintone host 内に貼る (= プレビューモードのレコード一覧画面で実行)** | リアル体験 | sandbox 隔離が崩れる |
+**実機検証 (2026-05-24) で確定**: kintone 公式の **動作テスト環境** (`/k/admin/preview/<appId>/`) が既に preview-only deploy 機能と組み合わさって "サンドボックス" として機能している。
 
-**暫定案**: **A (完全 mock)** + 後で「実環境プレビュー」を別ボタンで提供 (= 既に #20 spec に「`https://<subdomain>.cybozu.com/k/admin/preview/<appId>/` を新タブで開く」案がある)
+| 案 | 内容 | 評価 |
+|---|---|---|
+| A. **iframe + mock** — sandbox 内で `kintone.api` / `kintone.events` を no-op or 簡易 mock | 安全、コード実行が単独で完結。**ただし kintone API が呼べない = mock では限界**。fetch / DOM 操作だけのカスタマイズなら確認できるが、`kintone.api()` を呼ぶ JS は事実上テスト不能 |
+| B. **postMessage 経由で host kintone API を proxy** | リアルな挙動が見える | sandbox の意義が薄れる、実装複雑 |
+| **C. kintone 動作テスト環境 URL を新タブで開く** ⭐ | `PUT customize.json (preview)` だけ実行 → `/k/admin/preview/<appId>/` を新タブで開く。admin がそこで実 kintone で動作確認 → OK なら「適用」ボタンで deploy / NG なら「キャンセル」で revert | **kintone 公式機能、フル機能の実機確認可、iframe sandbox の実装不要** |
+
+**確定案**: **C (kintone 動作テスト環境 URL)**。
+
+- `useApplyWorkflow` の `previewed` 状態に遷移したら `PUT customize.json (preview)` を実行 + 動作テスト環境 URL のリンク or 自動 open
+- WorkflowFooter の「プレビュー」ボタンは `PUT preview` だけ実行、admin はリンクから動作テスト環境に飛んで実機確認
+- iframe sandbox / mock は**実装しない** (V1 で no-op だった preview sandbox は完全に廃止)
+
+**フロー (新)**:
+```
+[編集] → artifact 生成
+   ↓
+[プレビュー] → file.json upload + PUT customize.json (preview のみ)
+            → 「動作テスト環境を開く」ボタン or 自動オープン
+            → admin が /k/admin/preview/<appId>/ で実機確認
+   ↓
+[適用] → POST deploy.json (live 反映)
+   or
+[キャンセル] → POST deploy.json {revert: true} (preview を live と同期、編集破棄)
+```
 
 ### 3.5 rollback snapshot の永続化
 
@@ -213,7 +232,7 @@
 ### 4.2 新規
 
 - `packages/plugin/src/chat/workflow/useCustomizeFiles.ts` — `GET customize.json` を fetch して FileTree 用 entry に整形する hook
-- `packages/plugin/src/chat/workflow/previewSandbox.tsx` — iframe sandbox component
+- ~~`packages/plugin/src/chat/workflow/previewSandbox.tsx`~~ — **§3.4 確定により不要** (動作テスト環境 URL に飛ばす方式に変更)
 - `packages/plugin/src/chat/workflow/customizeHistoryRepo.ts` — snapshot を kintone レコード (専用アプリ) に保存/取得する repo
 - (任意) `packages/plugin/src/chat/workflow/CustomizeFileUploader.ts` — file.json upload ヘルパー
 
@@ -242,12 +261,12 @@
 
 - [x] **論点 3.1 — ファイル保管方式**: kintone FILE upload (案 A) → ✅ 検証で動作確認、確定
 - [ ] **論点 3.2 — multi-file artifact**: 1 artifact = 1 ファイル (案 A) で進めて良いか (B/C も検討余地あり)
-- [ ] **論点 3.4 — preview sandbox**: 完全 mock (案 A) で進めるか、実環境プレビュー (`/k/admin/preview/<appId>/` を別タブ) を主軸にするか
+- [x] **論点 3.4 — preview sandbox**: ~~完全 mock (案 A)~~ → ✅ 実機検証で **案 C (kintone 動作テスト環境 URL を新タブで開く)** に確定。iframe sandbox / mock は実装不要
 - [x] **論点 3.5 — rollback**: ~~revert API で snapshot 撤廃 (案 A)~~ → ✅ §2.5.7 で **不可** 確定。**案 B (kintone 専用アプリレコードに snapshot 保存)** で進めるか確認
 - [ ] **専用アプリの provision**: §3.5 案 B の snapshot 保存先アプリ `cowork-agent-customize-history` を Plugin 初回 install 時に自動作成 (REST API で創設) するか、admin に手動作成案内するか
 - [ ] **MVP の段階分割**: 全機能を一度にやらず、まず desktop.js のみで実 deploy → 後で multi-file 拡張、という段階的リリースは可能か?
 - [ ] **OAuth 再連携 UX**: 既存ユーザに対する追加 scope 取得タイミング (Customizer Agent 初回利用時に prompt? それとも Plugin install 時から)
-- [ ] **「適用前に動作テスト環境画面で実機確認」UX**: §3.4 案 A (sandbox mock) を採用したとしても、admin が実 kintone で動作確認したいケースに対応するか (= `/k/admin/preview/<appId>/` を別タブで開くボタンの位置づけ)
+- [ ] **「キャンセル」ボタンの UX**: 「適用」前に admin が動作テスト環境を見て「やめる」と判断したケースで `POST deploy.json {revert: true}` を呼んで preview を live と同期 (= 編集破棄) するボタンを置くか
 
 ---
 
