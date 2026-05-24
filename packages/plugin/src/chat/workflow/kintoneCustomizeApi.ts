@@ -377,7 +377,11 @@ export function useKintoneCustomizeWorkflow(
 /**
  * Plugin から kintone /k/v1/file.json に upload するヘルパー。
  * `kintone.api` は multipart 非対応のため fetch + FormData で直接叩く。
- * `__REQUEST_TOKEN__` (CSRF) を付与する公式パターン。
+ *
+ * kintone セッション認証 (Cookie ベース) が成立するには以下 2 つが必須:
+ *   1. `X-Requested-With: XMLHttpRequest` ヘッダ — CSRF 対策で kintone が XHR/fetch
+ *      発の正当な呼出かを確認するために要求 (無いと CB_JH01 認証エラー)
+ *   2. `__REQUEST_TOKEN__` form field — CSRF token (POST 時必須)
  */
 export async function defaultFileUpload(
   fileName: string,
@@ -394,7 +398,11 @@ export async function defaultFileUpload(
     fileName,
   );
   const url = kintone.api.url('/k/v1/file.json', /* detectGuestSpace */ true);
-  const res = await fetch(url, { method: 'POST', body: formData });
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: formData,
+  });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     const err = new Error(
