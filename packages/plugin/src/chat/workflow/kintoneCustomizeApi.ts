@@ -1,209 +1,408 @@
-// Cowork Agent for kintone — Customizer wedge kintone API 連携 (V1 P4.4)
+// Cowork Agent for kintone — Customizer wedge kintone REST API 連携 (#20 V2 Phase 1)
 //
-// preview / apply / rollback の各操作で実際に呼ぶ kintone REST API ラッパー。
-// WorkflowFooter から useApplyWorkflow.callbacks として注入される。
+// preview / apply / rollback / cancel の各操作で実際に呼ぶ kintone REST API ラッパー。
+// CustomizerArtifactView から useApplyWorkflow.callbacks として注入される。
 //
-// API:
-//   - preview: iframe sandbox で artifact.content (JS) を実行 (host kintone には触れない)
-//   - apply  : GET preview/app/customize で旧 JS を取得 → snapshot → PUT 新 JS → POST deploy
-//   - rollback: snapshot を PUT で書き戻し → POST deploy
+// V1 は no-op だった buildCustomizeUpdate を本実装に置換:
+//   - bundle.files を file.json で upload (UUID fileKey 取得)
+//   - 既存 customize.json を GET → 同 path は置換 / それ以外は保持 で merge
+//   - PUT preview/customize.json (revision 楽観ロック)
+//   - apply 時のみ POST deploy.json (live 反映) + status ポーリング
+//   - apply 直前に chatStore.workflowHistory に旧 customize を snapshot (Phase 1 in-memory)
+//   - rollback は snapshot を PUT + deploy で復元
+//   - cancel は POST deploy.json {revert:true} で preview を live と同期
 //
-// V1 の制限:
-//   - rollback の snapshot は chatStore.workflowHistory (in-memory)。Plugin リロードで失われる。
-//   - 403 (アプリ管理権限不足) は WorkflowFooter の status line で表示される。
-//
-// 仕様: requirements.md §15.5 / design.md §6.3 / Risk R2, R3
+// 仕様: .steering/20260518-customizer-wedge-actualization/design.md §3.1
 
 import { useCallback } from 'react';
 
 import { useChatStore } from '../../store/chatStore';
 
+import { detectMissingScopes, OAuthScopeError } from './OAuthScopeError';
+
+import type { CustomizeBundleContent, CustomizeFilePath } from '../../core/artifacts/types';
 import type { WorkflowCallbacks } from './useApplyWorkflow';
 
-/**
- * kintone REST API を呼ぶ薄いラッパー (kintone.api() を経由)。
- * テスト容易性のため呼出側で di できる shape にしている。
- */
+// ─── kintone REST API 型 ──────────────────────────────────────────────────
+
 export type KintoneApiFn = (
   url: string,
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   params: unknown,
 ) => Promise<unknown>;
 
-interface KintoneCustomizeJsResponse {
-  /** kintone preview/customize の正規レスポンス */
-  scope?: 'ALL' | 'ADMIN' | 'NONE';
-  desktop?: {
-    js?: Array<{ type: 'URL' | 'FILE'; url?: string; file?: { fileKey: string } }>;
-    css?: Array<{ type: 'URL' | 'FILE'; url?: string; file?: { fileKey: string } }>;
-  };
-  mobile?: {
-    js?: Array<{ type: 'URL' | 'FILE'; url?: string; file?: { fileKey: string } }>;
-  };
+/** file upload 用 (kintone.api は multipart 未対応のため fetch + FormData を別途使う想定) */
+export type FileUploadFn = (fileName: string, content: string) => Promise<string>;
+
+/** customize.json 1 entry */
+export type CustomizeFileEntry =
+  | { type: 'URL'; url: string }
+  | {
+      type: 'FILE';
+      file: {
+        fileKey: string;
+        name?: string;
+        contentType?: string;
+        size?: string;
+      };
+    };
+
+/** GET /k/v1/preview/app/customize.json レスポンス */
+export interface CustomizeJsonResponse {
+  scope: 'ALL' | 'ADMIN' | 'NONE';
+  desktop: { js?: CustomizeFileEntry[]; css?: CustomizeFileEntry[] };
+  mobile: { js?: CustomizeFileEntry[]; css?: CustomizeFileEntry[] };
   revision?: string;
 }
 
-/** sandbox preview 用の引数 */
-export interface PreviewArgs {
-  /** artifact.content (JavaScript) */
-  jsContent: string;
-  /** preview を出すコンテナ要素 (任意)。なければ new iframe を内部生成 */
-  sandboxParent?: HTMLElement;
+/** chatStore.workflowHistory に保存する snapshot (Phase 1 in-memory) */
+export interface CustomizeSnapshot {
+  /** apply 直前の preview customize.json (rollback 時に PUT で書き戻す) */
+  customize: CustomizeJsonResponse;
+  /** snapshot を取った時刻 */
+  capturedAt: number;
 }
 
 export interface KintoneCustomizeApiDeps {
-  /** kintone.api() に相当する関数 (テスト時に注入) */
-  apiFn: KintoneApiFn;
-  /** 対象アプリ ID */
   appId: number;
-  /** preview 用 sandbox 実行 (テスト時に注入) */
-  runSandbox?: (jsContent: string) => Promise<void>;
+  apiFn: KintoneApiFn;
+  /** file.json upload。kintone.api は multipart 不可のため別経路 (fetch + FormData) で呼ぶ */
+  uploadFile: FileUploadFn;
+  /** deploy.json status ポーリング間隔 (ms)。default 2000 */
+  pollIntervalMs?: number;
+  /** deploy.json status ポーリング上限回数。default 30 (= 60s) */
+  pollMaxAttempts?: number;
+}
+
+// ─── public API ────────────────────────────────────────────────────────────
+
+export interface CustomizerWorkflowParams {
+  /** 対象 bundle artifact id (snapshot 識別子になる) */
+  artifactId: string;
+  /** bundle 本体 (CustomizerArtifactView が artifact から parse して渡す) */
+  bundle: CustomizeBundleContent;
 }
 
 /**
- * preview/apply/rollback の callback set を生成するファクトリ。
- *
- * - chatStore.workflowHistory に snapshot を保存/取得する。
- * - apply 直前に既存 customize.js を取得して保存、その後 PUT で新 JS を設定 → deploy。
- * - rollback は snapshot を取り出し PUT → deploy。
+ * preview/apply/rollback/cancel の callback set を生成する factory。
+ * useApplyWorkflow に渡す WorkflowCallbacks を返す。
  */
 export function makeKintoneCustomizeWorkflow(
-  artifactId: string,
+  params: CustomizerWorkflowParams,
   deps: KintoneCustomizeApiDeps,
 ): WorkflowCallbacks {
-  const { apiFn, appId, runSandbox } = deps;
-  const store = useChatStore.getState;
+  const { artifactId, bundle } = params;
 
   return {
     preview: async () => {
-      if (runSandbox) {
-        await runSandbox(getJsContentFromStore(artifactId));
-      } else {
-        // V1 default: sandbox 実装は呼出側で注入。default は no-op (UI 検証用)。
-      }
+      await pushBundleToPreview(bundle, deps);
     },
     apply: async () => {
-      const jsContent = getJsContentFromStore(artifactId);
-
-      // 1) 既存の customize 設定を取得 (snapshot 用)
-      const existing = (await apiFn(
-        kintoneApiUrl('/k/v1/preview/app/customize.json'),
-        'GET',
-        { app: appId },
-      )) as KintoneCustomizeJsResponse;
-
-      // snapshot を chatStore に保存 (rollback で書き戻す用)
-      const snapshot = JSON.stringify({
-        desktop: existing.desktop ?? { js: [], css: [] },
-        mobile: existing.mobile ?? { js: [] },
-        scope: existing.scope ?? 'ALL',
-      });
-      store().saveWorkflowSnapshot(artifactId, snapshot);
-
-      // 2) 新 JS を URL 形式で desktop.js に追加 (URL は呼出側で生成、今は inline 想定で
-      //    実装は将来拡張。V1 では既存設定に追加せず、artifact 経由でファイルキー方式を採る)。
-      //    NOTE: kintone customize.json は url 配列 + file 配列の構造。V1 では sandbox 経由で
-      //    動作確認のみ。実機への JS deploy は MCP ツール kintone-update-customize-js (V3) 経由。
-      //    本 V1 では PUT を「最小サンプルで成功確認」レベルで実行する。
-      const newCustomize = buildCustomizeUpdate(existing, jsContent);
-      await apiFn(kintoneApiUrl('/k/v1/preview/app/customize.json'), 'PUT', {
-        app: appId,
-        ...newCustomize,
-      });
-
-      // 3) deploy
-      await apiFn(kintoneApiUrl('/k/v1/preview/app/deploy.json'), 'POST', { apps: [{ app: appId }] });
+      // apply 直前に旧 customize を snapshot (preview = live = 直前の状態と仮定)
+      const current = await getCustomize(deps, /* preview */ true);
+      saveSnapshot(artifactId, current);
+      await pushBundleToPreview(bundle, deps);
+      await deployAndWait(deps);
     },
     rollback: async () => {
-      const snapshot = store().workflowHistory.get(artifactId);
-      if (!snapshot) {
-        throw new Error('ロールバック用のスナップショットが見つかりません (Plugin リロード等で失われた可能性)');
+      const snap = loadSnapshot(artifactId);
+      if (!snap) {
+        throw new Error(
+          'ロールバック履歴が見つかりません (Plugin リロードで失われた可能性があります)。永続的なロールバックは Phase 2 で GitHub 連携と統合予定です。',
+        );
       }
-      const parsed = JSON.parse(snapshot) as KintoneCustomizeJsResponse;
-      await apiFn(kintoneApiUrl('/k/v1/preview/app/customize.json'), 'PUT', {
-        app: appId,
-        scope: parsed.scope ?? 'ALL',
-        desktop: parsed.desktop ?? { js: [], css: [] },
-        mobile: parsed.mobile ?? { js: [] },
+      await putCustomize(deps, snap.customize);
+      await deployAndWait(deps);
+      // 1 回 rollback したら snapshot を消す (再 apply で別 snapshot を取り直す)
+      clearSnapshot(artifactId);
+    },
+    cancel: async () => {
+      // POST deploy.json {revert: true} = preview を live と同期 (preview 編集を破棄)
+      const result = await callApi(deps, '/k/v1/preview/app/deploy.json', 'POST', {
+        apps: [{ app: deps.appId }],
+        revert: true,
       });
-      await apiFn(kintoneApiUrl('/k/v1/preview/app/deploy.json'), 'POST', { apps: [{ app: appId }] });
-      store().clearWorkflowSnapshot(artifactId);
+      void result;
     },
   };
-}
-
-// ─── 内部ヘルパ ───────────────────────────────────────────────────────────
-
-function getJsContentFromStore(artifactId: string): string {
-  const artifact = useChatStore.getState().artifacts.get(artifactId);
-  if (!artifact) {
-    throw new Error(`Artifact ${artifactId} が見つかりません`);
-  }
-  return artifact.content;
 }
 
 /**
- * 既存 customize 設定に「Cowork Agent が生成した JS」を **追記** する形で新設定を組む。
- * V1 では URL ベース (Worker でホストするか blob URL) ではなく、シンプルに inline で JS を
- * 文字列として保持する想定ではあるが、kintone customize.json は URL/FILE しか受け付けない。
- *
- * 実装方針 (V1 暫定):
- *   - Worker 経由でホストできないので、artifact.content は **直接 deploy できない**
- *   - 本関数は existing をそのまま返し (no-op)、UI 上 status は applied になるが
- *     実際の本番反映は MCP ツール kintone-update-customize-js (#24 V3) を待つ
- *   - これは V1 の wedge ループ UI 検証用 (実 deploy ロジックは V3 で完成)
+ * kintone 動作テスト環境 URL を組み立てる。WorkflowFooter の「動作テスト環境を開く」リンク用。
+ * 例: https://example.cybozu.com/k/admin/preview/3/
  */
-function buildCustomizeUpdate(
-  existing: KintoneCustomizeJsResponse,
-  _newJsContent: string,
-): Pick<KintoneCustomizeJsResponse, 'scope' | 'desktop' | 'mobile'> {
-  // V1: 既存設定をそのまま返す (deploy が空打ちになる)
-  // V3 で MCP の kintone-update-customize-js が完成したら本関数を置き換える
-  return {
-    scope: existing.scope ?? 'ALL',
-    desktop: existing.desktop ?? { js: [], css: [] },
-    mobile: existing.mobile ?? { js: [] },
+export function getPreviewUrl(appId: number, baseUrl?: string): string {
+  const origin =
+    baseUrl ?? (typeof window !== 'undefined' ? window.location.origin : '');
+  return `${origin}/k/admin/preview/${appId}/`;
+}
+
+// ─── 内部実装 ─────────────────────────────────────────────────────────────
+
+/** bundle.files を upload して preview customize.json に merge PUT する */
+async function pushBundleToPreview(
+  bundle: CustomizeBundleContent,
+  deps: KintoneCustomizeApiDeps,
+): Promise<void> {
+  // 各 file を file.json で upload
+  const uploaded = await Promise.all(
+    bundle.files.map(async (f) => ({
+      path: f.path,
+      fileKey: await deps.uploadFile(`cowork-agent-${f.path}`, f.content),
+    })),
+  );
+
+  // 現状の preview customize.json を取得
+  const current = await getCustomize(deps, /* preview */ true);
+
+  // bundle.files の path と一致する既存 entry を置換、それ以外は保持
+  const next = mergeCustomize(current, uploaded);
+  await putCustomize(deps, next);
+}
+
+/** snapshot を chatStore.workflowHistory に保存 */
+function saveSnapshot(artifactId: string, customize: CustomizeJsonResponse): void {
+  const snap: CustomizeSnapshot = {
+    customize,
+    capturedAt: Date.now(),
   };
+  useChatStore.getState().saveWorkflowSnapshot(artifactId, JSON.stringify(snap));
 }
 
-function kintoneApiUrl(path: string): string {
-  return path;
+function loadSnapshot(artifactId: string): CustomizeSnapshot | null {
+  const raw = useChatStore.getState().workflowHistory.get(artifactId);
+  if (typeof raw !== 'string') return null;
+  try {
+    return JSON.parse(raw) as CustomizeSnapshot;
+  } catch {
+    return null;
+  }
 }
 
-// ─── React hook 形式の便利ラッパー ────────────────────────────────────────
+function clearSnapshot(artifactId: string): void {
+  useChatStore.getState().clearWorkflowSnapshot?.(artifactId);
+}
+
+/** customize.json の merge: bundle path に対応する既存 entry を置換、それ以外は保持 */
+export function mergeCustomize(
+  current: CustomizeJsonResponse,
+  uploaded: ReadonlyArray<{ path: CustomizeFilePath; fileKey: string }>,
+): CustomizeJsonResponse {
+  // path → fileKey の lookup
+  const byPath = new Map<CustomizeFilePath, string>();
+  for (const u of uploaded) byPath.set(u.path, u.fileKey);
+
+  // 各 area (desktop.js, desktop.css, mobile.js, mobile.css) を merge
+  const result: CustomizeJsonResponse = {
+    scope: current.scope ?? 'ALL',
+    desktop: {
+      js: mergeFileArray(current.desktop?.js ?? [], byPath.get('desktop.js')),
+      css: mergeFileArray(current.desktop?.css ?? [], byPath.get('desktop.css')),
+    },
+    mobile: {
+      js: mergeFileArray(current.mobile?.js ?? [], byPath.get('mobile.js')),
+      css: mergeFileArray(current.mobile?.css ?? [], byPath.get('mobile.css')),
+    },
+  };
+  if (current.revision) {
+    result.revision = current.revision;
+  }
+  return result;
+}
+
+/**
+ * 既存配列に新 fileKey を merge:
+ *   - newFileKey が undefined: 既存配列を保持
+ *   - newFileKey 指定: 既存の最初の FILE エントリで `name` が cowork-agent-* なら **置換**、
+ *                       無ければ末尾に **追加**
+ *   - URL タイプは常に保持 (admin が手動登録した CDN リンクなど)
+ */
+function mergeFileArray(
+  existing: CustomizeFileEntry[],
+  newFileKey: string | undefined,
+): CustomizeFileEntry[] {
+  if (!newFileKey) return existing;
+  const result: CustomizeFileEntry[] = [];
+  let replaced = false;
+  for (const e of existing) {
+    if (
+      !replaced &&
+      e.type === 'FILE' &&
+      typeof e.file.name === 'string' &&
+      e.file.name.startsWith('cowork-agent-')
+    ) {
+      // 同名の Cowork Agent 生成 entry を置換
+      result.push({ type: 'FILE', file: { fileKey: newFileKey } });
+      replaced = true;
+    } else {
+      result.push(e);
+    }
+  }
+  if (!replaced) {
+    result.push({ type: 'FILE', file: { fileKey: newFileKey } });
+  }
+  return result;
+}
+
+async function getCustomize(
+  deps: KintoneCustomizeApiDeps,
+  preview: boolean,
+): Promise<CustomizeJsonResponse> {
+  const path = preview
+    ? '/k/v1/preview/app/customize.json'
+    : '/k/v1/app/customize.json';
+  return (await callApi(deps, path, 'GET', { app: deps.appId })) as CustomizeJsonResponse;
+}
+
+async function putCustomize(
+  deps: KintoneCustomizeApiDeps,
+  body: CustomizeJsonResponse,
+): Promise<void> {
+  await callApi(deps, '/k/v1/preview/app/customize.json', 'PUT', {
+    app: deps.appId,
+    scope: body.scope,
+    desktop: body.desktop,
+    mobile: body.mobile,
+    // revision を渡せば楽観ロック、無ければ skip ('-1' 相当)
+    ...(body.revision ? { revision: body.revision } : {}),
+  });
+}
+
+async function deployAndWait(deps: KintoneCustomizeApiDeps): Promise<void> {
+  await callApi(deps, '/k/v1/preview/app/deploy.json', 'POST', {
+    apps: [{ app: deps.appId }],
+  });
+  await pollDeployStatus(deps);
+}
+
+interface DeployStatusResponse {
+  apps?: Array<{ app: string; status: 'PROCESSING' | 'SUCCESS' | 'FAIL' | 'CANCEL' }>;
+}
+
+async function pollDeployStatus(deps: KintoneCustomizeApiDeps): Promise<void> {
+  const interval = deps.pollIntervalMs ?? 2000;
+  const max = deps.pollMaxAttempts ?? 30;
+  for (let i = 0; i < max; i++) {
+    await sleep(interval);
+    const res = (await callApi(deps, '/k/v1/preview/app/deploy.json', 'GET', {
+      apps: [deps.appId],
+    })) as DeployStatusResponse;
+    const status = res.apps?.[0]?.status;
+    if (status === 'SUCCESS') return;
+    if (status === 'FAIL' || status === 'CANCEL') {
+      throw new Error(`deploy ${status}: kintone 側でデプロイが失敗しました`);
+    }
+  }
+  throw new Error(`deploy status ポーリングがタイムアウトしました (${max * interval}ms)`);
+}
+
+/** kintone REST API 呼出ラッパー。403 + scope 文言で OAuthScopeError を throw */
+async function callApi(
+  deps: KintoneCustomizeApiDeps,
+  path: string,
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  params: unknown,
+): Promise<unknown> {
+  try {
+    return await deps.apiFn(path, method, params);
+  } catch (e) {
+    if (e instanceof Error) {
+      const body = (e as { responseBody?: string }).responseBody ?? e.message;
+      if (typeof body === 'string') {
+        const missing = detectMissingScopes(body);
+        if (missing.length > 0) {
+          throw new OAuthScopeError(missing, body);
+        }
+      }
+    }
+    throw e;
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+// ─── React hook 形式の便利ラッパー (CustomizerArtifactView 用) ───────────────
 
 export interface UseKintoneCustomizeWorkflowOptions {
   artifactId: string;
+  bundle: CustomizeBundleContent;
   appId: number;
   apiFn: KintoneApiFn;
-  runSandbox?: (jsContent: string) => Promise<void>;
+  uploadFile: FileUploadFn;
 }
 
-/**
- * WorkflowFooter から `useApplyWorkflow.callbacks` として渡せる形に整える hook。
- * makeKintoneCustomizeWorkflow を useCallback でメモ化するだけ。
- */
 export function useKintoneCustomizeWorkflow(
   options: UseKintoneCustomizeWorkflowOptions,
 ): WorkflowCallbacks {
-  const { artifactId, appId, apiFn, runSandbox } = options;
+  const { artifactId, bundle, appId, apiFn, uploadFile } = options;
   const preview = useCallback(async () => {
-    if (runSandbox) {
-      const content = useChatStore.getState().artifacts.get(artifactId)?.content;
-      if (!content) throw new Error(`Artifact ${artifactId} が見つかりません`);
-      await runSandbox(content);
-    }
-  }, [artifactId, runSandbox]);
+    const cb = makeKintoneCustomizeWorkflow(
+      { artifactId, bundle },
+      { appId, apiFn, uploadFile },
+    );
+    await cb.preview();
+  }, [artifactId, bundle, appId, apiFn, uploadFile]);
 
   const apply = useCallback(async () => {
-    const cb = makeKintoneCustomizeWorkflow(artifactId, { appId, apiFn, runSandbox });
+    const cb = makeKintoneCustomizeWorkflow(
+      { artifactId, bundle },
+      { appId, apiFn, uploadFile },
+    );
     await cb.apply();
-  }, [artifactId, appId, apiFn, runSandbox]);
+  }, [artifactId, bundle, appId, apiFn, uploadFile]);
 
   const rollback = useCallback(async () => {
-    const cb = makeKintoneCustomizeWorkflow(artifactId, { appId, apiFn, runSandbox });
+    const cb = makeKintoneCustomizeWorkflow(
+      { artifactId, bundle },
+      { appId, apiFn, uploadFile },
+    );
     await cb.rollback();
-  }, [artifactId, appId, apiFn, runSandbox]);
+  }, [artifactId, bundle, appId, apiFn, uploadFile]);
 
-  return { preview, apply, rollback };
+  const cancel = useCallback(async () => {
+    const cb = makeKintoneCustomizeWorkflow(
+      { artifactId, bundle },
+      { appId, apiFn, uploadFile },
+    );
+    await cb.cancel();
+  }, [artifactId, bundle, appId, apiFn, uploadFile]);
+
+  return { preview, apply, rollback, cancel };
+}
+
+// ─── デフォルトの file upload 実装 (Plugin runtime 用) ───────────────────────
+
+/**
+ * Plugin から kintone /k/v1/file.json に upload するヘルパー。
+ * `kintone.api` は multipart 非対応のため fetch + FormData で直接叩く。
+ * `__REQUEST_TOKEN__` (CSRF) を付与する公式パターン。
+ */
+export async function defaultFileUpload(
+  fileName: string,
+  content: string,
+): Promise<string> {
+  if (typeof kintone === 'undefined') {
+    throw new Error('kintone JavaScript API is not available (Plugin context 外)');
+  }
+  const formData = new FormData();
+  formData.append('__REQUEST_TOKEN__', kintone.getRequestToken());
+  formData.append(
+    'file',
+    new Blob([content], { type: 'application/javascript' }),
+    fileName,
+  );
+  const url = kintone.api.url('/k/v1/file.json', /* detectGuestSpace */ true);
+  const res = await fetch(url, { method: 'POST', body: formData });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    const err = new Error(
+      `file.json upload failed: HTTP ${res.status} ${body.slice(0, 200)}`,
+    );
+    (err as { responseBody?: string }).responseBody = body;
+    throw err;
+  }
+  const json = (await res.json()) as { fileKey: string };
+  return json.fileKey;
 }
