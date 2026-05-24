@@ -18,6 +18,7 @@ import {
   getPreviewUrl,
   makeKintoneCustomizeWorkflow,
   mergeCustomize,
+  unmergeCustomize,
 } from './kintoneCustomizeApi';
 import { OAuthScopeError } from './OAuthScopeError';
 
@@ -143,29 +144,38 @@ describe('makeKintoneCustomizeWorkflow.apply', () => {
 });
 
 describe('makeKintoneCustomizeWorkflow.rollback', () => {
-  it('chatStore.workflowHistory に snapshot が無ければ throw', async () => {
-    const { deps } = makeDeps();
+  it('現状の customize.json を GET → cowork-agent-* FILE entry を除去 → PUT + deploy', async () => {
+    // 現在の preview には cowork-agent-* が適用済 + admin 手動登録の URL も混在
+    const apiFn = vi.fn(async (url: string, method: string) => {
+      if (url.endsWith('/customize.json') && method === 'GET') {
+        return {
+          scope: 'ALL',
+          desktop: {
+            js: [
+              { type: 'URL', url: 'https://cdn.example.com/admin-manual.js' },
+              {
+                type: 'FILE',
+                file: { fileKey: 'internal-49', name: 'cowork-agent-desktop.js' },
+              },
+            ],
+            css: [],
+          },
+          mobile: { js: [], css: [] },
+          revision: '10',
+        };
+      }
+      if (url.endsWith('/customize.json') && method === 'PUT') {
+        return { revision: '11' };
+      }
+      if (url.endsWith('/deploy.json') && method === 'GET') {
+        return { apps: [{ app: '3', status: 'SUCCESS' }] };
+      }
+      return {};
+    });
+    const uploadFile = vi.fn();
+    const deps = { appId: 3, apiFn, uploadFile, pollIntervalMs: 0 };
     const cb = makeKintoneCustomizeWorkflow(
-      { artifactId: 'art_no_snap', bundle: SAMPLE_BUNDLE },
-      deps,
-    );
-    await expect(cb.rollback()).rejects.toThrow(/ロールバック履歴が見つかりません/);
-  });
-
-  it('snapshot から PUT customize → POST deploy で復元', async () => {
-    const snapshotCustomize: CustomizeJsonResponse = {
-      scope: 'ALL',
-      desktop: { js: [{ type: 'URL', url: 'https://cdn.example.com/old.js' }], css: [] },
-      mobile: { js: [], css: [] },
-      revision: '5',
-    };
-    useChatStore.getState().saveWorkflowSnapshot(
-      'art_1',
-      JSON.stringify({ customize: snapshotCustomize, capturedAt: Date.now() }),
-    );
-    const { apiFn, deps } = makeDeps();
-    const cb = makeKintoneCustomizeWorkflow(
-      { artifactId: 'art_1', bundle: SAMPLE_BUNDLE },
+      { artifactId: 'art_1', bundle: SAMPLE_BUNDLE }, // bundle = desktop.js
       deps,
     );
     await cb.rollback();
@@ -174,37 +184,28 @@ describe('makeKintoneCustomizeWorkflow.rollback', () => {
       (c) => c[0] === '/k/v1/preview/app/customize.json' && c[1] === 'PUT',
     );
     expect(putCall).toBeTruthy();
-    const body = putCall![2] as { desktop: { js: unknown[] } };
-    expect(body.desktop.js).toEqual([{ type: 'URL', url: 'https://cdn.example.com/old.js' }]);
-
-    // rollback 後 snapshot がクリアされる
-    expect(useChatStore.getState().workflowHistory.has('art_1')).toBe(false);
+    const body = putCall![2] as { desktop: { js: unknown[] }; revision?: string };
+    // cowork-agent-* は除去、admin の URL は保持
+    expect(body.desktop.js).toEqual([
+      { type: 'URL', url: 'https://cdn.example.com/admin-manual.js' },
+    ]);
+    // revision skip (楽観ロックなし)
+    expect(body.revision).toBeUndefined();
   });
 
-  it('rollback の PUT body は snapshot の古い revision を含めない (= 楽観ロック skip)', async () => {
-    const snapshotCustomize: CustomizeJsonResponse = {
-      scope: 'ALL',
-      desktop: { js: [], css: [] },
-      mobile: { js: [], css: [] },
-      revision: '5', // apply 直前の古い revision
-    };
-    useChatStore.getState().saveWorkflowSnapshot(
-      'art_1',
-      JSON.stringify({ customize: snapshotCustomize, capturedAt: Date.now() }),
-    );
+  it('snapshot が無くても rollback は実行できる (Plugin リロード後でも OK)', async () => {
+    // chatStore.workflowHistory は空のままでも、bundle.files の path 情報があれば rollback 可能
     const { apiFn, deps } = makeDeps();
+    expect(useChatStore.getState().workflowHistory.size).toBe(0);
     const cb = makeKintoneCustomizeWorkflow(
-      { artifactId: 'art_1', bundle: SAMPLE_BUNDLE },
+      { artifactId: 'no_snapshot_art', bundle: SAMPLE_BUNDLE },
       deps,
     );
-    await cb.rollback();
-
+    await expect(cb.rollback()).resolves.toBeUndefined();
     const putCall = apiFn.mock.calls.find(
       (c) => c[0] === '/k/v1/preview/app/customize.json' && c[1] === 'PUT',
     );
-    const body = putCall![2] as { revision?: string };
-    // rollback の PUT には revision を含めない (skip = '-1' 相当)
-    expect(body.revision).toBeUndefined();
+    expect(putCall).toBeTruthy();
   });
 });
 
@@ -274,6 +275,55 @@ describe('mergeCustomize', () => {
     };
     const merged = mergeCustomize(current, []);
     expect(merged.revision).toBe('42');
+  });
+});
+
+describe('unmergeCustomize (#20 V2 Phase 1 rollback)', () => {
+  it('bundle path 配下の cowork-agent-* FILE entry のみ除去、その他は保持', () => {
+    const current: CustomizeJsonResponse = {
+      scope: 'ALL',
+      desktop: {
+        js: [
+          { type: 'URL', url: 'https://cdn.example.com/admin.js' },
+          { type: 'FILE', file: { fileKey: 'kk1', name: 'cowork-agent-desktop.js' } },
+          { type: 'FILE', file: { fileKey: 'kk2', name: 'admin-manual.js' } },
+        ],
+        css: [],
+      },
+      mobile: { js: [], css: [] },
+      revision: '10',
+    };
+    const next = unmergeCustomize(current, [{ path: 'desktop.js' }]);
+    expect(next.desktop.js).toEqual([
+      { type: 'URL', url: 'https://cdn.example.com/admin.js' },
+      { type: 'FILE', file: { fileKey: 'kk2', name: 'admin-manual.js' } },
+    ]);
+  });
+
+  it('bundle に含まれない area (desktop.css 等) は触らない', () => {
+    const current: CustomizeJsonResponse = {
+      scope: 'ALL',
+      desktop: {
+        js: [],
+        css: [{ type: 'FILE', file: { fileKey: 'kc1', name: 'cowork-agent-desktop.css' } }],
+      },
+      mobile: { js: [], css: [] },
+    };
+    // bundle に desktop.js のみ
+    const next = unmergeCustomize(current, [{ path: 'desktop.js' }]);
+    // desktop.css は bundle path に含まれないので保持される
+    expect(next.desktop.css).toHaveLength(1);
+  });
+
+  it('revision は返り値に含めない (rollback で楽観ロック skip)', () => {
+    const current: CustomizeJsonResponse = {
+      scope: 'ALL',
+      desktop: { js: [], css: [] },
+      mobile: { js: [], css: [] },
+      revision: '99',
+    };
+    const next = unmergeCustomize(current, []);
+    expect(next.revision).toBeUndefined();
   });
 });
 

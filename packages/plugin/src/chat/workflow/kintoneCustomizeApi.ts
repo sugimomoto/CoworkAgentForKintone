@@ -105,20 +105,22 @@ export function makeKintoneCustomizeWorkflow(
       await deployAndWait(deps);
     },
     rollback: async () => {
-      const snap = loadSnapshot(artifactId);
-      if (!snap) {
-        throw new Error(
-          'ロールバック履歴が見つかりません (Plugin リロードで失われた可能性があります)。永続的なロールバックは Phase 2 で GitHub 連携と統合予定です。',
-        );
-      }
-      // snapshot 内の revision は apply 直前 (= 古い) の値なので、そのまま PUT に
-      // 渡すと楽観ロック失敗 (409 Conflict) になる。rollback は「強制的に過去状態を
-      // 書き戻す」操作なので revision を skip (= '-1' 相当) で上書きする。
-      const { revision: _staleRevision, ...customizeWithoutRevision } = snap.customize;
-      void _staleRevision;
-      await putCustomize(deps, customizeWithoutRevision as CustomizeJsonResponse);
+      // Phase 1 の rollback 戦略:
+      //   snapshot ベース (apply 直前の customize.json を保存して書き戻す) は、
+      //   kintone が apply の deploy 時に **旧 fileKey をガベージコレクション** するため
+      //   GAIA_BL01 「指定したファイルが見つかりません」になり実装不可。
+      //
+      //   代替策: 「apply で追加した bundle.files の cowork-agent-* FILE entry を
+      //   customize.json から除去する」逆操作で rollback を実現。bundle.files の path
+      //   情報だけで動くので snapshot 不要 = Plugin リロード後でも artifact が会話履歴に
+      //   残っていれば rollback 可能。admin が手動登録した CDN URL や別 entry は保持される。
+      //
+      //   Phase 2 (#17 GitHub 連携) で snapshot を git commit に永続化する形に切替予定。
+      const current = await getCustomize(deps, /* preview */ true);
+      const next = unmergeCustomize(current, bundle.files);
+      await putCustomize(deps, next);
       await deployAndWait(deps);
-      // 1 回 rollback したら snapshot を消す (再 apply で別 snapshot を取り直す)
+      // 互換のため snapshot もクリア (もし apply 時に保存していた場合)
       clearSnapshot(artifactId);
     },
     cancel: async () => {
@@ -213,6 +215,44 @@ export function mergeCustomize(
     result.revision = current.revision;
   }
   return result;
+}
+
+/**
+ * rollback 用: bundle.files の path に対応する area の cowork-agent-* FILE entry を
+ * customize.json から除去する (= apply の mergeCustomize の逆操作)。
+ *
+ * 例: bundle.files が [{path:'desktop.js'}] のとき、customize.desktop.js[] から
+ * `name` が `cowork-agent-` で始まる FILE entry を全部取り除く。URL タイプや別 name の
+ * FILE (admin が手動登録した) は保持される。
+ */
+export function unmergeCustomize(
+  current: CustomizeJsonResponse,
+  bundleFiles: ReadonlyArray<{ path: CustomizeFilePath }>,
+): CustomizeJsonResponse {
+  const bundlePaths = new Set<CustomizeFilePath>(bundleFiles.map((f) => f.path));
+  const filter = (
+    entries: CustomizeFileEntry[],
+    area: CustomizeFilePath,
+  ): CustomizeFileEntry[] => {
+    if (!bundlePaths.has(area)) return entries;
+    return entries.filter((e) => {
+      if (e.type !== 'FILE') return true;
+      const name = e.file.name;
+      // cowork-agent- prefix の FILE entry のみ除去 (Cowork Agent が apply した entry)
+      return typeof name !== 'string' || !name.startsWith('cowork-agent-');
+    });
+  };
+  return {
+    scope: current.scope ?? 'ALL',
+    desktop: {
+      js: filter(current.desktop?.js ?? [], 'desktop.js'),
+      css: filter(current.desktop?.css ?? [], 'desktop.css'),
+    },
+    mobile: {
+      js: filter(current.mobile?.js ?? [], 'mobile.js'),
+      css: filter(current.mobile?.css ?? [], 'mobile.css'),
+    },
+  };
 }
 
 /**
