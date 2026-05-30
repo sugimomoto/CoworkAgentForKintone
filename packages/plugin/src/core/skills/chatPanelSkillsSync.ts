@@ -8,10 +8,14 @@
 // そもそも動かない — kintone 公式仕様で「各プラグインの設定画面」のみ利用可)。
 // 同期完了後は呼出側が `resolveBundledSkillIds` を再 fetch して UI を更新する。
 
+import { apiRequest } from '../managed-agents/client';
 import { SKILL_BUNDLES } from '../../generated/skills-bundle';
 
 import type { CustomSkillInput } from '../../desktop/settings/SkillAddModal';
 import type { SkillBundle } from '../../generated/skills-bundle';
+
+/** Skills API 用 beta (apiHeaders で MANAGED_AGENTS_BETA を上書き) */
+const SKILLS_BETA = 'skills-2025-10-02';
 
 /** Worker /skills/sync の応答 (1 件分) */
 interface SkillSyncResult {
@@ -61,6 +65,38 @@ export async function syncCustomSkillFromChatPanel(args: {
     skillMd: input.skillMd,
   };
   return postSkillsSync(pluginId, workerUrl, [bundle]);
+}
+
+/**
+ * カスタム skill を編集する (#30 V2)。既存の syncCustomSkillFromChatPanel をそのまま
+ * 流用する — Worker /skills/sync が **display_title 一致なら新 version 作成** という
+ * 動作をするため、name 同一のまま skillMd だけ更新すれば自動的に edit になる。
+ *
+ * 別名 export を提供しているのは呼出側 (SettingsViewBound の onEditCustomSkill) の
+ * 意図が読みやすくなるため。実装は同じ。
+ */
+export async function editCustomSkillFromChatPanel(args: {
+  pluginId: string;
+  workerUrl: string;
+  input: CustomSkillInput;
+}): Promise<SkillSyncResponse> {
+  return syncCustomSkillFromChatPanel(args);
+}
+
+/**
+ * カスタム skill を完全削除する (#30 V2)。
+ * `DELETE /v1/skills/{id}` を Worker `/anthropic/*` passthrough 経由で叩く。
+ *
+ * 注意: skill を attach している既存 Agent がいる場合、Agent 側の skills 配列に
+ * dangling reference が残る可能性がある。呼出側で admin に警告ダイアログを出すこと。
+ */
+export async function deleteCustomSkillFromChatPanel(args: {
+  skillId: string;
+}): Promise<void> {
+  if (!args.skillId) throw new Error('skillId が空です');
+  await apiRequest('DELETE', `/v1/skills/${encodeURIComponent(args.skillId)}`, undefined, {
+    'anthropic-beta': SKILLS_BETA,
+  });
 }
 
 // ─── 内部ヘルパー ─────────────────────────────────────────────────────────

@@ -16,6 +16,8 @@ import type { AgentRecord } from '../../core/bootstrap/agentTypes';
 vi.mock('../../core/skills/chatPanelSkillsSync', () => ({
   syncBundledSkillsFromChatPanel: vi.fn().mockResolvedValue({ results: [] }),
   syncCustomSkillFromChatPanel: vi.fn().mockResolvedValue({ results: [] }),
+  editCustomSkillFromChatPanel: vi.fn().mockResolvedValue({ results: [] }),
+  deleteCustomSkillFromChatPanel: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('../../core/managed-agents/agentVisibility', () => ({
   setAgentVisibility: vi.fn().mockResolvedValue(undefined),

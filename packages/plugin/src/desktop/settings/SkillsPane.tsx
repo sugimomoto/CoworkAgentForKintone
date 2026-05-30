@@ -27,7 +27,7 @@ export interface BundledSkillEntry {
 export interface SkillsPaneProps {
   /** Plugin 同梱 skill の同期状態 (resolveAgent 周りから渡される想定) */
   bundledSkills?: BundledSkillEntry[];
-  /** カスタム skill (admin 追加) の一覧 (V2 で機能化、V1 は空配列) */
+  /** カスタム skill (admin 追加) の一覧 */
   customSkills?: BundledSkillEntry[];
   /**
    * 「Plugin 同梱 skill を同期」ボタン押下時のハンドラ。
@@ -35,9 +35,19 @@ export interface SkillsPaneProps {
    */
   onSyncBundled?: () => Promise<void>;
   /**
-   * カスタム skill 追加 (P3.2 モーダルから本ハンドラ経由で Anthropic にアップロード)
+   * カスタム skill 追加 (SkillAddModal 経由で Anthropic にアップロード)
    */
   onAddCustomSkill?: (input: CustomSkillInput) => Promise<void>;
+  /**
+   * カスタム skill 編集 (V2 #30)。SkillAddModal を editing モードで開き、SKILL.md 本文を
+   * 編集 → Worker /skills/sync で新 version 作成。
+   */
+  onEditCustomSkill?: (input: CustomSkillInput) => Promise<void>;
+  /**
+   * カスタム skill 削除 (V2 #30)。Anthropic `DELETE /v1/skills/{id}` で完全削除。
+   * 呼出前に admin に確認ダイアログを出すこと。
+   */
+  onDeleteCustomSkill?: (skill: BundledSkillEntry) => Promise<void>;
 }
 
 export function SkillsPane({
@@ -45,10 +55,16 @@ export function SkillsPane({
   customSkills = [],
   onSyncBundled,
   onAddCustomSkill,
+  onEditCustomSkill,
+  onDeleteCustomSkill,
 }: SkillsPaneProps): JSX.Element {
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  /** 編集中の skill (null = 編集モーダル閉じ) */
+  const [editingSkill, setEditingSkill] = useState<BundledSkillEntry | null>(null);
+  const [deletingName, setDeletingName] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleSync = async (): Promise<void> => {
     if (!onSyncBundled || syncing) return;
@@ -142,9 +158,51 @@ export function SkillsPane({
         ) : (
           <ul className="flex flex-col gap-[6px]">
             {customSkills.map((s) => (
-              <SkillRow key={s.name} skill={s} showStatus={false} />
+              <SkillRow
+                key={s.name}
+                skill={s}
+                showStatus={false}
+                actions={
+                  <CustomSkillActions
+                    skill={s}
+                    onEdit={onEditCustomSkill ? () => setEditingSkill(s) : undefined}
+                    onDelete={
+                      onDeleteCustomSkill
+                        ? async () => {
+                            const ok = window.confirm(
+                              `カスタム skill「${s.displayTitle}」を削除します。\n\n` +
+                                'この skill を attach している Agent にはダングリング参照が\n' +
+                                '残る可能性があります (新規セッションから skill 読込失敗の恐れ)。\n\n' +
+                                '本当に削除しますか?',
+                            );
+                            if (!ok) return;
+                            setDeletingName(s.name);
+                            setDeleteError(null);
+                            try {
+                              await onDeleteCustomSkill(s);
+                            } catch (e) {
+                              setDeleteError(
+                                e instanceof Error
+                                  ? `${s.displayTitle} の削除に失敗: ${e.message}`
+                                  : '削除に失敗しました',
+                              );
+                            } finally {
+                              setDeletingName(null);
+                            }
+                          }
+                        : undefined
+                    }
+                    disabled={deletingName === s.name}
+                  />
+                }
+              />
             ))}
           </ul>
+        )}
+        {deleteError && (
+          <div className="mt-[8px] rounded-[6px] border border-warn/30 bg-warn-soft px-[10px] py-[6px] text-[11px] text-warn">
+            {deleteError}
+          </div>
         )}
       </section>
 
@@ -157,6 +215,21 @@ export function SkillsPane({
           }}
         />
       )}
+
+      {editingSkill && onEditCustomSkill && (
+        <SkillAddModal
+          initialSkill={{
+            name: editingSkill.name,
+            description: '', // 編集時は description を再入力 (skillMd 内 frontmatter が正)
+            skillMd: '', // 現状 Plugin 側は skillMd 本文を保持していないため、admin が貼り直す想定
+          }}
+          onClose={() => setEditingSkill(null)}
+          onSubmit={async (input) => {
+            await onEditCustomSkill(input);
+            setEditingSkill(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -164,10 +237,13 @@ export function SkillsPane({
 function SkillRow({
   skill,
   showStatus = true,
+  actions,
 }: {
   skill: BundledSkillEntry;
   /** false にすると StatusDot と「同期済/未同期」バッジを非表示にする (カスタム skill 一覧用) */
   showStatus?: boolean;
+  /** カスタム skill 用の編集 / 削除ボタン (任意、右端に配置) */
+  actions?: JSX.Element;
 }): JSX.Element {
   return (
     <li
@@ -197,7 +273,49 @@ function SkillRow({
           {skill.status === 'synced' ? '同期済' : skill.status === 'updated' ? '更新あり' : '未同期'}
         </span>
       )}
+      {actions}
     </li>
+  );
+}
+
+function CustomSkillActions({
+  skill,
+  onEdit,
+  onDelete,
+  disabled,
+}: {
+  skill: BundledSkillEntry;
+  onEdit?: () => void;
+  onDelete?: () => void | Promise<void>;
+  disabled?: boolean;
+}): JSX.Element {
+  return (
+    <div className="flex shrink-0 items-center gap-[4px]">
+      {onEdit && (
+        <button
+          type="button"
+          data-testid={`skill-edit-${skill.name}`}
+          onClick={onEdit}
+          disabled={disabled}
+          title="編集 (新バージョン作成)"
+          className="rounded-[6px] border border-border bg-transparent px-[8px] py-[3px] text-[10.5px] font-medium text-text hover:bg-card-hi disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          編集
+        </button>
+      )}
+      {onDelete && (
+        <button
+          type="button"
+          data-testid={`skill-delete-${skill.name}`}
+          onClick={() => void onDelete()}
+          disabled={disabled}
+          title="削除"
+          className="rounded-[6px] border border-warn/40 bg-transparent px-[8px] py-[3px] text-[10.5px] font-medium text-warn hover:bg-warn-soft disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {disabled ? '削除中…' : '削除'}
+        </button>
+      )}
+    </div>
   );
 }
 

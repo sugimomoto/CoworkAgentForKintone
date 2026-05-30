@@ -30,6 +30,10 @@ export interface SettingsViewProps {
   onSyncBundled?: () => Promise<void>;
   /** カスタム skill 追加 (admin が SkillAddModal で投入) */
   onAddCustomSkill?: (input: CustomSkillInput) => Promise<void>;
+  /** カスタム skill 編集 (V2 #30、新 version 作成) */
+  onEditCustomSkill?: (input: CustomSkillInput) => Promise<void>;
+  /** カスタム skill 削除 (V2 #30、DELETE /v1/skills/{id}) */
+  onDeleteCustomSkill?: (skill: BundledSkillEntry) => Promise<void>;
   /** Agent 公開トグル切替 (Anthropic POST /v1/agents/{id} で metadata.visibility 更新) */
   onToggleVisibility?: (agent: AgentRecord, next: 'public' | 'private') => Promise<void>;
 }
@@ -41,6 +45,8 @@ export function SettingsView({
   customSkills,
   onSyncBundled,
   onAddCustomSkill,
+  onEditCustomSkill,
+  onDeleteCustomSkill,
   onToggleVisibility,
 }: SettingsViewProps): JSX.Element {
   const [section, setSection] = useState<SettingsSection>('agents');
@@ -88,6 +94,8 @@ export function SettingsView({
               {...(customSkills ? { customSkills } : {})}
               {...(onSyncBundled ? { onSyncBundled } : {})}
               {...(onAddCustomSkill ? { onAddCustomSkill } : {})}
+              {...(onEditCustomSkill ? { onEditCustomSkill } : {})}
+              {...(onDeleteCustomSkill ? { onDeleteCustomSkill } : {})}
             />
           )}
           {section === 'mcp' && <MCPPanePlaceholder />}

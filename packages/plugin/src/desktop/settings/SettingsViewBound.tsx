@@ -17,6 +17,8 @@ import { getPluginConfig } from '../../core/kintone/pluginConfig';
 import { setAgentVisibility } from '../../core/managed-agents/agentVisibility';
 import { resolveSkillSet } from '../../core/skills/resolveBundledSkillIds';
 import {
+  deleteCustomSkillFromChatPanel,
+  editCustomSkillFromChatPanel,
   syncBundledSkillsFromChatPanel,
   syncCustomSkillFromChatPanel,
 } from '../../core/skills/chatPanelSkillsSync';
@@ -117,6 +119,34 @@ export function SettingsViewBound({
     [pluginId, cfg.workerUrl],
   );
 
+  // V2 #30: 編集 (= 同 name で /skills/sync を呼ぶ = display_title マッチで Worker が
+  // 新 version を作成する経路を流用)
+  const handleEditCustomSkill = useCallback(
+    async (input: CustomSkillInput) => {
+      if (!pluginId) throw new Error('Plugin ID が未取得です');
+      if (!cfg.workerUrl) throw new Error('Worker URL が未設定です');
+      await editCustomSkillFromChatPanel({
+        pluginId,
+        workerUrl: cfg.workerUrl,
+        input,
+      });
+      await new Promise((r) => setTimeout(r, 800)); // eventual consistency
+      setRefetchNonce((n) => n + 1);
+    },
+    [pluginId, cfg.workerUrl],
+  );
+
+  // V2 #30: 削除 (Anthropic `DELETE /v1/skills/{id}` を passthrough 経由)
+  const handleDeleteCustomSkill = useCallback(
+    async (skill: { skillId: string | null }) => {
+      if (!skill.skillId) throw new Error('skillId が未設定 (まだ同期されていません)');
+      await deleteCustomSkillFromChatPanel({ skillId: skill.skillId });
+      await new Promise((r) => setTimeout(r, 800));
+      setRefetchNonce((n) => n + 1);
+    },
+    [],
+  );
+
   const handleToggleVisibility = useCallback(
     async (agent: AgentRecord, next: 'public' | 'private') => {
       await setAgentVisibility(agent.id, next);
@@ -136,6 +166,8 @@ export function SettingsViewBound({
       customSkills={customSkills}
       onSyncBundled={handleSyncBundled}
       onAddCustomSkill={handleAddCustomSkill}
+      onEditCustomSkill={handleEditCustomSkill}
+      onDeleteCustomSkill={handleDeleteCustomSkill}
       onToggleVisibility={handleToggleVisibility}
     />
   );

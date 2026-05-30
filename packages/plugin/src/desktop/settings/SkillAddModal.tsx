@@ -27,17 +27,27 @@ export interface SkillAddModalProps {
   onClose: () => void;
   /** 追加実行ハンドラ。resolve 後にモーダルが閉じられる */
   onSubmit: (input: CustomSkillInput) => Promise<void>;
+  /**
+   * 編集モード (V2 #30)。指定時:
+   *   - タイトルが「カスタム skill を編集」に
+   *   - name は read-only (display_title 一致で skill version up するため)
+   *   - 初期表示モードは 'text' (本文編集のみ想定)
+   *   - フォームに初期値が入る
+   * 省略時は新規追加モード (V1 既存挙動)。
+   */
+  initialSkill?: CustomSkillInput;
 }
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const ACCEPT_EXT = ['md'];
 
-export function SkillAddModal({ onClose, onSubmit }: SkillAddModalProps): JSX.Element {
-  const [mode, setMode] = useState<SkillAddMode>('file');
-  const [parsed, setParsed] = useState<CustomSkillInput | null>(null);
-  const [textName, setTextName] = useState('');
-  const [textDescription, setTextDescription] = useState('');
-  const [textBody, setTextBody] = useState('');
+export function SkillAddModal({ onClose, onSubmit, initialSkill }: SkillAddModalProps): JSX.Element {
+  const isEdit = initialSkill !== undefined;
+  const [mode, setMode] = useState<SkillAddMode>(isEdit ? 'text' : 'file');
+  const [parsed, setParsed] = useState<CustomSkillInput | null>(initialSkill ?? null);
+  const [textName, setTextName] = useState(initialSkill?.name ?? '');
+  const [textDescription, setTextDescription] = useState(initialSkill?.description ?? '');
+  const [textBody, setTextBody] = useState(initialSkill?.skillMd ?? '');
   const [fileError, setFileError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -86,8 +96,14 @@ export function SkillAddModal({ onClose, onSubmit }: SkillAddModalProps): JSX.El
         {/* Header */}
         <div className="flex items-center gap-[10px] border-b border-border px-[18px] py-[14px]">
           <div className="flex-1">
-            <div className="text-[14px] font-semibold text-text">カスタムスキルを追加</div>
-            <div className="text-[10.5px] text-muted">SKILL.md (frontmatter 必須) を Anthropic Workspace にアップロードします</div>
+            <div className="text-[14px] font-semibold text-text">
+              {isEdit ? 'カスタムスキルを編集' : 'カスタムスキルを追加'}
+            </div>
+            <div className="text-[10.5px] text-muted">
+              {isEdit
+                ? '本文を編集して保存すると Anthropic Workspace に **新バージョン** が作成されます。name は変更できません'
+                : 'SKILL.md (frontmatter 必須) を Anthropic Workspace にアップロードします'}
+            </div>
           </div>
           <button
             type="button"
@@ -100,19 +116,21 @@ export function SkillAddModal({ onClose, onSubmit }: SkillAddModalProps): JSX.El
           </button>
         </div>
 
-        {/* Mode tabs */}
-        <div className="flex shrink-0 gap-[2px] border-b border-border px-[18px] pt-[10px]">
-          <TabPill active={mode === 'file'} onClick={() => setMode('file')} testId="tab-file">
-            📤 ファイル
-          </TabPill>
-          <TabPill active={mode === 'text'} onClick={() => setMode('text')} testId="tab-text">
-            📝 直接入力
-          </TabPill>
-        </div>
+        {/* Mode tabs (新規追加時のみ。編集時はテキスト編集に限定) */}
+        {!isEdit && (
+          <div className="flex shrink-0 gap-[2px] border-b border-border px-[18px] pt-[10px]">
+            <TabPill active={mode === 'file'} onClick={() => setMode('file')} testId="tab-file">
+              📤 ファイル
+            </TabPill>
+            <TabPill active={mode === 'text'} onClick={() => setMode('text')} testId="tab-text">
+              📝 直接入力
+            </TabPill>
+          </div>
+        )}
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-[18px] py-[14px]">
-          {mode === 'file' ? (
+          {mode === 'file' && !isEdit ? (
             <FileTab
               parsed={parsed}
               setParsed={setParsed}
@@ -127,6 +145,7 @@ export function SkillAddModal({ onClose, onSubmit }: SkillAddModalProps): JSX.El
               setDescription={setTextDescription}
               body={textBody}
               setBody={setTextBody}
+              nameReadOnly={isEdit}
             />
           )}
         </div>
@@ -139,9 +158,13 @@ export function SkillAddModal({ onClose, onSubmit }: SkillAddModalProps): JSX.El
             ) : !canSubmit && mode === 'file' && parsed === null ? (
               'ファイルを選択してください'
             ) : !canSubmit && mode === 'text' ? (
-              'name / 本文を入力してください'
+              isEdit ? '本文を入力してください' : 'name / 本文を入力してください'
             ) : (
-              <span>準備完了。アップロードを押すと Anthropic に同期されます。</span>
+              <span>
+                {isEdit
+                  ? '準備完了。保存すると新バージョンが Anthropic に作成されます。'
+                  : '準備完了。アップロードを押すと Anthropic に同期されます。'}
+              </span>
             )}
           </div>
           <button
@@ -164,7 +187,13 @@ export function SkillAddModal({ onClose, onSubmit }: SkillAddModalProps): JSX.El
                 : 'cursor-not-allowed bg-card-hi text-muted opacity-60',
             ].join(' ')}
           >
-            {submitting ? 'アップロード中…' : 'アップロード'}
+            {submitting
+              ? isEdit
+                ? '保存中…'
+                : 'アップロード中…'
+              : isEdit
+                ? '保存 (新バージョン)'
+                : 'アップロード'}
           </button>
         </div>
       </div>
@@ -345,6 +374,8 @@ interface TextTabProps {
   setDescription: (v: string) => void;
   body: string;
   setBody: (v: string) => void;
+  /** 編集モードで name を変更不可にする (display_title 一致で skill version up するため) */
+  nameReadOnly?: boolean;
 }
 
 function TextTab({
@@ -354,17 +385,21 @@ function TextTab({
   setDescription,
   body,
   setBody,
+  nameReadOnly,
 }: TextTabProps): JSX.Element {
   return (
     <div data-testid="text-tab" className="grid grid-cols-1 gap-[10px]">
-      <FormField label="name (識別子)">
+      <FormField label={nameReadOnly ? 'name (識別子 — 編集不可)' : 'name (識別子)'}>
         <input
           type="text"
           data-testid="text-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="kintone-my-skill"
-          className="w-full rounded-[6px] border border-border bg-card px-[10px] py-[6px] font-mono text-[12px] text-text"
+          readOnly={nameReadOnly}
+          className={`w-full rounded-[6px] border border-border px-[10px] py-[6px] font-mono text-[12px] text-text ${
+            nameReadOnly ? 'cursor-not-allowed bg-card-hi text-muted' : 'bg-card'
+          }`}
         />
       </FormField>
       <FormField label="description (1 行説明)">
