@@ -65,6 +65,12 @@ function exposeTestApiIfRequested(): void {
       useChatStore.getState().removeAttachedFile(localId),
     clearAttachedFiles: () => useChatStore.getState().clearAttachedFiles(),
     getAttachedFiles: () => useChatStore.getState().attachedFiles,
+    // Customizer wedge 系 (#20 V2 Phase 1 E2E 用)
+    setBuiltInAgents: (
+      agents: Parameters<ReturnType<typeof useChatStore.getState>['setBuiltInAgents']>[0],
+    ) => useChatStore.getState().setBuiltInAgents(agents),
+    setCurrentAgentId: (id: string | null) =>
+      useChatStore.getState().setCurrentAgentId(id),
   };
 }
 
