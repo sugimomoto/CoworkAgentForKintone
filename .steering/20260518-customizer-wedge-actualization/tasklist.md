@@ -7,18 +7,23 @@
 
 ## タスク一覧 (Phase 1)
 
-| # | タスク | サイズ | 依存 |
-|---|---|---|---|
-| T1 | ArtifactKind に `kintone-customize-bundle` 追加 + 型定義 | S | — |
-| T2 | `kintoneCustomizeApi.ts` 本実装 (file.json upload + customize.json PUT + deploy.json + snapshot) + `OAuthScopeError` 定義 | M | T1 |
-| T3 | `FileTree.tsx` を hardcoded → props ベースに動的化 | S | T1 |
-| T4 | `WorkflowFooter.tsx` に [キャンセル] + [動作テスト環境を開く] ボタン追加 | S | — |
-| T5 | `useApplyWorkflow.ts` に `cancel` callback 追加 + rollback の実 API 化 | S | T2, T4 |
-| T6 | `ArtifactPane/index.tsx` に kind=bundle 分岐 (CustomizerArtifactView 新規) | M | T1, T3, T4, T5 |
-| T7 | `builtInAgents.ts` の `CUSTOMIZER_WORKFLOW_PROMPT` を bundle 規約に書き換え (Phase 1 制約含む) | S | T1 |
-| T8 | OAuth scope (`k:app_settings:write` / `k:file:write`) 追加 + 不足検出時の再連携トリガー (V1 #28 再利用) | S | T2 |
-| T9 | E2E spec 新規追加 (`e2e/customizer-wedge.spec.ts`) | M | T1〜T8 |
-| T10 | リリース確認 (実機 deploy + admin マニュアル更新) | S | T9 |
+| # | タスク | サイズ | 依存 | 状態 |
+|---|---|---|---|---|
+| T1 | ArtifactKind に `kintone-customize-bundle` 追加 + 型定義 | S | — | ✅ `9cee691` |
+| T2 | `kintoneCustomizeApi.ts` 本実装 (file.json upload + customize.json PUT + deploy.json + snapshot) + `OAuthScopeError` 定義 | M | T1 | ✅ `1954f0f` |
+| T3 | `FileTree.tsx` を hardcoded → props ベースに動的化 | S | T1 | ✅ `3eb8a6f` |
+| T4 | `WorkflowFooter.tsx` に [キャンセル] + [動作テスト環境を開く] ボタン追加 | S | — | ✅ `5f12866` |
+| T5 | `useApplyWorkflow.ts` に `cancel` callback 追加 + rollback の実 API 化 | S | T2, T4 | ✅ `5f12866` |
+| T6 | `ArtifactPane/index.tsx` に kind=bundle 分岐 (CustomizerArtifactView 新規) | M | T1, T3, T4, T5 | ✅ `5118c33` |
+| T7 | `builtInAgents.ts` の `CUSTOMIZER_WORKFLOW_PROMPT` を bundle 規約に書き換え (Phase 1 制約含む) | S | T1 | ✅ `a1c95c1` |
+| T8 | OAuth scope (`k:app_settings:write` / `k:file:write`) 追加 + 不足検出時の再連携トリガー (V1 #28 再利用) | S | T2 | ✅ `b0d594f` |
+| T9 | E2E spec 新規追加 (`e2e/customizer-wedge.spec.ts`) | M | T1〜T8 | ✅ `a35fefb` |
+| T10 | リリース確認 (実機 deploy + admin マニュアル更新) | S | T9 | ✅ build 167 |
+
+### 実機テストで判明し追加修正したもの (T1〜T10 と並行)
+- `defaultFileUpload` に `X-Requested-With: XMLHttpRequest` ヘッダ追加 (CB_JH01 認証エラー対応) — `532ebb6`
+- `bundle.appId` フィールドを追加し host appId と異なる場合の警告バナー対応 — `76f8a4c`
+- rollback を「snapshot 書き戻し」から「`cowork-agent-*` FILE entry を除去する逆操作」に再設計 (kintone GC で fileKey 失効する仕様への対応) — `5eb28c7`
 
 ---
 
@@ -230,12 +235,14 @@
 
 ## 完了基準 (Phase 1 受け入れ)
 
-- [ ] T1〜T8 全 PR がマージ
-- [ ] vitest 全 pass (719+ tests)
-- [ ] T9 E2E pass
-- [ ] 実機で「商談フェーズ=受注 を黄色に」のようなカスタマイズを Agent との会話で生成 → プレビュー → 適用 → ロールバック が動く
-- [ ] CSS / mobile.js を依頼されると Agent が「Phase 2 で対応予定」と案内する
-- [ ] OAuth scope 不足の admin が初回利用時に再連携誘導される
+- [x] T1〜T8 全 PR がマージ
+- [x] vitest 全 pass (758 tests)
+- [x] T9 E2E pass (customizer-wedge.spec.ts 5 件)
+- [x] 実機で「商談フェーズ=受注 を黄色に」のようなカスタマイズを Agent との会話で生成 → プレビュー → 適用 → ロールバック が動く
+- [x] CSS / mobile.js を依頼されると Agent が「Phase 2 で対応予定」と案内する (system prompt v22-customizer で制約)
+- [x] OAuth scope 不足の admin が初回利用時に再連携誘導される (withScopeRecovery)
+
+**Phase 1 完了 (2026-05-30、Plugin build 167)**
 
 ---
 
