@@ -2,11 +2,12 @@
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { OAuthScopeError } from '../../../chat/workflow/OAuthScopeError';
 import { serializeBundleContent, type Artifact } from '../../../core/artifacts/types';
 
-import { CustomizerBundleView } from './CustomizerBundleView';
+import { CustomizerBundleView, withScopeRecovery } from './CustomizerBundleView';
 
 import type { KintoneApiFn } from '../../../chat/workflow/kintoneCustomizeApi';
 
@@ -112,5 +113,49 @@ describe('CustomizerBundleView', () => {
     );
     render(<CustomizerBundleView artifact={artifact} appId={5} apiFn={NULL_API} />);
     expect(screen.queryByTestId('customizer-bundle-target-app-hint')).not.toBeInTheDocument();
+  });
+});
+
+describe('withScopeRecovery (T8 — OAuthScopeError → 再連携)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('元の callback が成功すればそのまま resolve', async () => {
+    const fn = vi.fn().mockResolvedValue(undefined);
+    const connect = vi.fn();
+    const wrapped = withScopeRecovery(fn, connect);
+    await expect(wrapped()).resolves.toBeUndefined();
+    expect(fn).toHaveBeenCalledOnce();
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('OAuthScopeError + confirm OK で connect を呼び、「再連携完了」エラーを throw', async () => {
+    const fn = vi
+      .fn()
+      .mockRejectedValue(new OAuthScopeError(['k:app_settings:write']));
+    const connect = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const wrapped = withScopeRecovery(fn, connect);
+    await expect(wrapped()).rejects.toThrow(/OAuth 再連携が完了しました/);
+    expect(connect).toHaveBeenCalledOnce();
+  });
+
+  it('OAuthScopeError + confirm NG なら connect 呼ばず、元の OAuthScopeError を throw', async () => {
+    const original = new OAuthScopeError(['k:file:write']);
+    const fn = vi.fn().mockRejectedValue(original);
+    const connect = vi.fn();
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const wrapped = withScopeRecovery(fn, connect);
+    await expect(wrapped()).rejects.toBe(original);
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('OAuthScopeError 以外のエラーはそのまま throw (connect 呼ばず)', async () => {
+    const fn = vi.fn().mockRejectedValue(new Error('network failure'));
+    const connect = vi.fn();
+    const wrapped = withScopeRecovery(fn, connect);
+    await expect(wrapped()).rejects.toThrow(/network failure/);
+    expect(connect).not.toHaveBeenCalled();
   });
 });

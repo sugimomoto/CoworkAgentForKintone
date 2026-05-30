@@ -38,11 +38,18 @@ export const AGENT_TYPE = {
 
 /**
  * kintone OAuth で要求する scope (固定)。
- * Plugin が叩くツールセット (kintone-* MCP ツール群) で必要なものを全部含む。
+ * Plugin が叩くツールセット (kintone-* MCP ツール群) と Customizer wedge の
+ * カスタマイズ適用 (PUT customize.json / POST deploy.json) で必要なものを全部含む。
  * ユーザー編集不可: 削れば壊れるし、足しても使われない。
+ *
+ * Scope 内訳:
+ *   - k:app_record:read/write — レコード CRUD (MCP ツール群)
+ *   - k:app_settings:read     — アプリ情報 / フィールド構造取得
+ *   - k:app_settings:write    — Customizer wedge の customize.json PUT + deploy (#20 V2)
+ *   - k:file:read/write       — レコード添付 + Customizer の file.json upload
  */
 export const DEFAULT_KINTONE_OAUTH_SCOPE =
-  'k:app_record:read k:app_record:write k:app_settings:read k:file:read k:file:write';
+  'k:app_record:read k:app_record:write k:app_settings:read k:app_settings:write k:file:read k:file:write';
 
 /** Cloudflare Workers script 名 (固定)。Worker URL の subdomain にも使われる。 */
 export const CLOUDFLARE_WORKER_SCRIPT_NAME = 'cowork-agent-kintone-mcp';

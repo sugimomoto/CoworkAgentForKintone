@@ -17,9 +17,12 @@ import {
   getPreviewUrl,
   useKintoneCustomizeWorkflow,
 } from '../../../chat/workflow/kintoneCustomizeApi';
+import { OAuthScopeError } from '../../../chat/workflow/OAuthScopeError';
+import { useUserBinding } from '../../hooks/useUserBinding';
 
 import type { Artifact, CustomizeFilePath } from '../../../core/artifacts/types';
 import type { KintoneApiFn } from '../../../chat/workflow/kintoneCustomizeApi';
+import type { WorkflowCallbacks } from '../../../chat/workflow/useApplyWorkflow';
 
 export interface CustomizerBundleViewProps {
   artifact: Artifact;
@@ -57,13 +60,27 @@ export function CustomizerBundleView({
   }, [artifact.version, bundle]);
 
   // WorkflowCallbacks 構築 (bundle と artifactId に依存)
-  const callbacks = useKintoneCustomizeWorkflow({
+  const rawCallbacks = useKintoneCustomizeWorkflow({
     artifactId: artifact.id,
     bundle: bundle ?? { files: [] },
     appId: targetAppId,
     apiFn,
     uploadFile: defaultFileUpload,
   });
+
+  // OAuth scope 不足を検知して V1 #28 既存の再連携 UX (useUserBinding.connect) を
+  // トリガーするラッパー。confirm で admin の意思確認 → connect (OAuth popup) →
+  // 完了後 admin が再度ボタンを押す流れに誘導。
+  const { connect: reconnectOAuth } = useUserBinding();
+  const callbacks: WorkflowCallbacks = useMemo(
+    () => ({
+      preview: withScopeRecovery(rawCallbacks.preview, reconnectOAuth),
+      apply: withScopeRecovery(rawCallbacks.apply, reconnectOAuth),
+      rollback: withScopeRecovery(rawCallbacks.rollback, reconnectOAuth),
+      cancel: withScopeRecovery(rawCallbacks.cancel, reconnectOAuth),
+    }),
+    [rawCallbacks, reconnectOAuth],
+  );
 
   if (!bundle) {
     return (
@@ -115,6 +132,39 @@ export function CustomizerBundleView({
       />
     </div>
   );
+}
+
+/**
+ * WorkflowCallback を wrap し、OAuthScopeError を検知して再連携 UX をトリガーする。
+ *   1. 元の callback を実行
+ *   2. OAuthScopeError なら confirm で admin に再連携 (OAuth 再認可) を促す
+ *   3. OK → connect (= OAuth popup) で再連携完了
+ *   4. throw して useApplyWorkflow の state を戻す (admin が再度ボタンを押す)
+ */
+export function withScopeRecovery(
+  fn: () => Promise<void>,
+  connect: () => Promise<void>,
+): () => Promise<void> {
+  return async () => {
+    try {
+      await fn();
+    } catch (e) {
+      if (e instanceof OAuthScopeError) {
+        const ok =
+          typeof window !== 'undefined' &&
+          window.confirm(
+            `kintone OAuth 権限が不足しています:\n  ${e.missingScopes.join(', ')}\n\n` +
+              '再連携 (OAuth 再認可) を実行しますか?',
+          );
+        if (ok) {
+          await connect();
+          // 再連携完了。admin が再度ボタンを押す
+          throw new Error('OAuth 再連携が完了しました。もう一度操作してください。');
+        }
+      }
+      throw e;
+    }
+  };
 }
 
 interface CodeViewerProps {
