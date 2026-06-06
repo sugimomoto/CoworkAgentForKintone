@@ -26,6 +26,7 @@ function makeAgent(overrides: Partial<AgentRecord> = {}): AgentRecord {
     visibility: 'public',
     isDefault: false,
     source: 'builtin',
+    quickActions: [],
     ...overrides,
   };
 }
@@ -125,20 +126,46 @@ describe('AgentsListPane', () => {
     expect(screen.getByText(/v_[a-zA-Z0-9]{6}/)).toBeInTheDocument();
   });
 
-  it('編集→ ボタンは V2 用 placeholder として disabled で描画される', () => {
+  it('編集→ ボタンは onEditAgent 未指定なら disabled (V1 互換), 指定時は enabled + click で呼出', async () => {
     useChatStore.getState().setBuiltInAgents([makeAgent({ id: 'biz' })]);
-    render(<AgentsListPane />);
+    const { rerender } = render(<AgentsListPane />);
+    expect(screen.getByTestId('agent-edit-biz')).toBeDisabled();
+
+    const onEditAgent = vi.fn();
+    rerender(<AgentsListPane onEditAgent={onEditAgent} />);
     const editBtn = screen.getByTestId('agent-edit-biz');
-    expect(editBtn).toBeDisabled();
-    expect(editBtn.textContent).toContain('編集');
+    expect(editBtn).not.toBeDisabled();
+    const user = userEvent.setup();
+    await user.click(editBtn);
+    expect(onEditAgent).toHaveBeenCalledWith(expect.objectContaining({ id: 'biz' }));
   });
 
-  it('カスタム エージェント section の empty placeholder と新規作成 disabled ボタンが表示される', () => {
+  it('カスタム エージェント section: Custom が無ければ empty placeholder + 追加ボタン (onCreateAgent 指定時)', async () => {
     useChatStore.getState().setBuiltInAgents([makeAgent({ id: 'biz' })]);
-    render(<AgentsListPane />);
+    const onCreateAgent = vi.fn();
+    render(<AgentsListPane onCreateAgent={onCreateAgent} />);
     expect(screen.getByTestId('custom-agents-empty')).toBeInTheDocument();
-    expect(screen.getByText('カスタムエージェントはまだありません')).toBeInTheDocument();
-    const newBtn = screen.getByRole('button', { name: /新規エージェント作成/ });
-    expect(newBtn).toBeDisabled();
+    const addBtn = screen.getByTestId('agent-create-btn');
+    expect(addBtn).not.toBeDisabled();
+    const user = userEvent.setup();
+    await user.click(addBtn);
+    expect(onCreateAgent).toHaveBeenCalledOnce();
+  });
+
+  it('カスタム エージェントがあれば一覧に表示される (Built-in と分離)', () => {
+    useChatStore.getState().setBuiltInAgents([
+      makeAgent({ id: 'biz', source: 'builtin' }),
+      makeAgent({
+        id: 'custom_1',
+        name: 'My Custom',
+        source: 'custom',
+        purpose: 'custom',
+      }),
+    ]);
+    render(<AgentsListPane />);
+    expect(screen.getByTestId('agent-row-biz')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-row-custom_1')).toBeInTheDocument();
+    // empty placeholder は出ない
+    expect(screen.queryByTestId('custom-agents-empty')).not.toBeInTheDocument();
   });
 });

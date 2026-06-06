@@ -11,10 +11,17 @@
 //   - syncBundledSkillsFromChatPanel / syncCustomSkillFromChatPanel の呼出
 //   - setAgentVisibility の呼出 (visibility 更新)
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { agentToRecord } from '../../core/bootstrap/agentRecord';
 import { getPluginConfig } from '../../core/kintone/pluginConfig';
+import {
+  applyAgentEdit,
+  archiveAgentById,
+  createCustomAgentFrom,
+} from '../../core/managed-agents/agentDetailApi';
 import { setAgentVisibility } from '../../core/managed-agents/agentVisibility';
+import { retrieveAgent } from '../../core/managed-agents/resources';
 import { resolveSkillSet } from '../../core/skills/resolveBundledSkillIds';
 import {
   deleteCustomSkillFromChatPanel,
@@ -25,9 +32,11 @@ import {
 import { SKILL_BUNDLES } from '../../generated/skills-bundle';
 import { useChatStore } from '../../store/chatStore';
 
+import { AgentDetailModal, type AvailableSkill } from './AgentDetailModal';
 import { SettingsView } from './SettingsView';
 
 import type { AgentRecord } from '../../core/bootstrap/agentTypes';
+import type { AgentEditDraft } from '../../core/managed-agents/agentDetailApi';
 import type { CustomSkillInput } from './SkillAddModal';
 import type { BundledSkillEntry } from './SkillsPane';
 
@@ -158,17 +167,96 @@ export function SettingsViewBound({
     [builtInAgents, setBuiltInAgents],
   );
 
+  // ─── Agent 詳細編集 / 追加 (#40) ──────────────────────────────────────────
+  const upsertAgent = useChatStore((s) => s.upsertAgent);
+  const removeAgent = useChatStore((s) => s.removeAgent);
+
+  const [modalState, setModalState] = useState<
+    | { kind: 'edit'; agent: AgentRecord }
+    | { kind: 'create'; templates: readonly AgentRecord[] }
+    | null
+  >(null);
+
+  // AgentDetailModal の skill 一覧 (Anthropic 製 4 + bundled + custom 同期済)
+  const availableSkills = useMemo<readonly AvailableSkill[]>(() => {
+    const out: AvailableSkill[] = [
+      { skillId: 'xlsx', type: 'anthropic', label: 'xlsx (Excel/CSV)' },
+      { skillId: 'docx', type: 'anthropic', label: 'docx (Word)' },
+      { skillId: 'pdf', type: 'anthropic', label: 'pdf (PDF 解析)' },
+      { skillId: 'pptx', type: 'anthropic', label: 'pptx (PowerPoint)' },
+    ];
+    for (const b of bundledSkills) {
+      if (b.skillId) {
+        out.push({ skillId: b.skillId, type: 'custom', label: b.name });
+      }
+    }
+    for (const c of customSkills) {
+      if (c.skillId) {
+        out.push({ skillId: c.skillId, type: 'custom', label: c.name });
+      }
+    }
+    return out;
+  }, [bundledSkills, customSkills]);
+
+  const handleEditAgent = useCallback((agent: AgentRecord) => {
+    setModalState({ kind: 'edit', agent });
+  }, []);
+
+  const handleCreateAgent = useCallback(() => {
+    setModalState({ kind: 'create', templates: builtInAgents });
+  }, [builtInAgents]);
+
+  const handleSaveAgent = useCallback(
+    async (draft: AgentEditDraft, sourceAgent: AgentRecord) => {
+      if (!modalState) return;
+      if (modalState.kind === 'edit') {
+        const updated = await applyAgentEdit(sourceAgent.id, draft);
+        upsertAgent(agentToRecord(updated));
+      } else {
+        const created = await createCustomAgentFrom({ baseAgentId: sourceAgent.id, draft });
+        upsertAgent(agentToRecord(created));
+      }
+      setModalState(null);
+    },
+    [modalState, upsertAgent],
+  );
+
+  const handleDeleteAgent = useCallback(
+    async (agent: AgentRecord) => {
+      if (agent.source !== 'custom') throw new Error('built-in Agent は削除できません');
+      await archiveAgentById(agent.id);
+      removeAgent(agent.id);
+      setModalState(null);
+    },
+    [removeAgent],
+  );
+
   return (
-    <SettingsView
-      onClose={onClose}
-      {...(onPluginConfigClick ? { onPluginConfigClick } : {})}
-      bundledSkills={bundledSkills}
-      customSkills={customSkills}
-      onSyncBundled={handleSyncBundled}
-      onAddCustomSkill={handleAddCustomSkill}
-      onEditCustomSkill={handleEditCustomSkill}
-      onDeleteCustomSkill={handleDeleteCustomSkill}
-      onToggleVisibility={handleToggleVisibility}
-    />
+    <>
+      <SettingsView
+        onClose={onClose}
+        {...(onPluginConfigClick ? { onPluginConfigClick } : {})}
+        bundledSkills={bundledSkills}
+        customSkills={customSkills}
+        onSyncBundled={handleSyncBundled}
+        onAddCustomSkill={handleAddCustomSkill}
+        onEditCustomSkill={handleEditCustomSkill}
+        onDeleteCustomSkill={handleDeleteCustomSkill}
+        onToggleVisibility={handleToggleVisibility}
+        onEditAgent={handleEditAgent}
+        onCreateAgent={handleCreateAgent}
+      />
+      {modalState && (
+        <AgentDetailModal
+          mode={modalState}
+          fetchAgent={retrieveAgent}
+          onSave={handleSaveAgent}
+          onDelete={handleDeleteAgent}
+          availableSkills={availableSkills}
+          onClose={() => setModalState(null)}
+        />
+      )}
+    </>
   );
 }
+

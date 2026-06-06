@@ -1,16 +1,26 @@
-// Cowork Agent for kintone — カスタム skill 追加モーダル (V1 P3.2)
+// Cowork Agent for kintone — カスタム skill 追加モーダル (V1 P3.2 / V2 #30)
 //
 // 2 タブ:
-//   - 📤 ファイル: SKILL.md / .md ドロップゾーン (max 8 MB) + frontmatter 自動抽出
+//   - 📤 ファイル: SKILL.md / .md / .zip / .skill ドロップゾーン (max 8 MB) + frontmatter 自動抽出
 //   - 📝 直接入力: name / description / SKILL.md textarea
 //
-// ZIP は V2 以降に延期 (frontmatter パース + bundler 設計が必要)。
+// V2 #30: .zip / .skill (ディレクトリ束) 対応。JSZip でブラウザ展開し、`<name>/SKILL.md` +
+// `<name>/references/*` + `<name>/scripts/*` を保持したまま Worker に送信する。
 //
 // 仕様: requirements.md §15.4 / design.md §4.6
 
+import JSZip from 'jszip';
 import { useRef, useState } from 'react';
 
 export type SkillAddMode = 'file' | 'text';
+
+/** Skill bundle 内の 1 ファイル (zip/.skill 展開後の各 entry) */
+export interface SkillFileEntry {
+  /** zip 内 path。`<name>/` prefix は呼出側で正規化されるので相対 path のままで可 */
+  path: string;
+  /** UTF-8 テキスト本文 */
+  content: string;
+}
 
 /** カスタム skill 投入時の引数 */
 export interface CustomSkillInput {
@@ -18,8 +28,14 @@ export interface CustomSkillInput {
   name: string;
   /** description (1 行説明) */
   description: string;
-  /** SKILL.md 本文 (frontmatter 含む) */
+  /** SKILL.md 本文 (frontmatter 含む) — 必ず含まれる (zip でも展開済 SKILL.md を入れる) */
   skillMd: string;
+  /**
+   * V2 #30: zip/.skill 展開で得られた複数ファイル。
+   * 省略時は SKILL.md 単体 (= skillMd フィールドのみ) として送信。
+   * 含まれる場合は SKILL.md 自体も `files[]` の中に entry として入っている前提。
+   */
+  files?: SkillFileEntry[];
 }
 
 export interface SkillAddModalProps {
@@ -39,7 +55,27 @@ export interface SkillAddModalProps {
 }
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
-const ACCEPT_EXT = ['md'];
+const ACCEPT_EXT = ['md', 'zip', 'skill'];
+
+/** zip/.skill 展開後に skill 1 件として認める SKILL.md の最大パス深さ */
+const MAX_SKILL_MD_DEPTH = 2;
+
+/**
+ * zip 内のうち skill 本体として扱う text ファイルの拡張子。これ以外 (.png 等のバイナリ)
+ * は無視する。Anthropic Skills API はテキストのみ受け付ける。
+ */
+const TEXT_FILE_EXT = new Set([
+  'md',
+  'markdown',
+  'txt',
+  'json',
+  'yaml',
+  'yml',
+  'js',
+  'ts',
+  'sh',
+  'py',
+]);
 
 export function SkillAddModal({ onClose, onSubmit, initialSkill }: SkillAddModalProps): JSX.Element {
   const isEdit = initialSkill !== undefined;
@@ -251,17 +287,23 @@ function FileTab({ parsed, setParsed, fileError, setFileError }: FileTabProps): 
       return;
     }
     try {
-      const text = await file.text();
-      const meta = parseFrontmatter(text);
-      if (!meta.name) {
-        setFileError('SKILL.md の frontmatter に name が見つかりません');
+      if (ext === 'md' || ext === 'markdown') {
+        const text = await file.text();
+        const meta = parseFrontmatter(text);
+        if (!meta.name) {
+          setFileError('SKILL.md の frontmatter に name が見つかりません');
+          return;
+        }
+        setParsed({
+          name: meta.name,
+          description: meta.description ?? '',
+          skillMd: text,
+        });
         return;
       }
-      setParsed({
-        name: meta.name,
-        description: meta.description ?? '',
-        skillMd: text,
-      });
+      // .zip / .skill: JSZip でブラウザ展開
+      const result = await extractSkillBundle(file);
+      setParsed(result);
     } catch (e) {
       setFileError(e instanceof Error ? e.message : 'ファイル読み込みに失敗しました');
     }
@@ -274,16 +316,28 @@ function FileTab({ parsed, setParsed, fileError, setFileError }: FileTabProps): 
   };
 
   if (parsed) {
+    const isBundle = Array.isArray(parsed.files) && parsed.files.length > 1;
+    const totalBytes = parsed.files
+      ? parsed.files.reduce((sum, f) => sum + f.content.length, 0)
+      : parsed.skillMd.length;
     return (
       <div data-testid="file-uploaded">
         <div className="mb-[10px] rounded-[8px] border border-border bg-card-hi p-[12px]">
           <div className="flex items-center gap-[10px]">
             <div className="flex h-[36px] w-[36px] items-center justify-center rounded-[6px] bg-accent-soft text-accent font-mono text-[10px] font-bold">
-              MD
+              {isBundle ? 'ZIP' : 'MD'}
             </div>
             <div className="flex-1">
-              <div className="font-mono text-[12px] font-semibold text-text">{parsed.name}.md</div>
-              <div className="text-[10.5px] text-muted">{(parsed.skillMd.length / 1024).toFixed(1)} KB · frontmatter OK</div>
+              <div className="font-mono text-[12px] font-semibold text-text">
+                {parsed.name}
+                {isBundle ? '/' : '.md'}
+              </div>
+              <div className="text-[10.5px] text-muted">
+                {(totalBytes / 1024).toFixed(1)} KB ·{' '}
+                {isBundle
+                  ? `${parsed.files!.length} ファイル · frontmatter OK`
+                  : 'frontmatter OK'}
+              </div>
             </div>
             <button
               type="button"
@@ -293,6 +347,21 @@ function FileTab({ parsed, setParsed, fileError, setFileError }: FileTabProps): 
               差し替え
             </button>
           </div>
+          {isBundle && (
+            <ul
+              data-testid="bundle-file-list"
+              className="mt-[8px] border-t border-border pt-[8px] font-mono text-[10.5px] text-muted"
+            >
+              {parsed.files!.slice(0, 12).map((f) => (
+                <li key={f.path} className="truncate">
+                  {f.path} <span className="text-muted/70">({(f.content.length / 1024).toFixed(1)} KB)</span>
+                </li>
+              ))}
+              {parsed.files!.length > 12 && (
+                <li className="text-muted/70">… 他 {parsed.files!.length - 12} ファイル</li>
+              )}
+            </ul>
+          )}
         </div>
         <div className="grid grid-cols-1 gap-[8px]">
           <FormField label="name (識別子)">
@@ -334,8 +403,10 @@ function FileTab({ parsed, setParsed, fileError, setFileError }: FileTabProps): 
         className="flex flex-col items-center gap-[10px] rounded-[10px] border-2 border-dashed border-border bg-card-hi px-[20px] py-[28px] text-center"
       >
         <UploadIcon />
-        <div className="text-[12px] text-text">SKILL.md / .md をドロップ</div>
-        <div className="text-[10.5px] text-muted">または下のボタンから選択 (最大 8 MB)</div>
+        <div className="text-[12px] text-text">SKILL.md / .md / .zip / .skill をドロップ</div>
+        <div className="text-[10.5px] text-muted">
+          .zip / .skill は中の SKILL.md と references/ scripts/ を保持してアップロード (最大 8 MB)
+        </div>
         <button
           type="button"
           data-testid="file-select-btn"
@@ -347,7 +418,7 @@ function FileTab({ parsed, setParsed, fileError, setFileError }: FileTabProps): 
         <input
           ref={inputRef}
           type="file"
-          accept=".md,.markdown"
+          accept=".md,.markdown,.zip,.skill"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -467,6 +538,103 @@ export function parseFrontmatter(text: string): { name?: string; description?: s
     if (key === 'description') result.description = value;
   }
   return result;
+}
+
+/**
+ * .zip / .skill ファイルをブラウザ上で展開して CustomSkillInput を組み立てる。
+ *
+ * 想定構造 (Claude Code 互換):
+ *   <name>/SKILL.md           (必須、frontmatter から name/description 抽出)
+ *   <name>/references/*.md    (任意)
+ *   <name>/scripts/*.sh       (任意)
+ *
+ * もしくは root flat:
+ *   SKILL.md
+ *   references/*
+ *   scripts/*
+ *
+ * いずれの形でも `<name>/` prefix に正規化してから返す (Worker 側がそのまま multipart に
+ * `files[]` で append できるように)。
+ */
+export async function extractSkillBundle(
+  file: File | Blob | ArrayBuffer | Uint8Array,
+): Promise<CustomSkillInput> {
+  const buf =
+    file instanceof ArrayBuffer || file instanceof Uint8Array
+      ? file
+      : await blobToArrayBuffer(file);
+  const zip = await JSZip.loadAsync(buf);
+
+  // 1. SKILL.md を探す (深さ MAX_SKILL_MD_DEPTH 以内、最浅優先)
+  const skillMdEntry = findSkillMd(zip);
+  if (!skillMdEntry) {
+    throw new Error('zip 内に SKILL.md が見つかりません');
+  }
+
+  const skillMdText = await skillMdEntry.async('string');
+  const meta = parseFrontmatter(skillMdText);
+  if (!meta.name) {
+    throw new Error('SKILL.md の frontmatter に name が見つかりません');
+  }
+  const name = meta.name;
+
+  // 2. SKILL.md が <name>/SKILL.md の形なら rootPrefix を抽出、root flat なら空
+  const rootPrefix = skillMdEntry.name.includes('/')
+    ? skillMdEntry.name.slice(0, skillMdEntry.name.lastIndexOf('/') + 1)
+    : '';
+
+  // 3. zip 内のテキストファイルだけ収集 (バイナリ・空ディレクトリは捨てる)
+  const files: SkillFileEntry[] = [];
+  const entries = Object.values(zip.files);
+  for (const entry of entries) {
+    if (entry.dir) continue;
+    // rootPrefix の外 (= 同梱の README やメタファイル) はスキップ
+    if (rootPrefix && !entry.name.startsWith(rootPrefix)) continue;
+    const ext = entry.name.split('.').pop()?.toLowerCase() ?? '';
+    if (!TEXT_FILE_EXT.has(ext)) continue;
+    // macOS の __MACOSX や .DS_Store 等は除外
+    if (entry.name.includes('__MACOSX/') || entry.name.endsWith('.DS_Store')) continue;
+    const content = await entry.async('string');
+    // path は <name>/relative-path の形に正規化
+    const relative = rootPrefix ? entry.name.slice(rootPrefix.length) : entry.name;
+    files.push({ path: `${name}/${relative}`, content });
+  }
+
+  if (files.length === 0 || !files.some((f) => f.path === `${name}/SKILL.md`)) {
+    throw new Error('zip 内に SKILL.md が見つかりません (展開後)');
+  }
+
+  return {
+    name,
+    description: meta.description ?? '',
+    skillMd: skillMdText,
+    files,
+  };
+}
+
+/** Blob → ArrayBuffer (JSDOM 環境では blob.arrayBuffer() が無いので FileReader でフォールバック) */
+async function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
+  if (typeof blob.arrayBuffer === 'function') return blob.arrayBuffer();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+/** zip 内から最浅の SKILL.md (拡張子大小区別なし) を探す */
+function findSkillMd(zip: JSZip): JSZip.JSZipObject | null {
+  let best: { entry: JSZip.JSZipObject; depth: number } | null = null;
+  for (const entry of Object.values(zip.files)) {
+    if (entry.dir) continue;
+    const base = entry.name.split('/').pop() ?? '';
+    if (base.toLowerCase() !== 'skill.md') continue;
+    const depth = entry.name.split('/').length - 1;
+    if (depth > MAX_SKILL_MD_DEPTH) continue;
+    if (!best || depth < best.depth) best = { entry, depth };
+  }
+  return best?.entry ?? null;
 }
 
 function CloseIcon(): JSX.Element {

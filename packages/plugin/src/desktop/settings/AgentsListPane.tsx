@@ -25,15 +25,23 @@ import type { AgentRecord } from '../../core/bootstrap/agentTypes';
 
 export interface AgentsListPaneProps {
   /**
-   * 公開トグル切替 callback。
-   * V1 では Anthropic API (updateAgent) を呼ぶラッパが別タスク (#39 / 後続) で実装される。
-   * 本コンポーネントは UI 状態を chatStore に反映するのみ。
+   * 公開トグル切替 callback。Anthropic API 呼出は SettingsViewBound 側で wire される。
    */
   onToggleVisibility?: (agent: AgentRecord, next: 'public' | 'private') => Promise<void>;
+  /** 編集ボタンクリック (#40) — SettingsViewBound が AgentDetailModal を open する */
+  onEditAgent?: (agent: AgentRecord) => void;
+  /** 新規 Custom Agent 追加ボタンクリック (#40) */
+  onCreateAgent?: () => void;
 }
 
-export function AgentsListPane({ onToggleVisibility }: AgentsListPaneProps = {}): JSX.Element {
-  const agents = useChatStore((s) => s.builtInAgents);
+export function AgentsListPane({
+  onToggleVisibility,
+  onEditAgent,
+  onCreateAgent,
+}: AgentsListPaneProps = {}): JSX.Element {
+  const allAgents = useChatStore((s) => s.builtInAgents);
+  const agents = allAgents.filter((a) => a.source === 'builtin');
+  const customAgents = allAgents.filter((a) => a.source === 'custom');
 
   return (
     <div data-testid="agents-list-pane" className="p-[20px]">
@@ -55,29 +63,51 @@ export function AgentsListPane({ onToggleVisibility }: AgentsListPaneProps = {})
       ) : (
         <ul className="mb-[18px] flex flex-col gap-[8px]">
           {agents.map((a) => (
-            <AgentRow key={a.id} agent={a} onToggleVisibility={onToggleVisibility} />
+            <AgentRow
+              key={a.id}
+              agent={a}
+              {...(onToggleVisibility ? { onToggleVisibility } : {})}
+              {...(onEditAgent ? { onEdit: onEditAgent } : {})}
+            />
           ))}
         </ul>
       )}
 
-      {/* Custom Agents (V3 機能 / V1 では placeholder のみ) */}
-      <div className="mb-[10px] text-[10px] font-bold uppercase tracking-[0.6px] text-subtle">
-        カスタム エージェント
+      {/* Custom Agents (#40) */}
+      <div className="mb-[10px] flex items-center justify-between">
+        <div className="text-[10px] font-bold uppercase tracking-[0.6px] text-subtle">
+          カスタム エージェント
+        </div>
+        {onCreateAgent && (
+          <button
+            type="button"
+            data-testid="agent-create-btn"
+            onClick={onCreateAgent}
+            className="rounded-[7px] bg-accent px-[10px] py-[5px] text-[11px] font-semibold text-white hover:opacity-90"
+          >
+            + 追加
+          </button>
+        )}
       </div>
-      <div
-        data-testid="custom-agents-empty"
-        className="mb-[12px] rounded-[12px] border border-dashed border-border bg-card-hi px-[18px] py-[22px] text-center"
-      >
-        <div className="mb-[8px] text-[12.5px] text-muted">カスタムエージェントはまだありません</div>
-        <button
-          type="button"
-          disabled
-          title="V3 で実装予定"
-          className="cursor-not-allowed rounded-[7px] bg-accent px-[12px] py-[6px] text-[12px] font-semibold text-white opacity-50"
+      {customAgents.length === 0 ? (
+        <div
+          data-testid="custom-agents-empty"
+          className="mb-[12px] rounded-[12px] border border-dashed border-border bg-card-hi px-[18px] py-[18px] text-center text-[12px] text-muted"
         >
-          + 新規エージェント作成
-        </button>
-      </div>
+          カスタムエージェントはまだありません。「+ 追加」で雛形から複製できます。
+        </div>
+      ) : (
+        <ul className="mb-[12px] flex flex-col gap-[8px]">
+          {customAgents.map((a) => (
+            <AgentRow
+              key={a.id}
+              agent={a}
+              {...(onToggleVisibility ? { onToggleVisibility } : {})}
+              {...(onEditAgent ? { onEdit: onEditAgent } : {})}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -85,9 +115,10 @@ export function AgentsListPane({ onToggleVisibility }: AgentsListPaneProps = {})
 interface AgentRowProps {
   agent: AgentRecord;
   onToggleVisibility?: (agent: AgentRecord, next: 'public' | 'private') => Promise<void>;
+  onEdit?: (agent: AgentRecord) => void;
 }
 
-function AgentRow({ agent, onToggleVisibility }: AgentRowProps): JSX.Element {
+function AgentRow({ agent, onToggleVisibility, onEdit }: AgentRowProps): JSX.Element {
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -144,10 +175,12 @@ function AgentRow({ agent, onToggleVisibility }: AgentRowProps): JSX.Element {
         />
         <button
           type="button"
-          disabled
-          title="V2 で実装予定"
+          disabled={!onEdit}
+          onClick={() => onEdit?.(agent)}
           data-testid={`agent-edit-${agent.id}`}
-          className="cursor-not-allowed rounded-[7px] border border-border bg-transparent px-[10px] py-[6px] text-[11.5px] font-medium text-text opacity-50"
+          className={`rounded-[7px] border border-border bg-transparent px-[10px] py-[6px] text-[11.5px] font-medium text-text ${
+            onEdit ? 'cursor-pointer hover:bg-card-hi' : 'cursor-not-allowed opacity-50'
+          }`}
         >
           編集 →
         </button>

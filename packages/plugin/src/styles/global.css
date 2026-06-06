@@ -258,3 +258,17 @@
     animation-iteration-count: 1 !important;
   }
 }
+
+/* PresetAgentLanding ↔ チャット遷移: 即切替 + 軽いフェード (160ms) */
+@keyframes cw-view-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.cowork-agent-root .cw-view-fade {
+  animation: cw-view-fade-in 160ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cowork-agent-root .cw-view-fade {
+    animation-duration: 0.01ms !important;
+  }
+}

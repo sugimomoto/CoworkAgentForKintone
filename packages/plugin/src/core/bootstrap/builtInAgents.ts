@@ -305,7 +305,25 @@ export interface BuiltInAgentSpec {
   variantGroup?: 'customizer';
   /** 組織既定フラグ (Plugin 初回 ensure 時の初期値) */
   isDefault: boolean;
+  /**
+   * プリセットエージェント一覧 (`PresetAgentLanding`) で並べるクイックアクション。
+   * 0〜5 個。Built-in の source-of-truth はこのカタログ (Anthropic 側 metadata には書かない)。
+   */
+  quickActions: readonly string[];
 }
+
+/**
+ * Customizer 系 (Opus / Sonnet) で共有するクイックアクション。
+ * 文言の妥当性は design ハンドオフ
+ * (.steering/20260606-preset-agents-one-click) を参照。
+ */
+const CUSTOMIZER_QUICK_ACTIONS: readonly string[] = [
+  '特定フィールドが空のとき保存できないようにする JS を作って',
+  '一覧画面でステータスフィールドの色分けをする JS を作って',
+  '保存時に別アプリのマスタを参照して値を自動入力する JS を作って',
+  'フォーム読込時にカスタムボタンを追加して特定 URL を新規タブで開く JS を作って',
+  '現在のアプリの fields 定義からサンプルレコード生成 JS を作って',
+];
 
 /**
  * V1 で auto-ensure される 3 variant の spec カタログ。
@@ -328,6 +346,13 @@ export const BUILTIN_AGENT_SPECS: Record<
     iconKind: 'biz',
     iconColor: 'accentSoft',
     isDefault: false,
+    quickActions: [
+      'kintone アプリ一覧を見せて',
+      '先週追加された案件レコードを集計して',
+      '未対応の問い合わせを一覧化して、優先度を提案して',
+      '今月の売上をアプリから取得して、グラフ付きの Excel レポートにまとめて',
+      '議事録の PDF からタスクを抽出して、タスク管理アプリに登録案を作って',
+    ],
   },
   'customizer-opus': {
     name: 'カスタマイザーエージェント',
@@ -344,6 +369,7 @@ export const BUILTIN_AGENT_SPECS: Record<
     iconColor: 'accent',
     variantGroup: 'customizer',
     isDefault: true, // V1 既定
+    quickActions: CUSTOMIZER_QUICK_ACTIONS,
   },
   'customizer-sonnet': {
     name: 'カスタマイザーエージェント',
@@ -360,6 +386,7 @@ export const BUILTIN_AGENT_SPECS: Record<
     iconColor: 'accent',
     variantGroup: 'customizer',
     isDefault: false,
+    quickActions: CUSTOMIZER_QUICK_ACTIONS,
   },
 };
 

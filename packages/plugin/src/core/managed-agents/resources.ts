@@ -64,6 +64,10 @@ export interface CreateAgentParams {
   description?: string;
   system?: string;
   tools?: unknown[];
+  /** Anthropic / custom skill attachment (`{ type: 'anthropic' | 'custom', skill_id }`) */
+  skills?: Array<{ type: 'anthropic' | 'custom'; skill_id: string }>;
+  /** MCP server bindings */
+  mcp_servers?: unknown[];
   metadata?: ManagedAgentsMetadata;
 }
 
@@ -86,16 +90,36 @@ export function retrieveAgent(id: string): Promise<Agent> {
  * (Anthropic は metadata 全体を replace するので、欠落キーは消える)。
  */
 export interface UpdateAgentParams {
+  /**
+   * 現在の Agent version (optimistic concurrency)。
+   * Anthropic 仕様で `POST /v1/agents/{id}` は必須。retrieve した Agent.version をそのまま渡す。
+   * 競合 (= サーバ側が更新済) なら 409 が返るので、その時は再 retrieve して再試行する。
+   */
+  version: number;
   model?: string | { id: string; speed?: 'standard' | 'fast' };
   name?: string;
   description?: string;
   system?: string;
   tools?: unknown[];
+  skills?: Array<{ type: 'anthropic' | 'custom'; skill_id: string }>;
+  mcp_servers?: unknown[];
   metadata?: ManagedAgentsMetadata;
 }
 
 export function updateAgent(id: string, params: UpdateAgentParams): Promise<Agent> {
   return post<Agent>(`/v1/agents/${id}`, params);
+}
+
+/**
+ * Agent をアーカイブ (論理削除)。POST /v1/agents/{id}/archive。
+ *
+ * Anthropic 仕様:
+ *   - 既存 Session は継続実行可
+ *   - 新規 Session 作成不可
+ *   - list 結果からは include_archived: true を付けない限り消える
+ */
+export async function archiveAgent(id: string): Promise<void> {
+  await apiRequest<unknown>('POST', `/v1/agents/${id}/archive`, {});
 }
 
 // ----- Environments ---------------------------------------------------------

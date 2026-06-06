@@ -268,6 +268,120 @@ describe('ChatPanel', () => {
     });
   });
 
+  describe('PresetAgentLanding (#45) — 空状態の差し替え', () => {
+    function seedBuiltInAgents(): void {
+      useChatStore.getState().setBuiltInAgents([
+        {
+          id: 'agent_biz',
+          name: '業務エージェント',
+          model: 'sonnet',
+          modelLabel: 'SONNET',
+          description: 'レコード操作',
+          purpose: 'business',
+          iconKind: 'biz',
+          iconColor: 'accentSoft',
+          visibility: 'public',
+          isDefault: false,
+          source: 'builtin',
+          quickActions: ['アプリ一覧を見せて', '案件を集計して'],
+        },
+        {
+          id: 'agent_cust',
+          name: 'カスタマイザー',
+          model: 'opus',
+          modelLabel: 'OPUS',
+          description: 'JS カスタマイズ',
+          purpose: 'customizer-opus',
+          iconKind: 'cust',
+          iconColor: 'accent',
+          visibility: 'public',
+          isDefault: true,
+          variantGroup: 'customizer',
+          source: 'builtin',
+          quickActions: ['空フィールド保存ブロック JS', '色分け JS'],
+        },
+      ]);
+      useChatStore.getState().setCurrentAgentId('agent_cust');
+    }
+
+    it('I1: builtInAgents が空のとき WelcomeMessage がフォールバックで描画される', async () => {
+      setBootstrapOk();
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+      expect(screen.getByTestId('welcome-message')).toBeInTheDocument();
+      expect(screen.queryByTestId('preset-agent-landing')).toBeNull();
+    });
+
+    it('I2: builtInAgents があれば PresetAgentLanding が表示される', async () => {
+      setBootstrapOk();
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+      seedBuiltInAgents();
+      await waitFor(() => {
+        expect(screen.getByTestId('preset-agent-landing')).toBeInTheDocument();
+        expect(screen.queryByTestId('welcome-message')).toBeNull();
+      });
+    });
+
+    it('I3/I5: クイックアクション押下 → user message が追加され PresetAgentLanding が消える', async () => {
+      setBootstrapOk();
+      mockCreateSession.mockResolvedValue(makeSession({ id: 'sess_new' }));
+      const user = userEvent.setup();
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+      seedBuiltInAgents();
+      await waitFor(() => expect(screen.getByTestId('preset-agent-landing')).toBeInTheDocument());
+
+      // cust が初期展開なのでそのプロンプトを押す
+      const buttons = screen.getAllByTestId('preset-prompt');
+      await user.click(buttons[0]!);
+
+      // user message が積まれる
+      await waitFor(() => {
+        const msgs = useChatStore.getState().messages;
+        const hasUser = msgs.some(
+          (m) => m.kind === 'user' && (m as { text?: string }).text === '空フィールド保存ブロック JS',
+        );
+        expect(hasUser).toBe(true);
+      });
+      // landing は消える (messages.length > 0 で MessageList に切替わる)
+      expect(screen.queryByTestId('preset-agent-landing')).toBeNull();
+    });
+
+    it('I4: 同じエージェントのプロンプトを押した場合は selectAgent (= startNewConversation) を呼ばない', async () => {
+      setBootstrapOk();
+      mockCreateSession.mockResolvedValue(makeSession({ id: 'sess_new' }));
+      const user = userEvent.setup();
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+      seedBuiltInAgents();
+      await waitFor(() => expect(screen.getByTestId('preset-agent-landing')).toBeInTheDocument());
+
+      // selectAgent が呼ばれると localStorage に書込まれるので、それを観察する
+      const lsKey = `cowork-agent:current-agent:example.cybozu.com:sato`;
+      window.localStorage.removeItem(lsKey);
+      // cust-opus (currentAgentId と同じ) のプロンプト押下
+      await user.click(screen.getAllByTestId('preset-prompt')[0]!);
+      await waitFor(() => expect(mockPost).toHaveBeenCalled());
+      // localStorage に書込まれていない = selectAgent ルートを通っていない
+      expect(window.localStorage.getItem(lsKey)).toBeNull();
+    });
+
+    it('I6: bindingStatus=unbound のときは PresetAgentLanding (main) と ConnectKintoneButton (composer 置換) が同時に表示される', async () => {
+      // 既存 WelcomeMessage と同じ振る舞い: 未連携時に main 領域 (空状態 UI) は出続け、
+      // Composer 領域のみ ConnectKintoneButton に置換される。
+      setBootstrapOk();
+      setBindingStatus('unbound');
+      render(<ChatPanel />);
+      await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
+      seedBuiltInAgents();
+      await waitFor(() => {
+        expect(screen.getByTestId('connect-kintone')).toBeInTheDocument();
+        expect(screen.getByTestId('preset-agent-landing')).toBeInTheDocument();
+      });
+    });
+  });
+
   it('bindingStatus=unbound で Composer の代わりに ConnectKintoneButton が表示され、postUserMessage は呼ばれない', async () => {
     setBootstrapOk();
     setBindingStatus('unbound');

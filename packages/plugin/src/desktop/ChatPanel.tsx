@@ -4,19 +4,22 @@
 // 未バインディング状態 (kintone OAuth 未連携) では Composer の代わりに ConnectKintoneButton を表示。
 // connect() 完了後に保留テキストを送信する。
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { postToolConfirmation, postUserInterrupt, postUserMessage } from '../core/managed-agents/events';
 import { useChatStore } from '../store/chatStore';
 
 import { ArtifactPane } from './components/ArtifactPane';
 import { Banner } from './components/Banner';
-import { Composer } from './components/Composer';
+import { Composer, type ComposerHandle } from './components/Composer';
+import { PresetAgentLanding } from './components/PresetAgentLanding';
 import { ConnectKintoneButton } from './components/ConnectKintoneButton';
 import { ConversationUtilityBar } from './components/ConversationUtilityBar';
 import { Header } from './Header';
 import { MessageList } from './components/MessageList';
 import { WelcomeMessage } from './components/WelcomeMessage';
+
+import type { AgentRecord } from '../core/bootstrap/agentTypes';
 import { HistoryView } from './HistoryView';
 import { SettingsViewBound } from './settings/SettingsViewBound';
 import { useIsAdmin } from '../core/admin/useIsAdmin';
@@ -68,6 +71,10 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
 
   // 未バインドで送信したテキストの保留先 (連携完了後に再送信する)
   const [pendingText, setPendingText] = useState<string | null>(null);
+
+  // Composer の textarea に外部からフォーカスを移すためのハンドル
+  // (PresetAgentLanding の「自由入力で話しかける」CTA から使う)
+  const composerRef = useRef<ComposerHandle>(null);
 
   useEventPoller({ sessionId, enabled: status === 'ready' && sessionId !== null });
   useCustomToolResponder({ sessionId, enabled: status === 'ready' && sessionId !== null });
@@ -175,6 +182,22 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
     },
     [setView],
   );
+
+  // PresetAgentLanding のクイックアクション押下 → エージェント切替 (同 id なら no-op) + handleSubmit。
+  const handlePresetPromptSelect = useCallback(
+    async (agent: AgentRecord, prompt: string) => {
+      selectAgent(agent.id, getCurrentSessionContext());
+      await handleSubmit(prompt);
+    },
+    [handleSubmit],
+  );
+
+  // 「自由入力で話しかける」CTA — 送信せず、エージェント切替 + Composer フォーカスのみ。
+  // RAF は selectAgent → 再描画後に textarea が disabled でなくなったタイミングで focus するため。
+  const handlePresetAgentForFreeInput = useCallback((agent: AgentRecord) => {
+    selectAgent(agent.id, getCurrentSessionContext());
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }, []);
 
   const handleHistoryClick = useCallback(() => {
     setView(view === 'history' ? 'chat' : 'history');
@@ -367,7 +390,12 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
         <div className="relative flex flex-1 overflow-hidden">
           <div className="flex flex-1 flex-col overflow-hidden lg:min-w-[360px]">
             {messages.length === 0 && sessionId === null ? (
-              <WelcomeMessage />
+              renderEmptyMainArea(
+                builtInAgents,
+                isAgentRunning,
+                handlePresetPromptSelect,
+                handlePresetAgentForFreeInput,
+              )
             ) : (
               <MessageList
                 messages={messages}
@@ -393,6 +421,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
                   bindingStatus={bindingStatus}
                 />
                 <Composer
+                  ref={composerRef}
                   onSubmit={handleSubmit}
                   disabled={status !== 'ready' || sessionTerminated}
                   running={isAgentRunning}
@@ -442,6 +471,27 @@ function ChatViewRedirect({ onRedirect }: { onRedirect: () => void }): JSX.Eleme
     onRedirect();
   }, [onRedirect]);
   return <></>;
+}
+
+/**
+ * 空状態の main 領域: 公開エージェントがあれば PresetAgentLanding、
+ * 無ければ WelcomeMessage (bootstrap 失敗 / 公開無し時のフォールバック)。
+ */
+function renderEmptyMainArea(
+  agents: AgentRecord[],
+  running: boolean,
+  onSelectPrompt: (agent: AgentRecord, prompt: string) => void,
+  onSelectAgentForFreeInput: (agent: AgentRecord) => void,
+): JSX.Element {
+  if (agents.length === 0) return <WelcomeMessage />;
+  return (
+    <PresetAgentLanding
+      agents={agents}
+      running={running}
+      onSelectPrompt={onSelectPrompt}
+      onSelectAgentForFreeInput={onSelectAgentForFreeInput}
+    />
+  );
 }
 
 /**

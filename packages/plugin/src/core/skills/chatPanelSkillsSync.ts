@@ -64,7 +64,7 @@ export async function syncCustomSkillFromChatPanel(args: {
     description: '',
     skillMd: input.skillMd,
   };
-  return postSkillsSync(pluginId, workerUrl, [bundle]);
+  return postSkillsSync(pluginId, workerUrl, [bundle], input.files);
 }
 
 /**
@@ -105,14 +105,27 @@ async function postSkillsSync(
   pluginId: string,
   workerUrl: string,
   bundles: SkillBundle[],
+  /**
+   * V2 #30: zip/.skill 展開で得られた多ファイル bundle。指定時は最初の bundle に紐付ける
+   * (= カスタム skill 投入は常に 1 bundle 想定なので問題ない)。
+   */
+  files?: Array<{ path: string; content: string }>,
 ): Promise<SkillSyncResponse> {
   const url = `${workerUrl.replace(/\/$/, '')}/skills/sync`;
   const body = {
-    skills: bundles.map((b) => ({
-      name: b.name,
-      displayTitle: b.displayTitle,
-      skillMd: b.skillMd,
-    })),
+    skills: bundles.map((b, idx) => {
+      const entry: { name: string; displayTitle: string; skillMd?: string; files?: typeof files } = {
+        name: b.name,
+        displayTitle: b.displayTitle,
+      };
+      // files[] があり、かつ最初の bundle (custom skill 投入時) のみ
+      if (idx === 0 && Array.isArray(files) && files.length > 0) {
+        entry.files = files;
+      } else {
+        entry.skillMd = b.skillMd;
+      }
+      return entry;
+    }),
   };
   const [respBody, status] = await kintone.plugin.app.proxy(
     pluginId,

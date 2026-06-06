@@ -91,18 +91,25 @@ Claude Managed Agents API を活用した「バックグラウンドで自律的
 | F-12 | **Chat Panel Settings View** (admin 専用、Agent 公開トグル / Skill 同期) | [#40](https://github.com/sugimomoto/CoworkAgentForKintone/issues/40) |
 | F-13 | **Plugin Config 縮小** (Skills 同期 UI を Chat Panel に完全移管) | [#41](https://github.com/sugimomoto/CoworkAgentForKintone/issues/41) |
 | F-14 | **Customizer Wedge ループ** (preview → apply → rollback の 5 状態 step bar + FileTree) | [#20](https://github.com/sugimomoto/CoworkAgentForKintone/issues/20) |
-| F-15 | **Custom Skills インフラ** (kintone-customize-js / kintone-plugin-development skill) | [#30](https://github.com/sugimomoto/CoworkAgentForKintone/issues/30) |
+| F-15 | **Custom Skills インフラ** (kintone-customize-js / kintone-plugin-development skill) + .zip/.skill アップロード対応 | [#30](https://github.com/sugimomoto/CoworkAgentForKintone/issues/30) |
+| F-16 | **Agent 詳細編集 + Custom Agent 新規作成** (admin、name / icon / system prompt / skills / tools 編集 + 雛形からコピーで Custom Agent 追加 + archive 削除) | [#19](https://github.com/sugimomoto/CoworkAgentForKintone/issues/19) (closed) |
 
-詳細仕様: [.steering/20260517-customizer-wedge-design/](../.steering/20260517-customizer-wedge-design/) (requirements.md / design.md / tasklist.md)
+詳細仕様:
+- Customizer Wedge: [.steering/20260517-customizer-wedge-design/](../.steering/20260517-customizer-wedge-design/) + [.steering/20260518-customizer-wedge-actualization/](../.steering/20260518-customizer-wedge-actualization/) (Phase 1 完了 2026-05-30)
+- Custom Skills: [.steering/20260516-issue-30-custom-skills-infra/](../.steering/20260516-issue-30-custom-skills-infra/)
+- Agent 詳細編集 + 追加: [.steering/20260601-agent-detail-edit/](../.steering/20260601-agent-detail-edit/) (完了 2026-06-01)
 
 ### 5.3 フェーズ 3 (V2) 以降の候補
 
-- **GitHub 連携** ([#17](https://github.com/sugimomoto/CoworkAgentForKintone/issues/17)): commit / PR / 履歴管理
-- **Agent 詳細編集 UI**: skill / tool ON-OFF + System Prompt 編集 (admin)
-- **追加 MCP Server 登録**: GitHub MCP / Slack MCP 等の Vault Credential 管理
+- **Customizer Wedge Phase 2** ([#20](https://github.com/sugimomoto/CoworkAgentForKintone/issues/20)): CSS / mobile.js / config.js 解禁、kintone-customize-js skill に該当指針追加 (Phase 1 で desktop.js のみ対応済)
+- **GitHub 連携** ([#17](https://github.com/sugimomoto/CoworkAgentForKintone/issues/17)): commit / PR / 履歴管理 + Customizer の snapshot 永続化 (現状 in-memory)
+- **追加 MCP Server 登録** ([#42](https://github.com/sugimomoto/CoworkAgentForKintone/issues/42)): GitHub MCP / Slack MCP 等を Settings → MCP から登録、Vault Credential 管理
+- **Plugin pack ツール** ([#43](https://github.com/sugimomoto/CoworkAgentForKintone/issues/43)): cli-kintone 相当の Plugin パッケージング / アップロードを Agent から呼べる MCP ツール化
 - **Memory ON/OFF トグル** ([#15 縮小](https://github.com/sugimomoto/CoworkAgentForKintone/issues/15)): Conversation View の (user × agent) auto-ensure
-- **Custom Agent 新規作成** (V3): system prompt 編集可能 + IconPicker
 - **kintone MCP 機能拡充** ([#24](https://github.com/sugimomoto/CoworkAgentForKintone/issues/24) / [#22](https://github.com/sugimomoto/CoworkAgentForKintone/issues/22) / [#25](https://github.com/sugimomoto/CoworkAgentForKintone/issues/25)): 管理系 / ワークフロー / クエリ拡充
+- **プリセットエージェント配布** ([#45](https://github.com/sugimomoto/CoworkAgentForKintone/issues/45) / [#46](https://github.com/sugimomoto/CoworkAgentForKintone/issues/46)): ワンクリック実行 UX + GitHub マーケットプレイス的取り込み
+
+umbrella: [#44 [V2 umbrella] Phase 2 — Customizer wedge 実用化 + Settings 詳細編集 + MCP 拡張](https://github.com/sugimomoto/CoworkAgentForKintone/issues/44)
 
 ### 5.4 後回し可 / 任意 (V4 以降)
 

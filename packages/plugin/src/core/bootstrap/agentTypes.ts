@@ -105,6 +105,11 @@ export interface AgentRecord {
   variantGroup?: AgentVariantGroup;
   /** Built-in は Plugin 同梱 spec で固定、Custom は admin が作成 */
   source: AgentSource;
+  /**
+   * プリセットエージェント一覧で「クイックアクション」として並べる文字列群 (0〜5 個)。
+   * Built-in は spec カタログから注入、Custom は metadata.quickActions (JSON 配列) から復元。
+   */
+  quickActions: readonly string[];
 }
 
 /**
@@ -151,3 +156,6 @@ export const AGENT_PICKER_COLORS: readonly AgentColor[] = [
   'sky',
   'fuchsia',
 ] as const;
+
+/** Anthropic Agent.metadata 上で quickActions を保存するキー名 (parse / build 両側で共有)。 */
+export const META_KEY_QUICK_ACTIONS = 'quickActions';

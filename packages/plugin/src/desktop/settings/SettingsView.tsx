@@ -36,6 +36,10 @@ export interface SettingsViewProps {
   onDeleteCustomSkill?: (skill: BundledSkillEntry) => Promise<void>;
   /** Agent 公開トグル切替 (Anthropic POST /v1/agents/{id} で metadata.visibility 更新) */
   onToggleVisibility?: (agent: AgentRecord, next: 'public' | 'private') => Promise<void>;
+  /** Agent 編集ボタンクリック (#40 V2) */
+  onEditAgent?: (agent: AgentRecord) => void;
+  /** Custom Agent 追加ボタンクリック (#40 V2) */
+  onCreateAgent?: () => void;
 }
 
 export function SettingsView({
@@ -48,6 +52,8 @@ export function SettingsView({
   onEditCustomSkill,
   onDeleteCustomSkill,
   onToggleVisibility,
+  onEditAgent,
+  onCreateAgent,
 }: SettingsViewProps): JSX.Element {
   const [section, setSection] = useState<SettingsSection>('agents');
 
@@ -86,7 +92,11 @@ export function SettingsView({
         />
         <div className="min-w-0 flex-1 overflow-y-auto">
           {section === 'agents' && (
-            <AgentsListPane {...(onToggleVisibility ? { onToggleVisibility } : {})} />
+            <AgentsListPane
+              {...(onToggleVisibility ? { onToggleVisibility } : {})}
+              {...(onEditAgent ? { onEditAgent } : {})}
+              {...(onCreateAgent ? { onCreateAgent } : {})}
+            />
           )}
           {section === 'skills' && (
             <SkillsPane

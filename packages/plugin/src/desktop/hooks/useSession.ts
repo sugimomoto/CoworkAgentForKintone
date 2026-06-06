@@ -250,6 +250,7 @@ function agentToRecord(
     isDefault: meta.isDefault === '1' || spec.isDefault,
     ...(spec.variantGroup ? { variantGroup: spec.variantGroup } : {}),
     source: 'builtin',
+    quickActions: spec.quickActions,
   };
 }
 
@@ -286,18 +287,20 @@ function pickInitialAgentId(
  * - chatStore.currentAgentId / agentId を更新
  * - 新規会話を開始 (messages クリア + sessionId null)
  *
- * 注意: 本ヘルパーは hook 外でも使えるよう独立関数。useSession 内では未使用。
+ * 既に同じ agentId が選択中なら no-op (= 不要な startNewConversation を抑制)。
+ * 本ヘルパーは hook 外でも使えるよう独立関数。
  */
 export function selectAgent(
   agentId: string,
   ctx: { kintoneDomain: string; kintoneUserCode: string },
 ): void {
+  const store = useChatStore.getState();
+  if (store.currentAgentId === agentId) return;
   try {
     window.localStorage.setItem(currentAgentStorageKey(ctx.kintoneDomain, ctx.kintoneUserCode), agentId);
   } catch {
     // ignore
   }
-  const store = useChatStore.getState();
   store.setCurrentAgentId(agentId);
   store.setAgentId(agentId);
   store.startNewConversation();

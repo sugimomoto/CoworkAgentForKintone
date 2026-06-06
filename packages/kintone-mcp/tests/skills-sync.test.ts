@@ -169,6 +169,61 @@ describe('handleSkillsSync', () => {
     expect(versionCall[0]).toBe('https://api.anthropic.com/v1/skills/skill_existing/versions');
   });
 
+  it('files[] (#30 V2 zip) を multipart に展開して送信する', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [], has_more: false }), { status: 200 }),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: 'skill_zip1',
+          display_title: 'kintone-zip-skill',
+          latest_version: 'v_001',
+          source: 'custom',
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const res = await handleSkillsSync(
+      makeReq({
+        body: {
+          skills: [
+            {
+              name: 'kintone-zip-skill',
+              displayTitle: 'kintone-zip-skill',
+              files: [
+                { path: 'kintone-zip-skill/SKILL.md', content: '---\nname: kintone-zip-skill\n---\n# A' },
+                { path: 'kintone-zip-skill/references/api.md', content: '# api' },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const createCall = fetchMock.mock.calls[1]!;
+    const form = (createCall[1] as RequestInit).body as FormData;
+    // FormData.getAll('files[]') で 2 entry 入っているはず
+    const filesField = (form as FormData).getAll('files[]');
+    expect(filesField).toHaveLength(2);
+  });
+
+  it('skillMd / files[] のどちらも無いと 400', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [] }), { status: 200 }),
+    );
+    const res = await handleSkillsSync(
+      makeReq({
+        body: {
+          skills: [{ name: 'x', displayTitle: 'x' }],
+        },
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
   it('Anthropic 上流エラーは 502 で伝播 (partialResults 付き)', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ data: [] }), { status: 200 }),

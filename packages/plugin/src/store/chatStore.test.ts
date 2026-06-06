@@ -165,6 +165,7 @@ describe('chatStore', () => {
           visibility: 'public' as const,
           isDefault: false,
           source: 'builtin' as const,
+          quickActions: [] as readonly string[],
         },
       ];
       useChatStore.getState().setBuiltInAgents(agents);

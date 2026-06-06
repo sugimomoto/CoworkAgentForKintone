@@ -165,6 +165,10 @@ export interface ChatState {
   setCurrentAgentId: (id: string | null) => void;
   /** resolveBuiltInAgents 完了時に 3 variant をまとめてセット */
   setBuiltInAgents: (agents: AgentRecord[]) => void;
+  /** 1 件分の Agent を id ベースで upsert (Custom Agent 追加/編集後の反映) — #40 */
+  upsertAgent: (record: AgentRecord) => void;
+  /** Agent を builtInAgents から除去 (Custom Agent 削除後) — #40 */
+  removeAgent: (agentId: string) => void;
   /** Memory トグル切替 (V1 は呼び出されないが API として用意) */
   setMemoryEnabled: (enabled: boolean) => void;
   /**
@@ -321,6 +325,20 @@ export const useChatStore = create<ChatState>((set) => ({
   setCurrentAgentId: (id) => set({ currentAgentId: id }),
 
   setBuiltInAgents: (agents) => set({ builtInAgents: agents }),
+
+  upsertAgent: (record) =>
+    set((s) => {
+      const idx = s.builtInAgents.findIndex((a) => a.id === record.id);
+      if (idx === -1) return { builtInAgents: [...s.builtInAgents, record] };
+      const next = s.builtInAgents.slice();
+      next[idx] = record;
+      return { builtInAgents: next };
+    }),
+
+  removeAgent: (agentId) =>
+    set((s) => ({
+      builtInAgents: s.builtInAgents.filter((a) => a.id !== agentId),
+    })),
 
   setMemoryEnabled: (enabled) => set({ memoryEnabled: enabled }),
 

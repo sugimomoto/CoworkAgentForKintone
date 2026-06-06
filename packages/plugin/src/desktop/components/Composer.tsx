@@ -4,7 +4,9 @@
 //                docs/design_handoff_attachments/README.md (添付対応)
 
 import {
+  forwardRef,
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
   type FormEvent,
@@ -38,22 +40,41 @@ export interface ComposerProps {
   onRemoveAttachment?: (localId: string) => void;
 }
 
+/**
+ * 親から `ref.current.focus()` を呼んで textarea にフォーカスを移すためのハンドル。
+ * PresetAgentLanding の「自由入力で話しかける」CTA から使う。
+ */
+export interface ComposerHandle {
+  focus(): void;
+}
+
 const DEFAULT_PLACEHOLDER = 'このアプリについて聞く / レコードを操作...';
 const ATTACHED_PLACEHOLDER = '添付について聞く / 指示を入力...';
 
-export function Composer({
-  onSubmit,
-  disabled = false,
-  placeholder,
-  running = false,
-  onCancel,
-  attachedFiles = [],
-  onAttach,
-  onRemoveAttachment,
-}: ComposerProps): JSX.Element {
+export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
+  {
+    onSubmit,
+    disabled = false,
+    placeholder,
+    running = false,
+    onCancel,
+    attachedFiles = [],
+    onAttach,
+    onRemoveAttachment,
+  },
+  ref,
+): JSX.Element {
   const [value, setValue] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => inputRef.current?.focus(),
+    }),
+    [],
+  );
 
   const hasAttachments = attachedFiles.length > 0;
   const effectivePlaceholder =
@@ -229,4 +250,4 @@ export function Composer({
       </div>
     </form>
   );
-}
+});

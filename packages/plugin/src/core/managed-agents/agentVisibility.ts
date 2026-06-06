@@ -26,5 +26,7 @@ export async function setAgentVisibility(
     ...(existing.metadata ?? {}),
     visibility: next,
   };
-  await updateAgent(agentId, { metadata: mergedMetadata });
+  // Anthropic Managed Agents API は version 必須 (optimistic concurrency)。
+  // 現在 version を retrieve して渡す。
+  await updateAgent(agentId, { version: existing.version, metadata: mergedMetadata });
 }

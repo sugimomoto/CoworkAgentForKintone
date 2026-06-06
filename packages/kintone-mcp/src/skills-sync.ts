@@ -22,10 +22,24 @@ const ANTHROPIC_BASE = 'https://api.anthropic.com';
 const ANTHROPIC_VERSION = '2023-06-01';
 const SKILLS_BETA = 'skills-2025-10-02';
 
+/**
+ * skill 1 件の input。
+ *
+ * 後方互換: `skillMd` 文字列を渡すと SKILL.md 単一ファイル送信になる (V1 形式)。
+ * V2 拡張: `files[]` 配列で複数ファイル送信 (Claude Code 互換、`<name>/SKILL.md` +
+ * `<name>/references/*` + `<name>/scripts/*` 等のディレクトリ構造を保持)。
+ * どちらか必須。両方渡された場合は `files[]` を優先。
+ */
 interface SkillBundleInput {
   name: string;
   displayTitle: string;
-  skillMd: string;
+  /** V1 互換: SKILL.md 本文 1 ファイル */
+  skillMd?: string;
+  /**
+   * V2 拡張: 複数ファイル (path は <name>/ 配下、e.g. "<name>/SKILL.md")。
+   * 1 entry に最低限 SKILL.md が含まれること。
+   */
+  files?: Array<{ path: string; content: string }>;
 }
 
 interface SyncRequestBody {
@@ -101,19 +115,36 @@ async function listAllCustomSkills(apiKey: string): Promise<AnthropicSkillEntry[
   return out;
 }
 
-/** SKILL.md を 1 ファイル multipart で送信して新 skill を作成 */
+/**
+ * bundle から `files[]` を正規化する。
+ *   - `files[]` が指定されていればそのまま (path が "<name>/" prefix 無しなら付与)
+ *   - `skillMd` 単数なら `<name>/SKILL.md` 1 件に変換
+ * 最低限 SKILL.md を含むこと (= multipart に最低 1 ファイル必要)。
+ */
+function normalizeFiles(bundle: SkillBundleInput): Array<{ path: string; content: string }> {
+  const prefix = `${bundle.name}/`;
+  if (Array.isArray(bundle.files) && bundle.files.length > 0) {
+    return bundle.files.map((f) => ({
+      path: f.path.startsWith(prefix) ? f.path : `${prefix}${f.path.replace(/^\/+/, '')}`,
+      content: f.content,
+    }));
+  }
+  if (typeof bundle.skillMd === 'string' && bundle.skillMd.length > 0) {
+    return [{ path: `${prefix}SKILL.md`, content: bundle.skillMd }];
+  }
+  return [];
+}
+
+/** files[] を multipart で送信して新 skill を作成 */
 async function createSkill(
   apiKey: string,
   bundle: SkillBundleInput,
 ): Promise<AnthropicSkillCreateResponse> {
   const form = new FormData();
   form.append('display_title', bundle.displayTitle);
-  // ファイル名は <name>/SKILL.md とする (Anthropic 側はトップディレクトリを 1 つだけ要求)
-  form.append(
-    'files[]',
-    new Blob([bundle.skillMd], { type: 'text/markdown' }),
-    `${bundle.name}/SKILL.md`,
-  );
+  for (const f of normalizeFiles(bundle)) {
+    form.append('files[]', new Blob([f.content]), f.path);
+  }
   const res = await fetch(`${ANTHROPIC_BASE}/v1/skills`, {
     method: 'POST',
     headers: anthropicHeaders(apiKey),
@@ -126,18 +157,16 @@ async function createSkill(
   return (await res.json()) as AnthropicSkillCreateResponse;
 }
 
-/** 既存 skill に新バージョンをアップロード */
+/** 既存 skill に新バージョンをアップロード (files[] multipart) */
 async function createSkillVersion(
   apiKey: string,
   skillId: string,
   bundle: SkillBundleInput,
 ): Promise<AnthropicSkillVersionResponse> {
   const form = new FormData();
-  form.append(
-    'files[]',
-    new Blob([bundle.skillMd], { type: 'text/markdown' }),
-    `${bundle.name}/SKILL.md`,
-  );
+  for (const f of normalizeFiles(bundle)) {
+    form.append('files[]', new Blob([f.content]), f.path);
+  }
   const res = await fetch(
     `${ANTHROPIC_BASE}/v1/skills/${encodeURIComponent(skillId)}/versions`,
     {
@@ -189,13 +218,17 @@ export async function handleSkillsSync(request: Request): Promise<Response> {
   // 4. 各 skill に対し create or new version
   const results: SyncResponseEntry[] = [];
   for (const bundle of body.skills) {
+    const hasFiles = Array.isArray(bundle.files) && bundle.files.length > 0;
     if (
       !isString(bundle.name) ||
       !isString(bundle.displayTitle) ||
-      !isString(bundle.skillMd)
+      (!isString(bundle.skillMd) && !hasFiles)
     ) {
       return jsonResponse(
-        { error: 'validation_failed', message: 'each skill needs name/displayTitle/skillMd' },
+        {
+          error: 'validation_failed',
+          message: 'each skill needs name/displayTitle and either skillMd or files[]',
+        },
         400,
       );
     }

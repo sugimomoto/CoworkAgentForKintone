@@ -162,6 +162,27 @@ describe('system prompt 分割', () => {
   });
 });
 
+describe('quickActions — 3 variant 全てに 4 個以上のクイックアクションがある', () => {
+  it.each(['business', 'customizer-opus', 'customizer-sonnet'] as const)(
+    '%s には 4〜5 個のクイックアクションが定義されている',
+    (purpose) => {
+      const spec = BUILTIN_AGENT_SPECS[purpose];
+      expect(spec.quickActions.length).toBeGreaterThanOrEqual(4);
+      expect(spec.quickActions.length).toBeLessThanOrEqual(5);
+      spec.quickActions.forEach((a) => {
+        expect(typeof a).toBe('string');
+        expect(a.length).toBeGreaterThan(0);
+      });
+    },
+  );
+
+  it('customizer-opus と customizer-sonnet は同じクイックアクションを共有する', () => {
+    expect(BUILTIN_AGENT_SPECS['customizer-opus'].quickActions).toEqual(
+      BUILTIN_AGENT_SPECS['customizer-sonnet'].quickActions,
+    );
+  });
+});
+
 describe('共有定数', () => {
   it('KINTONE_TOOL_NAMES は 10 個のツール', () => {
     expect(KINTONE_TOOL_NAMES).toHaveLength(10);
