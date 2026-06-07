@@ -24,10 +24,12 @@ const KIND_LABEL: Record<ArtifactKind, string> = {
   'kintone-customize-bundle': 'kintone カスタマイズ',
   csv: 'CSV',
   binary: 'ファイル',
+  'agent-draft': 'エージェント案',
 };
 
 const KIND_EMOJI: Partial<Record<ArtifactKind, string>> = {
   binary: '📎',
+  'agent-draft': '🧩',
 };
 
 export function ArtifactRefMessage({

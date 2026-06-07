@@ -21,7 +21,8 @@ export type ArtifactKind =
   | 'kintone-customize-js'        // legacy (V1)、表示のみサポート
   | 'kintone-customize-bundle'    // V2 Phase 1 で導入、多ファイル束
   | 'csv'
-  | 'binary';
+  | 'binary'
+  | 'agent-draft';                // #48 エージェントデザイナーの提案スナップショット
 
 export const SUPPORTED_ARTIFACT_KINDS: readonly ArtifactKind[] = [
   'markdown',
@@ -35,6 +36,7 @@ export const SUPPORTED_ARTIFACT_KINDS: readonly ArtifactKind[] = [
   'kintone-customize-bundle',
   'csv',
   'binary',
+  'agent-draft',
 ] as const;
 
 /** 本フェーズで「ちゃんと描画できる」 kind */
@@ -49,6 +51,7 @@ export const RENDERABLE_ARTIFACT_KINDS = new Set<ArtifactKind>([
   'kintone-customize-bundle',
   'csv',
   'binary',
+  'agent-draft',
 ]);
 
 /**

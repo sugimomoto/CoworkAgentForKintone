@@ -9,6 +9,7 @@ import { isCustomizerPurpose, useCurrentAgentPurpose } from '../../hooks/useCurr
 import { ArtifactFooter } from './ArtifactFooter';
 import { ArtifactHeader } from './ArtifactHeader';
 import { CustomizerBundleView } from './CustomizerBundleView';
+import { AgentDraftArtifact } from './renderers/AgentDraftArtifact';
 import { BinaryArtifact } from './renderers/BinaryArtifact';
 import { CodeArtifact } from './renderers/CodeArtifact';
 import { CsvArtifact } from './renderers/CsvArtifact';
@@ -45,6 +46,8 @@ function renderBody(artifact: Artifact): JSX.Element {
       return <CsvArtifact artifact={artifact} />;
     case 'binary':
       return <BinaryArtifact artifact={artifact} />;
+    case 'agent-draft':
+      return <AgentDraftArtifact artifact={artifact} />;
     default:
       return <PlaceholderArtifact artifact={artifact} />;
   }

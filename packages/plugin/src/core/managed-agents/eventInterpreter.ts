@@ -9,8 +9,13 @@
 
 import { parseCreateArtifactInput } from '../artifacts/types';
 import { HIDDEN_BLOCK_MARKER } from '../files/messageContent';
+import { KINTONE_TOOL_NAMES } from '../bootstrap/builtInAgents';
+import { PROPOSE_AGENT_TOOL_NAME } from '../bootstrap/resolveAgent';
 
 import type { ArtifactKind, CreateArtifactInput } from '../artifacts/types';
+import type { AgentColor, AgentGlyph } from '../bootstrap/agentTypes';
+import type { AgentEditDraft } from './agentDetailApi';
+import type { KintoneToolName } from '../bootstrap/builtInAgents';
 import type { ChatMessage, ToolMessage } from '../../desktop/components/MessageList';
 import type { SessionEvent } from './types';
 
@@ -22,6 +27,19 @@ export type InterpretedEffect =
       /** custom_tool_use の tool_use_id (= 結果返却用の識別子)。無ければ event.id を使う */
       toolUseId: string;
       input: CreateArtifactInput;
+    }
+  | {
+      // #48 エージェントデザイナーの propose_agent 受信。
+      // useEventPoller がこの effect を見たら:
+      //  1. agent-draft アーティファクトを upsert (content に { draft, rationale, model })
+      //  2. chatStore.setPendingAgentProposal で modal を起動
+      //  3. pendingCustomToolUseIds に追加 (responder が tool_result を返す)
+      kind: 'propose-agent';
+      toolUseId: string;
+      draft: AgentEditDraft;
+      rationale: string;
+      /** 提案された model。createCustomAgentFrom の base 選定に使う (AgentEditDraft には載せない)。 */
+      model: 'opus' | 'sonnet';
     };
 
 export function interpretEvent(event: SessionEvent): InterpretedEffect[] {
@@ -78,39 +96,54 @@ export function interpretEvent(event: SessionEvent): InterpretedEffect[] {
     }
     case 'agent.custom_tool_use': {
       const e = event as Extract<SessionEvent, { type: 'agent.custom_tool_use' }>;
-      // 現状サポートしている custom tool は create_artifact のみ
-      if (e.name !== 'create_artifact') return [];
-      const input = parseCreateArtifactInput(e.input);
       // event.id がそのまま custom_tool_use_id として user.custom_tool_result の
       // 参照キーに使われる (Anthropic Managed Agents 仕様)
       const toolUseId = e.id;
-      if (!input) {
-        // 不正な入力。会話側にエラーメッセージを残し、useEventPoller が
-        // postCustomToolResult で is_error を返すフックも別途必要。
+      if (e.name === 'create_artifact') {
+        const input = parseCreateArtifactInput(e.input);
+        if (!input) {
+          return [
+            {
+              kind: 'add',
+              message: {
+                id: e.id,
+                kind: 'agent',
+                text: '⚠️ アーティファクト作成に失敗しました (入力不正)',
+              },
+            },
+          ];
+        }
         return [
+          { kind: 'upsert-artifact', toolUseId, input },
           {
             kind: 'add',
             message: {
               id: e.id,
-              kind: 'agent',
-              text: '⚠️ アーティファクト作成に失敗しました (入力不正)',
+              kind: 'artifact-ref',
+              artifactId: input.id,
+              title: input.title,
+              artifactKind: input.kind as ArtifactKind,
             },
           },
         ];
       }
-      return [
-        { kind: 'upsert-artifact', toolUseId, input },
-        {
-          kind: 'add',
-          message: {
-            id: e.id,
-            kind: 'artifact-ref',
-            artifactId: input.id,
-            title: input.title,
-            artifactKind: input.kind as ArtifactKind,
-          },
-        },
-      ];
+      if (e.name === PROPOSE_AGENT_TOOL_NAME) {
+        const parsed = parseProposeAgentInput(e.input);
+        if (!parsed) {
+          return [
+            {
+              kind: 'add',
+              message: {
+                id: e.id,
+                kind: 'agent',
+                text: '⚠️ エージェント設計案の取込に失敗しました (入力不正)',
+              },
+            },
+          ];
+        }
+        return [{ kind: 'propose-agent', toolUseId, ...parsed }];
+      }
+      return [];
     }
     case 'session.status_idle': {
       const e = event as Extract<SessionEvent, { type: 'session.status_idle' }>;
@@ -154,6 +187,94 @@ export function isTerminalEvent(event: SessionEvent): boolean {
     t === 'max_tokens' ||
     t === 'error'
   );
+}
+
+// ─── propose_agent 入力 parser (#48) ───────────────────────────────────────
+
+const ICON_KINDS: readonly AgentGlyph[] = [
+  'biz',
+  'cust',
+  'dev',
+  'analytics',
+  'mail',
+  'calendar',
+  'ops',
+  'ai',
+  'doc',
+];
+const ICON_COLORS: readonly AgentColor[] = [
+  'teal',
+  'emerald',
+  'amber',
+  'rose',
+  'indigo',
+  'slate',
+  'sky',
+  'fuchsia',
+];
+const ANTHROPIC_SKILL_IDS = new Set(['xlsx', 'docx', 'pdf', 'pptx']);
+const KNOWN_KINTONE_TOOL_NAMES = new Set<string>(KINTONE_TOOL_NAMES);
+
+const QUICK_ACTIONS_MAX = 5;
+
+/**
+ * `propose_agent` Custom Tool の input を `AgentEditDraft` + `rationale` に正規化する。
+ * 不正なフィールドは silent fallback (enum 外 → 既定値、未知ツール名 → 除外、超過 → slice)。
+ * 必須フィールドが完全に欠けている場合のみ null を返す (= 解釈不能)。
+ */
+export function parseProposeAgentInput(
+  raw: unknown,
+): { draft: AgentEditDraft; rationale: string; model: 'opus' | 'sonnet' } | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+
+  const name = typeof o.name === 'string' ? o.name.trim() : '';
+  const description = typeof o.description === 'string' ? o.description.trim() : '';
+  const systemPrompt = typeof o.systemPrompt === 'string' ? o.systemPrompt : '';
+  if (!name || !systemPrompt) return null;
+
+  const iconKind: AgentGlyph =
+    typeof o.iconKind === 'string' && (ICON_KINDS as readonly string[]).includes(o.iconKind)
+      ? (o.iconKind as AgentGlyph)
+      : 'ai';
+  const iconColor: AgentColor =
+    typeof o.iconColor === 'string' && (ICON_COLORS as readonly string[]).includes(o.iconColor)
+      ? (o.iconColor as AgentColor)
+      : 'teal';
+  const model: 'opus' | 'sonnet' = o.model === 'opus' ? 'opus' : 'sonnet';
+
+  const quickActionsRaw = Array.isArray(o.quickActions) ? o.quickActions : [];
+  const quickActions = quickActionsRaw
+    .map((q) => (typeof q === 'string' ? q.trim() : ''))
+    .filter((q) => q.length > 0)
+    .slice(0, QUICK_ACTIONS_MAX);
+
+  const enabledToolsRaw = Array.isArray(o.enabledTools) ? o.enabledTools : [];
+  const enabledTools = enabledToolsRaw.filter(
+    (t): t is KintoneToolName => typeof t === 'string' && KNOWN_KINTONE_TOOL_NAMES.has(t),
+  );
+
+  const skillIdsRaw = Array.isArray(o.anthropicSkillIds) ? o.anthropicSkillIds : [];
+  const anthropicSkillIds = skillIdsRaw.filter(
+    (s): s is string => typeof s === 'string' && ANTHROPIC_SKILL_IDS.has(s),
+  );
+
+  const rationale = typeof o.rationale === 'string' ? o.rationale.trim() : '';
+
+  const draft: AgentEditDraft = {
+    name,
+    description,
+    iconKind,
+    iconColor,
+    visibility: 'public',
+    isDefault: false,
+    systemPrompt,
+    anthropicSkillIds,
+    customSkillIds: [],
+    enabledTools,
+    quickActions,
+  };
+  return { draft, rationale, model };
 }
 
 /**

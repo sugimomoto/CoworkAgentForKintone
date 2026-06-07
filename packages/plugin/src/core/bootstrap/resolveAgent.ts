@@ -199,6 +199,78 @@ export const KINTONE_MCP_SERVER_NAME = 'kintone';
  * Plugin 側で `agent.custom_tool_use` を観測したら chatStore に Artifact を upsert し、
  * `user.custom_tool_result` を返すことでターンを継続させる。
  */
+/**
+ * `propose_agent` Custom Tool 定義 — エージェントデザイナー (#48) 専用。
+ * LLM がインタビュー完了時に 1 度だけ呼ぶ。Plugin 側で受領すると:
+ *   1. chatStore.pendingAgentProposal にセット → ChatPanel が AgentDetailModal を開く
+ *   2. kind='agent-draft' アーティファクトを生成して履歴に残す
+ *   3. tool_result は `{ success: true }` で返し LLM のクロージング発話につなぐ
+ * 仕様: .steering/20260607-agent-designer-builtin/design.md §3.1
+ */
+export const PROPOSE_AGENT_TOOL_NAME = 'propose_agent';
+
+export const PROPOSE_AGENT_TOOL = {
+  type: 'custom',
+  name: PROPOSE_AGENT_TOOL_NAME,
+  description:
+    'インタビュー完了後、ユーザーが Cowork Agent に新たに登録すべき' +
+    'エージェント設計案を提出する。呼出と同時に作成画面 (admin 用モーダル) が' +
+    '全項目入力済の状態で開かれる。1 セッションで複数回呼ぶことは想定しない。',
+  input_schema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', description: 'エージェント表示名 (10〜20 字)' },
+      description: { type: 'string', description: '1 行説明 (20〜35 字)' },
+      iconKind: {
+        type: 'string',
+        enum: ['biz', 'cust', 'dev', 'analytics', 'mail', 'calendar', 'ops', 'ai', 'doc'],
+      },
+      iconColor: {
+        type: 'string',
+        enum: ['teal', 'emerald', 'amber', 'rose', 'indigo', 'slate', 'sky', 'fuchsia'],
+      },
+      model: { type: 'string', enum: ['opus', 'sonnet'] },
+      systemPrompt: {
+        type: 'string',
+        description: 'エージェント本体の system prompt 全文 (テンプレ非推奨)',
+      },
+      quickActions: {
+        type: 'array',
+        items: { type: 'string' },
+        minItems: 4,
+        maxItems: 5,
+        description: 'PresetAgentLanding に並ぶ 1 クリック実行ボタンの文言',
+      },
+      enabledTools: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'kintone MCP ツール名。get 系を基本、書込が必要なときのみ追加',
+      },
+      anthropicSkillIds: {
+        type: 'array',
+        items: { type: 'string', enum: ['xlsx', 'docx', 'pdf', 'pptx'] },
+        description: '出力形式に応じて attach する Anthropic 製 skill',
+      },
+      rationale: {
+        type: 'string',
+        description: 'この設計に至った理由 (3〜5 文)。業務文脈で書く',
+      },
+    },
+    required: [
+      'name',
+      'description',
+      'iconKind',
+      'iconColor',
+      'model',
+      'systemPrompt',
+      'quickActions',
+      'enabledTools',
+      'anthropicSkillIds',
+      'rationale',
+    ],
+  },
+} as const;
+
 export const CREATE_ARTIFACT_TOOL = {
   type: 'custom',
   name: 'create_artifact',
@@ -392,6 +464,38 @@ async function findDefaultAgents(filter: Record<string, string>): Promise<Agent[
   return findByMetadata<Agent>((page) => listAgents({ page }), filter);
 }
 
+/**
+ * テナント (kintoneDomain) に紐づく Custom Agent (purpose=custom) を全て取得する。
+ *
+ * bootstrap 時に built-in 3 variant と並列で呼ぶ。`useSession` でこれを
+ * `agentToRecord` で変換して `chatStore.builtInAgents` に積めば、ページ再読込でも
+ * Workspace 上の Custom Agent が UI に出続ける。
+ *
+ * Anthropic の archive 機構は API レスポンスに `archive_state` 等を含むことがあるが、
+ * 念のため Plugin 側でも archived 相当のものを除外する (= null / 未設定のみ通す)。
+ */
+export async function listCustomAgents(options: {
+  workerUrl: string;
+  kintoneDomain: string;
+}): Promise<Agent[]> {
+  const filter: Record<string, string> = {
+    source: METADATA_SOURCE,
+    type: AGENT_TYPE.default,
+    purpose: 'custom',
+    workerUrl: options.workerUrl,
+    kintoneDomain: options.kintoneDomain,
+  };
+  const found = await findByMetadata<Agent>((page) => listAgents({ page }), filter);
+  return found.filter((a) => !isArchivedAgent(a));
+}
+
+function isArchivedAgent(agent: Agent): boolean {
+  const a = agent as unknown as { archive_state?: unknown; archived?: unknown };
+  if (a.archive_state && a.archive_state !== 'active' && a.archive_state !== null) return true;
+  if (a.archived === true) return true;
+  return false;
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Customizer wedge V1 — Built-in Agent 3 variant ensure (P1.4)
 // ─────────────────────────────────────────────────────────────────────────
@@ -529,7 +633,7 @@ async function doResolveBuiltIn(
     model: spec.model,
     name: spec.name,
     system: spec.systemPrompt,
-    tools: buildBuiltInAgentTools(spec),
+    tools: buildBuiltInAgentTools(purpose, spec),
     skills,
     metadata: fullMetadata,
     mcp_servers: buildMcpServers(options.workerUrl, options.kintoneDomain),
@@ -547,11 +651,15 @@ async function doResolveBuiltIn(
 
 /**
  * Built-in Agent 用のツール構成。spec.mcpToolFilter で per-variant に kintone MCP
- * ツールを絞り込む (業務エージェントは管理系を除外、Customizer は全部 attach)。
+ * ツールを絞り込む。purpose='customizer-opus' (= エージェントデザイナー、#48) のみ
+ * `propose_agent` Custom Tool を追加 attach する。
  */
-function buildBuiltInAgentTools(spec: BuiltInAgentSpec): Array<Record<string, unknown>> {
+function buildBuiltInAgentTools(
+  purpose: BuiltInPurpose,
+  spec: BuiltInAgentSpec,
+): Array<Record<string, unknown>> {
   const filteredTools = BUILTIN_KINTONE_TOOL_NAMES.filter((name) => spec.mcpToolFilter(name));
-  return [
+  const baseTools: Array<Record<string, unknown>> = [
     {
       type: 'agent_toolset_20260401',
       default_config: {
@@ -560,6 +668,12 @@ function buildBuiltInAgentTools(spec: BuiltInAgentSpec): Array<Record<string, un
       },
     },
     CREATE_ARTIFACT_TOOL as unknown as Record<string, unknown>,
+  ];
+  if (purpose === 'customizer-opus') {
+    baseTools.push(PROPOSE_AGENT_TOOL as unknown as Record<string, unknown>);
+  }
+  return [
+    ...baseTools,
     {
       type: 'mcp_toolset',
       mcp_server_name: KINTONE_MCP_SERVER_NAME,

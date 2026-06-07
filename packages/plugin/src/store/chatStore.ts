@@ -9,6 +9,7 @@ import { binaryArtifactIdFromFileId } from '../core/artifacts/types';
 
 import type { AgentRecord } from '../core/bootstrap/agentTypes';
 import type { Artifact, CreateArtifactInput } from '../core/artifacts/types';
+import type { AgentEditDraft } from '../core/managed-agents/agentDetailApi';
 
 export interface BinaryArtifactInput {
   fileId: string;
@@ -115,6 +116,13 @@ export interface ChatState {
    */
   memoryEnabled: boolean;
   /**
+   * #48 エージェントデザイナーの `propose_agent` 受信で発火する「全項目入力済モーダルを開く」シグナル。
+   * ChatPanel がこれを購読して `<AgentDetailModal mode='create-from-proposal'>` を描画する。
+   * AgentEditDraft 自体は永続化スキーマとして純粋に保ち、rationale はここに別フィールドで持つ。
+   */
+  pendingAgentProposal: { draft: AgentEditDraft; rationale: string; model: 'opus' | 'sonnet' } | null;
+
+  /**
    * Customizer wedge の rollback 用スナップショット (#20)。
    * key = artifact.id、value = apply 直前の旧 customize.js コンテンツ。
    * Plugin リロードで失われる (V1 制約、design.md Risk R3)。
@@ -178,6 +186,9 @@ export interface ChatState {
   saveWorkflowSnapshot: (artifactId: string, prevJs: string) => void;
   /** rollback 完了後にスナップショットを破棄 */
   clearWorkflowSnapshot: (artifactId: string) => void;
+
+  /** #48 propose_agent 受信時にモーダル展開シグナルをセット。null でクリア。 */
+  setPendingAgentProposal: (next: { draft: AgentEditDraft; rationale: string; model: 'opus' | 'sonnet' } | null) => void;
 
   /**
    * Artifact を新規追加 or 同 id 更新する。
@@ -246,6 +257,8 @@ const INITIAL_STATE = {
   builtInAgents: [] as AgentRecord[],
   memoryEnabled: false,
   workflowHistory: new Map<string, string>(),
+  // #48 エージェントデザイナー
+  pendingAgentProposal: null as { draft: AgentEditDraft; rationale: string; model: 'opus' | 'sonnet' } | null,
 };
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -358,6 +371,8 @@ export const useChatStore = create<ChatState>((set) => ({
       next.delete(artifactId);
       return { workflowHistory: next };
     }),
+
+  setPendingAgentProposal: (next) => set({ pendingAgentProposal: next }),
 
   upsertArtifact: (input) => {
     const now = Date.now();
@@ -503,5 +518,6 @@ export const useChatStore = create<ChatState>((set) => ({
       activeArtifactId: null,
       pendingCustomToolUseIds: new Map(),
       attachedFiles: [],
+      pendingAgentProposal: null,
     }),
 }));

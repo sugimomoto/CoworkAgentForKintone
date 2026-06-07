@@ -94,10 +94,11 @@ describe('resolveBuiltInAgents', () => {
     expect(businessBody.metadata.isDefault).toBe('0');
     expect(businessBody.metadata.visibility).toBe('public');
 
+    // #48: customizer-opus は エージェントデザイナーに repurpose、variantGroup を外した
     expect(opusBody.model).toBe('claude-opus-4-7');
-    expect(opusBody.metadata.iconKind).toBe('cust');
+    expect(opusBody.metadata.iconKind).toBe('ai');
     expect(opusBody.metadata.iconColor).toBe('accent');
-    expect(opusBody.metadata.variantGroup).toBe('customizer');
+    expect(opusBody.metadata.variantGroup).toBeUndefined();
     expect(opusBody.metadata.isDefault).toBe('1');
 
     expect(sonnetBody.model).toBe('claude-sonnet-4-6');
@@ -105,7 +106,7 @@ describe('resolveBuiltInAgents', () => {
     expect(sonnetBody.metadata.isDefault).toBe('0');
   });
 
-  it('promptVersion v20-business / v22-customizer が metadata.promptVersion に入る', async () => {
+  it('promptVersion v20-business / v22-customizer / v23-agent-designer が metadata.promptVersion に入る', async () => {
     mockAllVariantsCreate({
       business: 'a1',
       'customizer-opus': 'a2',
@@ -116,8 +117,10 @@ describe('resolveBuiltInAgents', () => {
     const bodies = posts.map((c) => JSON.parse(c[1].body));
     const businessBody = bodies.find((b) => b.metadata.purpose === 'business');
     const opusBody = bodies.find((b) => b.metadata.purpose === 'customizer-opus');
+    const sonnetBody = bodies.find((b) => b.metadata.purpose === 'customizer-sonnet');
     expect(businessBody.metadata.promptVersion).toBe('v20-business');
-    expect(opusBody.metadata.promptVersion).toBe('v22-customizer');
+    expect(opusBody.metadata.promptVersion).toBe('v23-agent-designer');
+    expect(sonnetBody.metadata.promptVersion).toBe('v22-customizer');
   });
 
   it('既存 Agent が見つかれば再利用 (POST 呼出 0 回)', async () => {
@@ -145,7 +148,7 @@ describe('resolveBuiltInAgents', () => {
                 source: 'cowork-agent-for-kintone',
                 type: 'default',
                 purpose: 'customizer-opus',
-                promptVersion: 'v22-customizer',
+                promptVersion: 'v23-agent-designer',
                 workerUrl: OPTIONS.workerUrl,
                 kintoneDomain: OPTIONS.kintoneDomain,
               },

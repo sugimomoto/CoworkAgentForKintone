@@ -50,23 +50,41 @@ export interface AvailableSkill {
   label: string;
 }
 
+export type AgentDetailModalMode =
+  | { kind: 'edit'; agent: AgentRecord }
+  | { kind: 'create'; templates: readonly AgentRecord[] }
+  | {
+      // #48 Designer の propose_agent 受信時に開くモード。
+      // 雛形プルダウンは出さず、draft で全項目初期化。「雛形から作り直す」リンクで
+      // fallbackTemplates を使った通常の create モードに切替えられる。
+      kind: 'create-from-proposal';
+      draft: AgentEditDraft;
+      rationale: string;
+      /** 提案された model。base 雛形の選定に使う (AgentEditDraft には載せない) */
+      model: 'opus' | 'sonnet';
+    };
+
 export interface AgentDetailModalProps {
-  /** edit (既存 Agent 編集) or create (新規 Custom Agent 追加) */
-  mode:
-    | { kind: 'edit'; agent: AgentRecord }
-    | { kind: 'create'; templates: readonly AgentRecord[] };
+  /** edit (既存 Agent 編集) / create (新規 Custom Agent 追加) / create-from-proposal (#48 Designer 提案) */
+  mode: AgentDetailModalMode;
   /** モーダル open 時に Agent 詳細 (system / tools / skills) を取得する */
   fetchAgent: (id: string) => Promise<Agent>;
   /**
    * 保存ハンドラ。
    * - edit モード: 2nd 引数 (sourceAgent) は mode.agent と一致する
    * - create モード: 2nd 引数は dropdown で選択された雛形 AgentRecord (base)
+   * - create-from-proposal モード: 2nd 引数は fallbackTemplates から選んだ Designer 等の base
    */
   onSave: (draft: AgentEditDraft, sourceAgent: AgentRecord) => Promise<void>;
   /** 削除ハンドラ — custom Agent の編集モードのみ表示 */
   onDelete?: (agent: AgentRecord) => Promise<void>;
   /** 描画用 skill リスト (Anthropic 製 + Plugin 同梱 + custom 同期済) */
   availableSkills: readonly AvailableSkill[];
+  /**
+   * create-from-proposal モードで「雛形から作り直す」を押した時の templates ソース。
+   * 通常は builtInAgents をそのまま渡す。
+   */
+  fallbackTemplates?: readonly AgentRecord[];
   /** モーダルを閉じる */
   onClose: () => void;
 }
@@ -74,20 +92,49 @@ export interface AgentDetailModalProps {
 // ─── component ────────────────────────────────────────────────────────────
 
 export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
-  const isEdit = props.mode.kind === 'edit';
-  const editAgent: AgentRecord | null =
-    props.mode.kind === 'edit' ? props.mode.agent : null;
+  // localMode: 「雛形から作り直す」(#48 提案 mode → create mode への移行) の遷移用。
+  // 親から渡された mode が変わったら localMode も同期する。
+  const [localMode, setLocalMode] = useState<AgentDetailModalMode>(props.mode);
+  useEffect(() => {
+    setLocalMode(props.mode);
+  }, [props.mode]);
+
+  const isEdit = localMode.kind === 'edit';
+  const editAgent: AgentRecord | null = localMode.kind === 'edit' ? localMode.agent : null;
+  const isCreateFromProposal = localMode.kind === 'create-from-proposal';
 
   // create モードでは雛形 ID を state で保持 (templates[0] を初期選択)
   const initialTemplateId =
-    props.mode.kind === 'create' ? props.mode.templates[0]?.id ?? '' : '';
+    localMode.kind === 'create' ? localMode.templates[0]?.id ?? '' : '';
   const [templateId, setTemplateId] = useState<string>(initialTemplateId);
+  // localMode が create に切替わったら templateId も初期化
+  useEffect(() => {
+    if (localMode.kind === 'create') {
+      setTemplateId(localMode.templates[0]?.id ?? '');
+    }
+  }, [localMode]);
 
-  // 現在 form で扱っている Agent (= edit なら mode.agent、create なら templateId で引いた template)
+  // 現在 form で扱っている Agent。
+  // - edit: mode.agent
+  // - create: templateId で引いた template
+  // - create-from-proposal: fallbackTemplates から Designer (= isDefault) を優先
   const sourceAgent: AgentRecord | null = useMemo(() => {
-    if (props.mode.kind === 'edit') return props.mode.agent;
-    return props.mode.templates.find((t) => t.id === templateId) ?? null;
-  }, [props.mode, templateId]);
+    if (localMode.kind === 'edit') return localMode.agent;
+    if (localMode.kind === 'create') {
+      return localMode.templates.find((t) => t.id === templateId) ?? null;
+    }
+    // create-from-proposal: base に使う Agent を fallbackTemplates から選ぶ。
+    // Designer が提案した model に一致する built-in を優先 (= 新 Agent の model 継承)、
+    // 無ければ isDefault → 先頭の順でフォールバック。
+    const pool = props.fallbackTemplates ?? [];
+    const wantModel = localMode.model;
+    return (
+      pool.find((t) => t.model === wantModel) ??
+      pool.find((t) => t.isDefault) ??
+      pool[0] ??
+      null
+    );
+  }, [localMode, templateId, props.fallbackTemplates]);
 
   const [draft, setDraft] = useState<AgentEditDraft | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,8 +143,15 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // モーダル open 時 / 雛形変更時に Agent 詳細を fetch して form を初期化
+  // モーダル open 時 / 雛形変更時に Agent 詳細を fetch して form を初期化。
+  // create-from-proposal モードでは draft が外部から渡されるので fetch 不要。
   useEffect(() => {
+    if (localMode.kind === 'create-from-proposal') {
+      setDraft(localMode.draft);
+      setLoading(false);
+      setFetchError(null);
+      return;
+    }
     if (!sourceAgent) return;
     let cancelled = false;
     setLoading(true);
@@ -107,7 +161,14 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
       .fetchAgent(sourceAgent.id)
       .then((agent) => {
         if (cancelled) return;
-        setDraft(buildDraftFromAgent(agent, sourceAgent, props.availableSkills, props.mode.kind));
+        setDraft(
+          buildDraftFromAgent(
+            agent,
+            sourceAgent,
+            props.availableSkills,
+            localMode.kind === 'edit' ? 'edit' : 'create',
+          ),
+        );
         setLoading(false);
       })
       .catch((e) => {
@@ -118,7 +179,13 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [sourceAgent, props.fetchAgent, props.availableSkills, props.mode.kind]);
+  }, [sourceAgent, props.fetchAgent, props.availableSkills, localMode]);
+
+  /** 「雛形から作り直す」: create-from-proposal → 通常の create モードに切替 (draft 破棄) */
+  const handleRebuildFromTemplate = useCallback(() => {
+    const templates = props.fallbackTemplates ?? [];
+    setLocalMode({ kind: 'create', templates });
+  }, [props.fallbackTemplates]);
 
   const handleReset = useCallback(() => {
     if (!editAgent || editAgent.source !== 'builtin') return;
@@ -175,13 +242,27 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
         {/* Header */}
         <div className="flex items-center gap-[10px] border-b border-border px-[18px] py-[14px]">
           <div className="flex-1">
-            <div className="text-[14px] font-semibold text-text">
-              {isEdit ? `${editAgent?.name ?? ''} を編集` : 'カスタム エージェントを追加'}
+            <div className="flex items-center gap-[8px] text-[14px] font-semibold text-text">
+              {isEdit
+                ? `${editAgent?.name ?? ''} を編集`
+                : isCreateFromProposal
+                  ? 'カスタム エージェントを追加'
+                  : 'カスタム エージェントを追加'}
+              {isCreateFromProposal && (
+                <span
+                  data-testid="agent-detail-proposal-badge"
+                  className="rounded-[4px] bg-accent-soft px-[6px] py-[1px] text-[9.5px] font-bold uppercase tracking-[0.5px] text-accent"
+                >
+                  エージェントデザイナーによる提案
+                </span>
+              )}
             </div>
             <div className="text-[10.5px] text-muted">
               {isEdit
                 ? 'system prompt / tools / skills を編集して保存すると次回 Session から反映されます'
-                : '雛形を選んで Agent を複製。model は変更できません'}
+                : isCreateFromProposal
+                  ? '内容を確認・調整して保存してください'
+                  : '雛形を選んで Agent を複製。model は変更できません'}
             </div>
           </div>
           <button
@@ -198,7 +279,7 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-[18px] py-[14px]">
           {/* create モードの雛形プルダウン */}
-          {props.mode.kind === 'create' && (
+          {localMode.kind === 'create' && (
             <div className="mb-[14px] rounded-[8px] border border-border bg-card-hi p-[10px]">
               <label className="block text-[10.5px] font-semibold text-muted">雛形 (base Agent)</label>
               <select
@@ -207,12 +288,36 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
                 onChange={(e) => setTemplateId(e.target.value)}
                 className="mt-[4px] w-full rounded-[6px] border border-border bg-card px-[8px] py-[5px] text-[12px] text-text"
               >
-                {props.mode.templates.map((t) => (
+                {localMode.templates.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name} ({t.modelLabel})
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {/* create-from-proposal モードの rationale + 「雛形から作り直す」 */}
+          {localMode.kind === 'create-from-proposal' && (
+            <div className="mb-[14px] rounded-[8px] border border-accent-soft bg-accent-soft/40 p-[10px]">
+              <details data-testid="agent-detail-rationale">
+                <summary className="cursor-pointer text-[10.5px] font-semibold text-text">
+                  設計理由
+                </summary>
+                <p className="mt-[6px] whitespace-pre-wrap text-[11.5px] leading-[1.55] text-text">
+                  {localMode.rationale || '(理由は提供されていません)'}
+                </p>
+              </details>
+              <div className="mt-[8px] text-right">
+                <button
+                  type="button"
+                  data-testid="agent-detail-rebuild-from-template"
+                  onClick={handleRebuildFromTemplate}
+                  className="text-[10.5px] text-accent underline hover:no-underline"
+                >
+                  自分で雛形から作り直す →
+                </button>
+              </div>
             </div>
           )}
 

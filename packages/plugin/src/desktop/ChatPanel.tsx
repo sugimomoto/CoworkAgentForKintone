@@ -21,6 +21,7 @@ import { WelcomeMessage } from './components/WelcomeMessage';
 
 import type { AgentRecord } from '../core/bootstrap/agentTypes';
 import { HistoryView } from './HistoryView';
+import { AgentProposalBridge } from './settings/AgentProposalBridge';
 import { SettingsViewBound } from './settings/SettingsViewBound';
 import { useIsAdmin } from '../core/admin/useIsAdmin';
 import { selectAgent } from './hooks/useSession';
@@ -455,6 +456,9 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
           ) : null}
         </div>
       )}
+
+      {/* #48 エージェントデザイナー: propose_agent 受信時に作成画面を全項目入力済で開く */}
+      <AgentProposalBridge />
     </div>
   );
 }

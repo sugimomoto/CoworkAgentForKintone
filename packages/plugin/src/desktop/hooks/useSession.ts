@@ -10,8 +10,13 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 
-import { resolveBuiltInAgents, resolveDefaultAgent } from '../../core/bootstrap/resolveAgent';
+import {
+  listCustomAgents,
+  resolveBuiltInAgents,
+  resolveDefaultAgent,
+} from '../../core/bootstrap/resolveAgent';
 import { BUILTIN_AGENT_SPECS } from '../../core/bootstrap/builtInAgents';
+import { agentToRecord as customAgentToRecord } from '../../core/bootstrap/agentRecord';
 import { resolveBootstrapEnvironment } from '../../core/bootstrap/resolveEnvironment';
 import { createUserSession } from '../../core/bootstrap/resolveSession';
 import { getPluginConfig } from '../../core/kintone/pluginConfig';
@@ -91,13 +96,18 @@ export function useSession(): UseSessionResult {
         const envPromise = resolveBootstrapEnvironment();
 
         if (workerUrl) {
-          const [set, env] = await Promise.all([
+          // built-in 3 variant + 既存 Custom Agent 一覧を並列で fetch。
+          // Custom Agent の取得に失敗してもアプリは起動できるよう catch して空配列に倒す。
+          const [set, env, customAgents] = await Promise.all([
             resolveBuiltInAgents({
               workerUrl,
               kintoneDomain: kctx.kintoneDomain,
               ...(customSkillIds.length > 0 ? { customSkillIds } : {}),
             }),
             envPromise,
+            listCustomAgents({ workerUrl, kintoneDomain: kctx.kintoneDomain }).catch(
+              () => [],
+            ),
           ]);
           if (cancelled) return;
           builtInSet = set;
@@ -108,8 +118,11 @@ export function useSession(): UseSessionResult {
             kintoneUserCode: kctx.kintoneUserCode,
           };
 
-          // AgentRecord[] に変換して chatStore へ
-          const records = toAgentRecords(set);
+          // built-in 3 variant + 永続化済 Custom Agent を 1 つの records にして chatStore へ
+          const records = [
+            ...toAgentRecords(set),
+            ...customAgents.map((a) => customAgentToRecord(a)),
+          ];
           setBuiltInAgents(records);
 
           // localStorage から復元 → 無ければ isDefault=true → それも無ければ最初の Agent

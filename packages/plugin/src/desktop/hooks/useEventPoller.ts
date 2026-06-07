@@ -53,6 +53,7 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
   const removeMessage = useChatStore((s) => s.removeMessage);
   const updateTool = useChatStore((s) => s.updateTool);
   const upsertArtifact = useChatStore((s) => s.upsertArtifact);
+  const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
   const addPendingCustomToolUse = useChatStore((s) => s.addPendingCustomToolUse);
   const removePendingCustomToolUse = useChatStore((s) => s.removePendingCustomToolUse);
   const setAgentRunning = useChatStore((s) => s.setAgentRunning);
@@ -174,6 +175,32 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
               addPendingCustomToolUse(r.toolUseId, artifact.id);
             } else {
               debug('CustomTool', 'replay: skip POST for', r.toolUseId);
+            }
+          } else if (r.kind === 'propose-agent') {
+            // #48: Designer の propose_agent 受信 → artifact のみ生成 + 右ペインに focus。
+            // モーダルは自動で開かない — ユーザーが artifact を確認し、必要なら追加の
+            // 修正依頼を Designer に出した上で、自分のタイミングで「作成画面を開く」
+            // ボタンを押す自然なフロー。
+            const artifactId = `agent-draft-${r.toolUseId}`;
+            const artifact = upsertArtifact({
+              id: artifactId,
+              kind: 'agent-draft',
+              title: `エージェント案: ${r.draft.name}`,
+              content: JSON.stringify({
+                draft: r.draft,
+                rationale: r.rationale,
+                model: r.model,
+              }),
+            });
+            setActiveArtifact(artifact.id);
+            debug('CustomTool', 'propose_agent observed', {
+              toolUseId: r.toolUseId,
+              artifactId: artifact.id,
+              name: r.draft.name,
+            });
+            // create_artifact と同じ仕組みで responder に tool_result を返してもらう
+            if (!respondedIdsThisBatch.has(r.toolUseId)) {
+              addPendingCustomToolUse(r.toolUseId, artifact.id);
             }
           }
         }

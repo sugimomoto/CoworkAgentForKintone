@@ -22,6 +22,8 @@ const KIND_EXT: Record<ArtifactKind, ExtMime> = {
   csv: { ext: 'csv', mime: 'text/csv' },
   // binary は filename / mime を artifact 側のフィールドから取るので fallback のみ
   binary: { ext: 'bin', mime: 'application/octet-stream' },
+  // #48 エージェントデザイナー提案のスナップショット (JSON 構造)
+  'agent-draft': { ext: 'json', mime: 'application/json' },
 };
 
 /** language ヒントからの拡張子マッピング (kind=code 用)。落ちたら .txt */

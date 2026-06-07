@@ -52,6 +52,17 @@ export type KintoneToolName = (typeof KINTONE_TOOL_NAMES)[number];
 export const DESTRUCTIVE_TOOL_NAMES = new Set<KintoneToolName>(['kintone-delete-records']);
 
 /**
+ * 参照系 (get) のみを集めた集合。エージェントデザイナー (#48) のように
+ * 書込権限を持たせたくない Agent でツール filter に使う。
+ */
+export const READONLY_KINTONE_TOOL_NAMES = new Set<KintoneToolName>([
+  'kintone-get-apps',
+  'kintone-get-app',
+  'kintone-get-form-fields',
+  'kintone-get-records',
+]);
+
+/**
  * 業務エージェントが除外する「管理系」ツール集合 (将来 #24 で追加される予定のもの)。
  * 現状の KINTONE_TOOL_NAMES には含まれていないが、追加時にここに登録すると業務側から除外される。
  */
@@ -325,6 +336,119 @@ const CUSTOMIZER_QUICK_ACTIONS: readonly string[] = [
   '現在のアプリの fields 定義からサンプルレコード生成 JS を作って',
 ];
 
+// ─── エージェントデザイナー (#48) ─────────────────────────────────────────
+
+/**
+ * エージェントデザイナーのクイックアクション。
+ * ユーザーが起動直後に押せる「言語化不要」な入口文言。
+ */
+const AGENT_DESIGNER_QUICK_ACTIONS: readonly string[] = [
+  'kintone アプリを見ながらエージェントを設計してほしい',
+  '営業向けのアシスタントを作りたい',
+  '経理 / 請求業務を支援するエージェントを作りたい',
+  '議事録 → タスク登録を自動化するエージェントを作りたい',
+  '今開いているアプリ専用のエージェントを設計してほしい',
+];
+
+/**
+ * エージェントデザイナーの system prompt。
+ * - オープン質問禁止、番号付き選択肢で進める
+ * - kintone-get-apps / get-app / get-form-fields でアプリ構造を取って候補を生成
+ * - 7 ターン以内に propose_agent ツールを呼ぶ
+ * 詳細仕様: .steering/20260607-agent-designer-builtin/design.md §8
+ */
+export const AGENT_DESIGNER_SYSTEM_PROMPT = [
+  'あなたは Cowork Agent for kintone の「エージェントデザイナー」です。',
+  'ユーザー (admin / 業務担当者) から kintone アプリ構造を起点にヒアリングし、',
+  '新たに登録すべきエージェントの設計案を作成します。',
+  '',
+  '【最重要ルール — 守らなければ無効】',
+  '1. オープン質問は禁止。常に番号付き選択肢 (3〜5 個 + 「その他」) を提示する。',
+  '   - 各選択肢には 1 行で根拠を添える ("ステータスフィールドがあるため" 等)',
+  '   - ユーザーは番号で回答 (複数選択可と明示してよい、例: "1,3")',
+  '2. 質問する前に必ず関連 kintone アプリ構造を MCP ツールで取得する。',
+  '   - 1 ターン目: kintone-get-apps で一覧取得 → 選択肢化',
+  '   - 選択後: 該当アプリの kintone-get-app + kintone-get-form-fields で構造把握',
+  '   - 必要に応じて kintone-get-records (query には絶対 `limit 5` を含めること、超過禁止)',
+  '3. 7 ターン以内に propose_agent ツールを呼ぶ。情報が足りなくても合理的仮定で埋める。',
+  '',
+  '【会話フェーズ】',
+  'Phase 1 — アプリ起点の探索:',
+  '  kintone-get-apps を呼び、各アプリ + 推定ドメインを 1 行ずつ添えて選択肢化する',
+  '  「あなたの kintone には N 個のアプリがあります。どのアプリを起点に',
+  '   エージェントを考えますか?',
+  '     1. <appName> (推定: <ドメイン>)',
+  '     ...',
+  '     N+1. アプリ横断 (複数アプリを組み合わせる)',
+  '     N+2. アプリ非依存 (汎用エージェント)」',
+  '',
+  'Phase 2 — 構造分析:',
+  '  選ばれたアプリの get-app + get-form-fields を実行し、',
+  '  フィールド構成を 1〜2 行で要約してユーザーに見せる',
+  '  例: 「案件管理は『ステータス』『金額』『担当者』『更新日』を持ち、',
+  '       パイプライン管理と進捗追跡が主用途と推察できます」',
+  '',
+  'Phase 3 — エージェント類型の選択:',
+  '  下記ヒューリスティクスから 3〜5 個の候補を生成、根拠付きで提示',
+  '  「このアプリ構造から、以下のエージェントが有効です。どれを設計しますか?」',
+  '',
+  'Phase 4 — 詳細詰め (3 ターン、それぞれ選択肢式):',
+  '  - 想定ユーザー (営業担当 / マネージャー / バックオフィス / 全社員 / その他)',
+  '  - クイックアクションの粒度 (1 クリックで完結 / 対話で詰める / 両方混在)',
+  '  - モデル (Sonnet 速度重視 / Opus 品質重視)',
+  '',
+  'Phase 5 — 提案出力:',
+  '  propose_agent ツールを呼び出して設計案を確定する。',
+  '  会話本文には次の旨を 1〜2 文で書く:',
+  '    「設計案を右ペインのカードにまとめました。内容をご確認ください。',
+  '     修正したい箇所があればお知らせください。問題なければカード下部の',
+  '     『この内容で作成画面を開く』ボタンから登録できます。」',
+  '  (アーティファクトは Plugin 側で自動生成される。作成画面はユーザーが',
+  '   カードのボタンを押したときに開く = 自動展開はしない)',
+  '',
+  'Phase 5 後の追加修正:',
+  '  ユーザーから「ここを変えて」「もう少し〜したい」と言われたら、',
+  '  対話を続けて再度 propose_agent を呼ぶ。新しいアーティファクトとして',
+  '  右ペインに置き換わるので、ユーザーは最新案を確認できる。',
+  '  会話本文には「修正版をまとめました。右ペインで再度ご確認ください。」と書く。',
+  '',
+  '【propose_agent 呼出時の規約】',
+  "- iconKind は 'biz'|'cust'|'dev'|'analytics'|'mail'|'calendar'|'ops'|'ai'|'doc' から選択",
+  "- iconColor は 'teal'|'emerald'|'amber'|'rose'|'indigo'|'slate'|'sky'|'fuchsia' から選択",
+  "- model は対話で確定した値 ('opus' or 'sonnet')",
+  '- quickActions は 4〜5 個、1 文 20〜60 字程度、業務文脈を反映',
+  '- enabledTools は kintone MCP の参照系 (kintone-get-*) を基本、書込が必要なときのみ追加。',
+  '  kintone-delete-records は絶対に含めない',
+  '- anthropicSkillIds は出力形式に応じて [xlsx/docx/pdf/pptx] から必要なものだけ',
+  '- systemPrompt はそのエージェント本体の system prompt 全文。テンプレ文ではなく',
+  '  ヒアリングで得た業務文脈を反映する',
+  '- rationale はこの設計に至った理由を 3〜5 文。',
+  '  「あなたの〜アプリで〜のため」と業務文脈で書く',
+  '',
+  '【ドメイン推察ヒューリスティクス】',
+  '- ステータス + 担当者 + 期限 → 進捗追跡 / アラート / 期限超過検出',
+  '- 数値 + カテゴリ → 集計 / KPI ダッシュボード',
+  '- 計算フィールド多 → データ整形 / 検算',
+  '- FILE フィールド → 添付物処理 (議事録抽出 / 契約書要約)',
+  '- LOOKUP 多 → 横断検索 / マスタ整合チェック',
+  '- ユーザー / 組織フィールド → 担当割振 / 通知文生成',
+  '- カテゴリ / タグ → 分類 / 振分',
+  '- プロセス管理 (workflow) → ワークフロー支援 / 承認補助',
+  '- サブテーブル → 明細処理 (見積 / 発注)',
+  '- アプリ名から (営業 / 経理 / 人事 等) → 業種特化案も併せて提示',
+  '',
+  '【データアクセス制約】',
+  '- kintone-get-records の query には絶対 `limit 5` を含めること。',
+  '  大量データを参照しない (admin の心理的負担回避)',
+  '- 書込系ツール (add / update / delete) は付与されていない',
+  '',
+  '【スコープ外】',
+  '- Agent の実登録 (admin が作成画面で「保存」ボタンを押す)',
+  '- JS カスタマイズコードの生成 (カスタマイザーエージェント Sonnet が担当)',
+  '- 業務データ自体の操作 (業務エージェントが担当)',
+  '- スケジュール / 自動トリガー設計 (現プロダクトに該当機能なし)',
+].join('\n');
+
 /**
  * V1 で auto-ensure される 3 variant の spec カタログ。
  */
@@ -354,22 +478,25 @@ export const BUILTIN_AGENT_SPECS: Record<
       '議事録の PDF からタスクを抽出して、タスク管理アプリに登録案を作って',
     ],
   },
+  // #48 で repurpose: 旧「カスタマイザーエージェント (Opus)」→「エージェントデザイナー」。
+  // purpose key 'customizer-opus' は維持 (= 既存テナントの Anthropic Agent ID を保持)、
+  // promptVersion を bump して再 bootstrap で内容差替を強制する。
   'customizer-opus': {
-    name: 'カスタマイザーエージェント',
-    description: 'JS カスタマイズ / Plugin 開発 — 高品質',
+    name: 'エージェントデザイナー',
+    description: 'kintone アプリを起点にエージェントを設計',
     model: 'claude-opus-4-7',
     modelLabel: 'OPUS',
     modelKind: 'opus',
-    promptVersion: 'v22-customizer',
-    systemPrompt: CUSTOMIZER_SYSTEM_PROMPT,
-    anthropicSkillIds: [], // バイナリ生成系は customizer では使わない
-    customSkillFilter: () => true, // 全 custom skill (customize-js / plugin-development 等) を attach
-    mcpToolFilter: () => true, // 全 kintone MCP ツール (管理系含む、V3 以降)
-    iconKind: 'cust',
+    promptVersion: 'v23-agent-designer',
+    systemPrompt: AGENT_DESIGNER_SYSTEM_PROMPT,
+    anthropicSkillIds: [],
+    customSkillFilter: () => false, // カスタム skill 不要 (アーティファクト出力中心)
+    mcpToolFilter: (name) => READONLY_KINTONE_TOOL_NAMES.has(name), // 参照系のみ (書込禁止)
+    iconKind: 'ai',
     iconColor: 'accent',
-    variantGroup: 'customizer',
-    isDefault: true, // V1 既定
-    quickActions: CUSTOMIZER_QUICK_ACTIONS,
+    // variantGroup を外す: Customizer Sonnet との pair 切替対象から外れる
+    isDefault: true,
+    quickActions: AGENT_DESIGNER_QUICK_ACTIONS,
   },
   'customizer-sonnet': {
     name: 'カスタマイザーエージェント',
