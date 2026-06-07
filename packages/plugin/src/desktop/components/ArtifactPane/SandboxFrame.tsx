@@ -89,6 +89,14 @@ export function escapeHtml(s: string): string {
 /** sandbox iframe 子側で使う共通スクリプト (boot/post/error ハンドリング) */
 export const POST_HELPER_SCRIPT = `
 const post = (type, payload) => parent.postMessage({ source: 'artifact', type, payload }, '*');
-window.addEventListener('error', (e) => post('error', String(e.error?.stack || e.message)));
-window.addEventListener('unhandledrejection', (e) => post('error', String(e.reason?.stack || e.reason)));
+const fmtErr = (err, fallback) => {
+  if (err && typeof err === 'object') {
+    const msg = err.message ? String(err.message) : '';
+    const stack = err.stack ? String(err.stack) : '';
+    return msg && stack && !stack.includes(msg) ? msg + '\\n' + stack : (stack || msg || String(err));
+  }
+  return String(err ?? fallback ?? 'unknown error');
+};
+window.addEventListener('error', (e) => post('error', fmtErr(e.error, e.message)));
+window.addEventListener('unhandledrejection', (e) => post('error', fmtErr(e.reason, 'unhandled rejection')));
 `.trim();

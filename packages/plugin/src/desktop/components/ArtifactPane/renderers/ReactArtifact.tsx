@@ -64,8 +64,16 @@ try {
 
   const module = { exports: {} };
   const runtimeExports = module.exports;
-  new Function('React', 'Recharts', 'module', 'exports', transformed)
-    (React, RechartsNS, module, runtimeExports);
+  // Babel の modules: 'cjs' 変換で生成される require(...) を解決するシム。
+  // LLM が import { useState } from "react" 等を書いても動かせる。
+  const requireShim = (name) => {
+    if (name === 'react') return React;
+    if (name === 'react-dom' || name === 'react-dom/client') return ReactDOMNS;
+    if (name === 'recharts') return RechartsNS;
+    throw new Error('module not available in sandbox: ' + name);
+  };
+  new Function('React', 'Recharts', 'module', 'exports', 'require', transformed)
+    (React, RechartsNS, module, runtimeExports, requireShim);
   const Component = (module.exports && (module.exports.default || module.exports));
   if (typeof Component !== 'function') {
     throw new Error('default export が関数コンポーネントではありません。\\n例: export default function App() { return ... }');
@@ -74,7 +82,7 @@ try {
   root.render(React.createElement(Component));
   post('rendered', null);
 } catch (err) {
-  const msg = String(err && err.stack || err);
+  const msg = fmtErr(err, 'render failed');
   showErr(msg);
   post('error', msg);
 }
