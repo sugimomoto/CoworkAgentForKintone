@@ -1,0 +1,12 @@
+---
+import Icon from '../Icon.astro';
+
+interface Props {
+  id?: string;
+}
+const { id } = Astro.props;
+---
+<div class="msg m-agent" data-msg-id={id}>
+  <span class="av"><Icon name="star-avatar" size={13} /></span>
+  <div class="bubble"><slot /></div>
+</div>

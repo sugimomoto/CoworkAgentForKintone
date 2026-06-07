@@ -1,0 +1,31 @@
+---
+import Icon from '../Icon.astro';
+---
+
+<section class="cta-band">
+  <div class="container">
+    <div class="cta-card reveal">
+      <h2>あなたの kintone に、Cowork Agent を迎える</h2>
+      <p>セットアップは 5 分。GitHub で公開中。スターとフィードバックで開発を応援してください。</p>
+      <div class="cta-actions">
+        <a
+          href="https://github.com/sugimomoto/CoworkAgentForKintone"
+          target="_blank"
+          rel="noopener"
+          class="btn btn-primary btn-lg"
+        >
+          <Icon name="github" size={17} /> GitHub で見る
+        </a>
+        <a href="help/admin/" class="btn btn-ghost btn-lg">
+          <Icon name="download" size={16} /> インストール手順
+        </a>
+      </div>
+      <pre class="codeblock mono"><span class="cmt"># GitHub Releases から最新の .zip を取得</span>
+<span class="gp">$</span> gh release download --repo sugimomoto/CoworkAgentForKintone
+<span class="cmt"># kintone のプラグイン管理画面にアップロード → 完了</span></pre>
+      <div class="legal">
+        kintone は サイボウズ株式会社 の登録商標です。本製品は kintone と連携するサードパーティ製の OSS です。
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,44 @@
+---
+import Icon from '../Icon.astro';
+
+const cards = [
+  {
+    n: '01',
+    icon: 'panel' as const,
+    t: 'サイドパネルに常駐',
+    d: 'kintone のレコード一覧を開くと、右側にいつでも相談できる AI コワーカーが待機。画面を離れずに、その場で質問・操作できます。',
+  },
+  {
+    n: '02',
+    icon: 'async' as const,
+    t: '非同期で動く',
+    d: '時間のかかる集計や一括処理はバックグラウンドへ。Cowork Agent for kintone が作業している間も、あなたは別の仕事を進められます。',
+  },
+  {
+    n: '03',
+    icon: 'shield' as const,
+    t: 'HITL 承認フロー',
+    d: '更新・削除などの破壊的な操作は、必ず人の承認を挟みます。対象と件数を確認してから実行する、安心の設計です。',
+  },
+];
+---
+
+<section id="concept" class="concept">
+  <div class="container">
+    <div class="section-head oneline reveal">
+      <span class="eyebrow"><span class="dot"></span>WHAT IS IT</span>
+      <h2>kintone の「隣」で働く、3 つの仕組み</h2>
+      <p>難しい設定はなし。常駐し、任せられて、暴走しない。業務で本当に使える形にしました。</p>
+    </div>
+    <div class="concept-grid">
+      {cards.map((c, i) => (
+        <div class="concept-card reveal" style={`transition-delay:${i * 70}ms;`}>
+          <span class="num mono">{c.n}</span>
+          <div class="concept-ic"><Icon name={c.icon} size={22} /></div>
+          <h3>{c.t}</h3>
+          <p>{c.d}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

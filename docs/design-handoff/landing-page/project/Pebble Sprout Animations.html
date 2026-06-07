@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Pebble Sprout — Animated States</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #faf6ea; }
+    body {
+      font-family: 'Noto Sans JP', 'Inter', sans-serif;
+      color: #231200;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 56px 32px 80px; }
+    h1 {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 22px; font-weight: 400; margin: 0 0 14px;
+      line-height: 1.4;
+    }
+    .lede {
+      font-size: 14px; color: #6b5f4a; max-width: 720px;
+      line-height: 1.7; margin-bottom: 36px;
+    }
+    .lede b { color: #231200; }
+    h2 {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 13px; font-weight: 400; margin: 56px 0 6px;
+    }
+    h2 + .sub { font-size: 13px; color: #6b5f4a; margin: 0 0 24px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid rgba(35,18,0,0.10);
+      border-radius: 14px;
+      padding: 22px 18px;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+    }
+    .card-stage {
+      width: 140px; height: 140px;
+      display: flex; align-items: center; justify-content: center;
+      background: #faf2dc66;
+      border-radius: 12px;
+    }
+    .card-label {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 11px; color: #231200;
+    }
+    .card-state-name {
+      font-size: 13px; font-weight: 600; color: #231200;
+    }
+    .card-desc {
+      font-size: 11.5px; color: #6b5f4a; line-height: 1.55;
+      text-align: center;
+    }
+    .card-anim-spec {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px;
+      color: #0d9488; background: #cfeae6; padding: 3px 8px; border-radius: 4px;
+    }
+
+    /* size demo */
+    .size-row {
+      display: flex; gap: 36px; align-items: center;
+      padding: 28px; background: #fff;
+      border: 1px solid rgba(35,18,0,0.10); border-radius: 14px;
+      justify-content: center;
+    }
+    .size-cell {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .size-cell .label {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6b5f4a;
+    }
+
+    /* chat panel mock */
+    .chat-mock {
+      display: flex; gap: 24px;
+      align-items: flex-start;
+    }
+    .chat-panel {
+      width: 380px;
+      height: 560px;
+      background: #fff;
+      border: 1px solid rgba(35,18,0,0.10);
+      border-radius: 14px;
+      box-shadow: 0 4px 24px rgba(35,18,0,0.06);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .chat-panel-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(35,18,0,0.06);
+    }
+    .chat-panel-header-name {
+      font-size: 14px; font-weight: 600; color: #231200;
+    }
+    .chat-panel-header-status {
+      font-size: 11px; color: #6b5f4a;
+    }
+    .chat-body {
+      flex: 1; padding: 16px;
+      display: flex; flex-direction: column; gap: 14px;
+      overflow: auto;
+    }
+    .msg {
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .msg-bubble {
+      flex: 1; background: #faf2dc;
+      padding: 10px 12px; border-radius: 10px;
+      font-size: 12.5px; line-height: 1.6;
+      color: #231200;
+    }
+    .msg-user {
+      justify-content: flex-end;
+    }
+    .msg-user .msg-bubble {
+      background: #231200; color: #faf2dc; max-width: 78%;
+    }
+    .controls {
+      flex: 1;
+      background: #fff;
+      border: 1px solid rgba(35,18,0,0.10);
+      border-radius: 14px;
+      padding: 22px;
+    }
+    .controls h3 {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 11px; font-weight: 400; margin: 0 0 14px;
+    }
+    .control-btn {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%;
+      padding: 10px 12px;
+      margin-bottom: 6px;
+      border: 1px solid rgba(35,18,0,0.10);
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12.5px;
+      color: #231200;
+      text-align: left;
+      transition: background 0.15s;
+    }
+    .control-btn:hover { background: #faf2dc88; }
+    .control-btn.active { background: #cfeae6; border-color: #0d9488; }
+    .control-btn-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #0d9488;
+    }
+    .control-btn-key {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px; color: #6b5f4a; margin-left: auto;
+    }
+
+    .integration-block {
+      background: #1a0d00; color: #faf2dc;
+      border-radius: 12px; padding: 22px 24px;
+      font-family: 'JetBrains Mono', monospace; font-size: 12px;
+      line-height: 1.7;
+      overflow-x: auto;
+    }
+    .integration-block .k { color: #ffbf00; }
+    .integration-block .s { color: #cfeae6; }
+    .integration-block .c { color: #6b5f4a; font-style: italic; }
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" src="animated-pebble-sprout.jsx"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const STATES = [
+      { id: 'idle',     label: '待機',     desc: 'ふわふわ呼吸＋葉の揺れ＋瞬き', spec: 'breathe 3.6s + sway 4s + blink' },
+      { id: 'thinking', label: '思考中',   desc: '葉が小刻みに揺れ、思考バブルがポップ', spec: 'jitter 1.4s + bubble pop' },
+      { id: 'working',  label: '実行中',   desc: '体が左右にトコトコ＋目に走査ライン', spec: 'toddle 0.7s + scan 1.2s' },
+      { id: 'waiting',  label: '承認待ち', desc: '体が鼓動＋amberアラートが点滅', spec: 'pulse 1.4s + alert blink 1s' },
+      { id: 'done',     label: '完了',     desc: 'ぴょんと跳ねる＋葉が広がる＋スパークル', spec: 'hop 1s + spread + sparkle' },
+    ];
+
+    function App() {
+      const [activeState, setActiveState] = React.useState('idle');
+      const [messages, setMessages] = React.useState([
+        { from: 'agent', text: 'こんにちは。今日はどんな作業をお手伝いしましょうか？' },
+      ]);
+
+      // demo flow on chat panel
+      const runFlow = (newState) => {
+        setActiveState(newState);
+        const flowMsg = {
+          idle:     null,
+          thinking: { from: 'agent', text: '関連アプリを確認しています…' },
+          working:  { from: 'agent', text: 'レコード取得中（342件）。集計まであと少しです。' },
+          waiting:  { from: 'agent', text: '47件を更新します。破壊的操作のため承認をお願いします。' },
+          done:     { from: 'agent', text: '集計完了。担当者ごとの結果をお見せします。' },
+        }[newState];
+        if (flowMsg) {
+          setMessages((prev) => [...prev.slice(-3), flowMsg]);
+        }
+      };
+
+      return (
+        <div className="container">
+          <h1>Pebble Sprout · Animated States</h1>
+          <p className="lede">
+            5つの状態を、シルエットを変えずに <b>CSS アニメーションだけ</b> で描き分けます。
+            JS制御は不要 — <b>state プロップ</b> を切り替えるだけで自動的にアニメが切り替わります。
+            軽量・SVGのみ・依存ゼロなので、Cowork Agent のチャットパネルにそのまま組み込めます。
+          </p>
+
+          <h2>5 States — Live</h2>
+          <p className="sub">それぞれのアニメーションをループ再生中。</p>
+          <div className="grid">
+            {STATES.map((s) => (
+              <div key={s.id} className="card">
+                <div className="card-stage">
+                  <AnimatedPebbleSprout state={s.id} size={120} />
+                </div>
+                <div className="card-state-name">{s.label}</div>
+                <div className="card-desc">{s.desc}</div>
+                <div className="card-anim-spec">{s.spec}</div>
+              </div>
+            ))}
+          </div>
+
+          <h2>Size demo · idle</h2>
+          <p className="sub">アバター用（24px）からヒーロー用（160px）まで、すべて同じコンポーネント。</p>
+          <div className="size-row">
+            {[24, 40, 64, 96, 160].map((sz) => (
+              <div key={sz} className="size-cell">
+                <AnimatedPebbleSprout state="idle" size={sz} />
+                <span className="label">{sz}px</span>
+              </div>
+            ))}
+          </div>
+
+          <h2>Interactive · Chat panel integration</h2>
+          <p className="sub">右側のボタンで状態を切り替えると、チャットパネル内のアバターと吹き出しが連動します。</p>
+          <div className="chat-mock">
+            <div className="chat-panel">
+              <div className="chat-panel-header">
+                <AnimatedPebbleSprout state={activeState} size={40} />
+                <div>
+                  <div className="chat-panel-header-name">Cowork Agent</div>
+                  <div className="chat-panel-header-status">
+                    {STATES.find((s) => s.id === activeState).label}
+                  </div>
+                </div>
+              </div>
+              <div className="chat-body">
+                {messages.map((m, i) => (
+                  m.from === 'agent' ? (
+                    <div key={i} className="msg">
+                      <AnimatedPebbleSprout state={i === messages.length - 1 ? activeState : 'idle'} size={32} />
+                      <div className="msg-bubble">{m.text}</div>
+                    </div>
+                  ) : (
+                    <div key={i} className="msg msg-user">
+                      <div className="msg-bubble">{m.text}</div>
+                    </div>
+                  )
+                ))}
+              </div>
+            </div>
+
+            <div className="controls">
+              <h3>STATE TRIGGER</h3>
+              {STATES.map((s) => (
+                <button
+                  key={s.id}
+                  className={`control-btn ${activeState === s.id ? 'active' : ''}`}
+                  onClick={() => runFlow(s.id)}
+                >
+                  <span className="control-btn-dot" style={{
+                    background: activeState === s.id ? '#0d9488' : '#d4cdb8',
+                  }}/>
+                  <span style={{ fontWeight: 600 }}>{s.label}</span>
+                  <span className="control-btn-key">{s.id}</span>
+                </button>
+              ))}
+              <div style={{
+                marginTop: 18, padding: 12, background: '#faf2dc',
+                borderRadius: 8, fontSize: 11.5, color: '#6b5f4a', lineHeight: 1.6,
+              }}>
+                <b style={{ color: '#231200' }}>使い方:</b> 実装側では Agent の状態（待機 / ツール呼び出し中 / HITL待ち / 完了）に応じて <code style={{ background: '#fff', padding: '1px 4px', borderRadius: 3 }}>state</code> を更新するだけ。アニメーションは CSS で自走します。
+              </div>
+            </div>
+          </div>
+
+          <h2>Integration snippet</h2>
+          <p className="sub">Cowork Agent のチャットパネルへの組み込み例。</p>
+          <pre className="integration-block">
+<span className="c">{`// 1. ヘッダーやメッセージのアバター位置に配置`}</span>
+{`
+`}<span className="k">{`<AnimatedPebbleSprout`}</span>{` `}
+{`  `}<span className="k">{`state`}</span>{`={agent.status}`}{`         `}<span className="c">{`// 'idle' | 'thinking' | 'working' | 'waiting' | 'done'`}</span>
+{`
+  `}<span className="k">{`size`}</span>{`=`}<span className="s">{`{40}`}</span>{`                    `}<span className="c">{`// 16〜160px、用途に応じて`}</span>
+{`
+`}<span className="k">{`/>`}</span>{`
+
+`}<span className="c">{`// 2. Agent の内部状態が更新されたら state を切り替えるだけ。`}</span>
+{`
+`}<span className="c">{`//    アニメーションは CSS keyframes で自走する。`}</span>
+{`
+`}<span className="k">{`useEffect`}</span>{`(() => {`}
+{`
+  `}<span className="k">{`if`}</span>{` (toolCallInProgress)   setStatus(`}<span className="s">{`'working'`}</span>{`);`}
+{`
+  `}<span className="k">{`else if`}</span>{` (waitingApproval) setStatus(`}<span className="s">{`'waiting'`}</span>{`);`}
+{`
+  `}<span className="k">{`else if`}</span>{` (lastResultFresh) setStatus(`}<span className="s">{`'done'`}</span>{`);`}
+{`
+  `}<span className="k">{`else`}</span>{`                    setStatus(`}<span className="s">{`'idle'`}</span>{`);`}
+{`
+}, [toolCallInProgress, waitingApproval, lastResultFresh]);`}
+          </pre>
+
+          <div style={{
+            marginTop: 28, padding: '18px 22px', background: '#fff',
+            border: '1px solid rgba(35,18,0,0.10)', borderRadius: 12,
+            fontSize: 13, color: '#6b5f4a', lineHeight: 1.7,
+          }}>
+            <b style={{ color: '#231200' }}>技術メモ:</b> SVG + CSS keyframes のみで構成。React/Vue/素のJS どこでも動きます。
+            ファイルサイズは ~10KB（minify前）、外部依存なし。<br/>
+            <b style={{ color: '#231200' }}>Reduced motion 対応:</b> 必要であれば <code style={{ background: '#faf2dc', padding: '1px 5px', borderRadius: 3 }}>@media (prefers-reduced-motion: reduce)</code> でアニメーションを短縮できます（ご希望あれば追加します）。
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

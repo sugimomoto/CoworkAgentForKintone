@@ -1,0 +1,224 @@
+---
+import Icon from '../Icon.astro';
+import ChatPanel from '../chat/ChatPanel.astro';
+import UserMsg from '../chat/UserMsg.astro';
+import ToolCall from '../chat/ToolCall.astro';
+import ResultCard from '../chat/ResultCard.astro';
+import ListResult from '../chat/ListResult.astro';
+import CheckResult from '../chat/CheckResult.astro';
+
+interface Role {
+  id: string;
+  badge: string;
+  name: string;
+  primary: boolean;
+  tagline: string;
+  examples: string[];
+}
+
+const roles: Role[] = [
+  {
+    id: 'sales', badge: '営', name: '営業', primary: true,
+    tagline: '受注の集計、顧客リストの抽出、活動報告のまとめ。毎週の「あの作業」を話すだけに。',
+    examples: [
+      '3ヶ月以上連絡していない既存顧客を抽出して、優先連絡リストを作って',
+      '先週の新規見込み客で、業種がITの会社を案件アプリに転記して',
+      '今月の活動報告を案件別にまとめて、ネクストアクションを抜き出して',
+    ],
+  },
+  {
+    id: 'cs', badge: 'CS', name: 'カスタマーサポート', primary: true,
+    tagline: '未対応の棚卸し、傾向分析、FAQ づくり。問い合わせの山を、落ち着いてさばく。',
+    examples: [
+      '先月のクレーム案件を、頻出キーワードで分類して傾向を見せて',
+      '「至急」タグが付いた未解決の問い合わせを、対応案件アプリに転記して',
+      '対応完了したチケットから、FAQ 候補を10件抽出して',
+    ],
+  },
+  {
+    id: 'hr', badge: '人', name: '人事', primary: true,
+    tagline: '入社処理の抜け漏れ、勤怠の集計、リマインド文面。細かな確認作業を、まとめて任せる。',
+    examples: [
+      '有給残が5日以下の社員に向けた、リマインド文面のドラフトを作って',
+      '内定者アプリと社員マスタを照合して、入社処理のチェックリストを作って',
+      '先月の残業時間が45時間超の人を抽出して、上司ごとに集計して',
+    ],
+  },
+  {
+    id: 'fin', badge: '経', name: '経理', primary: false,
+    tagline: '未入金の照合、経費チェック、締めの集計。',
+    examples: [
+      '先月の経費申請で、領収書が添付されていないものをリストアップして',
+      '四半期締めの仕訳データを部門別に集計して、CSV に出力して',
+    ],
+  },
+  {
+    id: 'ga', badge: '総', name: '総務・情シス', primary: false,
+    tagline: '備品の返却管理、申請の督促、社内 FAQ。',
+    examples: [
+      '社内申請アプリの未承認案件を、承認者別に集計してリマインドできる状態にして',
+      '社内ヘルプデスクへの問い合わせから、よくある質問 Top10 を作って',
+    ],
+  },
+];
+
+const primary = roles.filter((r) => r.primary);
+const secondary = roles.filter((r) => !r.primary);
+const initial = 'sales';
+---
+
+<section id="roles" class="roles">
+  <div class="container">
+    <div class="section-head oneline reveal">
+      <span class="eyebrow"><span class="dot"></span>BY ROLE · 役割別</span>
+      <h2>あなたの kintone 業務は、<span class="accent">どれ</span>ですか？</h2>
+      <p>役割を選ぶと、そのままチャットに送れる「依頼例」が見られます。これ、毎週やっていませんか？</p>
+    </div>
+
+    <div class="role-tabs reveal" data-role-tabs>
+      {primary.map((role) => (
+        <button
+          class:list={['role-tab', { on: role.id === initial }]}
+          data-role-tab={role.id}
+          type="button"
+        >
+          <span class="rb">{role.badge}</span>{role.name}
+        </button>
+      ))}
+      <span class="role-divider"></span>
+      {secondary.map((role) => (
+        <button
+          class:list={['role-tab secondary', { on: role.id === initial }]}
+          data-role-tab={role.id}
+          type="button"
+        >
+          <span class="rb">{role.badge}</span>{role.name}
+        </button>
+      ))}
+    </div>
+
+    {roles.map((r) => (
+      <div
+        class="role-stage"
+        data-role-stage={r.id}
+        style={r.id === initial ? '' : 'display:none;'}
+      >
+        <div class="role-text">
+          <div class="role-head">
+            <span class="rbadge">{r.badge}</span>
+            <h3>{r.name}のあなたへ</h3>
+          </div>
+          <p class="role-tagline">{r.tagline}</p>
+          <div class="role-exlabel">こんな依頼も、ひとことで</div>
+          {r.examples.map((ex) => (
+            <div class="role-ex">
+              <span class="qi"><Icon name="qchat" size={12} /></span>
+              <span class="qt">{ex}</span>
+            </div>
+          ))}
+        </div>
+        <div class="role-mock">
+          {r.id === 'sales' && (
+            <ChatPanel solo foot="メッセージを入力…">
+              <UserMsg>今月の受注で500万円超の案件を、担当者ごとにランキングで集計して</UserMsg>
+              <ToolCall
+                tool="get_records"
+                label="案件管理を集計"
+                detail="受注日=今月 AND 金額≥¥5,000,000 → 9件"
+              />
+              <ResultCard
+                title="担当者別 受注ランキング · 今月"
+                sub="9件 · 合計 ¥84.2M"
+                rows={[
+                  { ini: '田', name: '1. 田中 美咲', val: 348, disp: '¥34.8M', color: '#0d9488' },
+                  { ini: '佐', name: '2. 佐藤 健一', val: 274, disp: '¥27.4M', color: '#0a766c' },
+                  { ini: '山', name: '3. 山田 拓也', val: 216, disp: '¥21.6M', color: '#b45309' },
+                ]}
+                followups={['グラフにする', 'Slackで共有']}
+              />
+            </ChatPanel>
+          )}
+          {r.id === 'cs' && (
+            <ChatPanel solo foot="メッセージを入力…">
+              <UserMsg>24時間以上未対応の問い合わせを優先度順に並べて、各件を要約して</UserMsg>
+              <ToolCall
+                tool="search_records"
+                label="問い合わせ管理を検索"
+                detail="ステータス=未対応 AND 24時間以上 → 12件"
+              />
+              <ListResult
+                title="未対応チケット · 優先度順"
+                sub="12件 · 最長 32時間"
+                rows={[
+                  { pill: '高', tone: 'high', text: 'サーバー接続エラー（A社）', meta: '32h 経過' },
+                  { pill: '高', tone: 'high', text: '請求金額の相違（B社）', meta: '28h 経過' },
+                  { pill: '中', tone: 'mid', text: 'ログインできない（C社）', meta: '25h 経過' },
+                ]}
+              />
+            </ChatPanel>
+          )}
+          {r.id === 'hr' && (
+            <ChatPanel solo foot="メッセージを入力…">
+              <UserMsg>先月入社した人の社内アカウント発行漏れがないかチェックして</UserMsg>
+              <ToolCall
+                tool="cross_app"
+                label="社員マスタ × アカウント管理を照合"
+                detail="4月入社 6名を突合"
+              />
+              <CheckResult
+                title="入社処理チェック · 4月入社 6名"
+                rows={[
+                  { text: '社内アカウント発行', meta: '5 / 6' },
+                  { text: '未発行 1名（佐藤 健太さん）', meta: '要対応', warn: true },
+                  { text: '入社書類の回収', meta: '6 / 6' },
+                ]}
+              />
+            </ChatPanel>
+          )}
+          {r.id === 'fin' && (
+            <ChatPanel solo foot="メッセージを入力…">
+              <UserMsg>請求書アプリと入金管理アプリを照合して、未入金の案件を期日順に並べて</UserMsg>
+              <ToolCall
+                tool="cross_app"
+                label="請求書 × 入金管理を照合"
+                detail="未入金 → 7件"
+              />
+              <ListResult
+                title="未入金リスト · 期日順"
+                sub="7件 · 合計 ¥18.6M"
+                rows={[
+                  { pill: '超過', tone: 'over', text: 'C商事 ¥4.2M', meta: '期日 5日超過' },
+                  { pill: '近日', tone: 'soon', text: 'D工業 ¥3.1M', meta: '期日 明日' },
+                  { pill: '近日', tone: 'soon', text: 'E社 ¥2.4M', meta: '期日 3日後' },
+                ]}
+              />
+            </ChatPanel>
+          )}
+          {r.id === 'ga' && (
+            <ChatPanel solo foot="メッセージを入力…">
+              <UserMsg>備品管理アプリで返却期限を過ぎている貸出物を、担当者別にまとめて</UserMsg>
+              <ToolCall
+                tool="search_records"
+                label="備品管理を検索"
+                detail="返却期限 < 本日 → 8件"
+              />
+              <ListResult
+                title="返却期限切れ · 担当者別"
+                sub="8件"
+                rows={[
+                  { pill: '超過', tone: 'over', text: 'ノートPC #14（田中）', meta: '12日超過' },
+                  { pill: '超過', tone: 'over', text: 'プロジェクター（佐藤）', meta: '5日超過' },
+                  { pill: '中', tone: 'mid', text: '貸出スマホ #3（鈴木）', meta: '2日超過' },
+                ]}
+              />
+            </ChatPanel>
+          )}
+        </div>
+      </div>
+    ))}
+
+    <div class="role-foot reveal">
+      自分の役割が見つからない？ それでも大丈夫。<a href="#usecases">できることの仕組みを見る →</a>
+    </div>
+  </div>
+</section>

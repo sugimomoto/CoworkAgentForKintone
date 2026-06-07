@@ -1,0 +1,104 @@
+---
+import Icon from '../Icon.astro';
+
+interface Step {
+  name: string;
+  h: string;
+  d: string;
+  url: string;
+}
+
+const steps: Step[] = [
+  { name: 'STEP 1 · プラグイン', h: 'Plugin をインストール', d: 'GitHub Releases から .zip をダウンロードし、kintone のプラグイン管理画面にアップロードするだけ。', url: 'kintone.com/admin/plugins' },
+  { name: 'STEP 2 · Worker', h: 'Cloudflare Worker をデプロイ', d: 'MCP サーバーとなる Worker を、Plugin 設定画面のボタンからブラウザだけでデプロイ。CLI は不要です。', url: 'config / worker-deploy' },
+  { name: 'STEP 3 · API Key', h: 'Anthropic API Key を登録', d: 'お手持ちの Anthropic API キーを設定画面に貼り付け。キーは Vault に暗号化保存されます。', url: 'config / anthropic' },
+  { name: 'STEP 4 · OAuth', h: 'kintone OAuth クライアントを登録', d: 'kintone 側で OAuth クライアントを作成し、Client ID / Secret を登録。これで接続準備が完了します。', url: 'kintone.com/admin/oauth' },
+  { name: 'STEP 5 · 完了', h: '業務ユーザーが使い始める', d: 'セットアップ完了。あとはレコード一覧を開けば、チームの誰もがサイドパネルから Cowork Agent for kintone に話しかけられます。', url: 'app/records · index' },
+];
+---
+
+<section id="setup">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow"><span class="dot"></span>SETUP · FOR ADMINS</span>
+      <h2>管理者の導入は、<span class="accent">5 ステップ</span></h2>
+      <p>追加サーバーの構築も、CLI 操作も不要。すべてブラウザの設定画面だけで完結します。</p>
+    </div>
+    <div class="setup-layout">
+      <div class="setup-rail" data-setup-rail>
+        <div class="setup-line">
+          <div class="setup-line-fill" data-setup-line-fill style="height: 20%;"></div>
+        </div>
+        {steps.map((s, i) => (
+          <div class:list={['setup-item', { on: i === 0 }]} data-setup-item={i}>
+            <span class="setup-dot" data-setup-dot={i}>{i + 1}</span>
+            <div class="setup-body">
+              <h3>{s.h}</h3>
+              <p>{s.d}</p>
+              {i === 1 && <div class="badge-row"><span class="chip">CLI 不要</span><span class="chip">ブラウザ完結</span></div>}
+              {i === 2 && <div class="badge-row"><span class="chip"><Icon name="lock" size={11} /> Vault 暗号化</span><span class="chip">キー持ち込み</span></div>}
+            </div>
+          </div>
+        ))}
+        <div style="margin-top:18px;padding-left:58px;">
+          <a href="help/admin/" class="btn btn-ghost">詳しい管理者ガイドを見る <Icon name="arrow" size={14} /></a>
+        </div>
+      </div>
+      <div class="setup-visual">
+        {steps.map((s, i) => (
+          <div class="setup-screen" data-setup-screen={i} style={i === 0 ? '' : 'display:none;'}>
+            <div class="ss-head">
+              <div class="ss-dots"><i></i><i></i><i></i></div>
+              <span class="ss-url mono">{s.url}</span>
+            </div>
+            <div class="ss-body">
+              <div class="ss-stepname">{s.name}</div>
+
+              {i === 0 && (
+                <>
+                  <div class="ss-h">プラグインを追加</div>
+                  <div class="ss-field"><div class="l">アップロードするファイル</div><div class="v">cowork-agent-1.0.0.zip</div></div>
+                  <div class="ss-field"><div class="l">状態</div><div class="v" style="color:var(--accent-deep);">✓ 検証済み · 署名 OK</div></div>
+                  <span class="btn btn-primary btn-block ss-cta">プラグインを追加</span>
+                </>
+              )}
+              {i === 1 && (
+                <>
+                  <div class="ss-h">Worker をデプロイ</div>
+                  <div class="ss-field"><div class="l">デプロイ先</div><div class="v">cowork-mcp.your-team.workers.dev</div></div>
+                  <div class="ss-field key"><div class="l">ステータス</div><div class="v">● デプロイ中… 90%</div></div>
+                  <span class="btn btn-primary btn-block ss-cta"><Icon name="bolt" size={15} /> ブラウザからデプロイ</span>
+                </>
+              )}
+              {i === 2 && (
+                <>
+                  <div class="ss-h">API キーを登録</div>
+                  <div class="ss-field key"><div class="l">Anthropic API Key</div><div class="v">sk-ant-•••••••••••••••• 4f2a</div></div>
+                  <div class="ss-field"><div class="l">保存先</div><div class="v">🔒 Vault（暗号化）</div></div>
+                  <span class="btn btn-primary btn-block ss-cta"><Icon name="lock" size={14} /> キーを安全に保存</span>
+                </>
+              )}
+              {i === 3 && (
+                <>
+                  <div class="ss-h">OAuth クライアント</div>
+                  <div class="ss-field"><div class="l">Client ID</div><div class="v">kintone-cowork-agent</div></div>
+                  <div class="ss-field key"><div class="l">Client Secret</div><div class="v">cs_•••••••••••• 8b10</div></div>
+                  <span class="btn btn-primary btn-block ss-cta">接続をテスト</span>
+                </>
+              )}
+              {i === 4 && (
+                <div class="ss-ok">
+                  <span class="big"><Icon name="check" size={18} /></span>
+                  <div>
+                    <div style="font-weight:700;font-size:14px;">セットアップ完了！</div>
+                    <div style="font-size:12px;color:var(--muted);">レコード一覧を開いて Cowork Agent に話しかけましょう。</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+</section>

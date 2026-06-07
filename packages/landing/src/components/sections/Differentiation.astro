@@ -1,0 +1,39 @@
+---
+import Icon from '../Icon.astro';
+import type { ComponentProps } from 'astro/types';
+type IconName = ComponentProps<typeof Icon>['name'];
+
+interface Card {
+  icon: IconName;
+  t: string;
+  d: string;
+}
+
+const cards: Card[] = [
+  { icon: 'async', t: 'Claude Managed Agents による非同期実行', d: '長時間タスクをエージェントに任せ、裏側で動かす。完了を待たずに次の仕事へ進めます。' },
+  { icon: 'github', t: '完全な OSS（MIT License）', d: 'ソースはすべて公開。中身を確認でき、自社の要件に合わせて自由に改変・配布できます。' },
+  { icon: 'lock', t: 'Vault による secret 管理', d: 'API キーや OAuth Secret は暗号化して保管。Worker はステートレスで認証情報を保持しません。' },
+  { icon: 'scale', t: 'Anthropic 利用規約に準拠', d: 'データの取り扱いは Anthropic の規約に従い設計。必要なフィールドだけを送信します。' },
+];
+---
+
+<section id="why">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow"><span class="dot"></span>WHY COWORK AGENT</span>
+      <h2>なぜ、Cowork Agent なのか</h2>
+      <p>「話せる AI」はいくつもあります。業務で本当に任せられるかは、その下の設計で決まります。</p>
+    </div>
+    <div class="diff-grid">
+      {cards.map((c, i) => (
+        <div class="diff-card reveal" style={`transition-delay:${(i % 2) * 60}ms;`}>
+          <span class="diff-ic"><Icon name={c.icon} size={18} /></span>
+          <div>
+            <h3>{c.t}</h3>
+            <p>{c.d}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

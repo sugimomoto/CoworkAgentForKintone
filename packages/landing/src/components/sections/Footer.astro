@@ -1,0 +1,53 @@
+---
+import Icon from '../Icon.astro';
+import Wordmark from '../Wordmark.astro';
+---
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <Wordmark size={28} />
+        <p class="lead">kintone のサイドに常駐し、仕事を任せられる AI コワーカー。OSS / MIT License。</p>
+        <a
+          href="https://github.com/sugimomoto/CoworkAgentForKintone"
+          target="_blank"
+          rel="noopener"
+          class="nav-gh ghbtn"
+        >
+          <Icon name="github" size={15} /> スターをつける ★
+        </a>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#concept">特徴</a></li>
+          <li><a href="#usecases">使い方</a></li>
+          <li><a href="#wedge">カスタマイズ</a></li>
+          <li><a href="#setup">導入</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Help</h4>
+        <ul>
+          <li><a href="help/user/">業務ユーザーヘルプ</a></li>
+          <li><a href="help/admin/">管理者ヘルプ</a></li>
+          <li><a href="help/admin/#install">インストール手順</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Open Source</h4>
+        <ul>
+          <li><a href="https://github.com/sugimomoto/CoworkAgentForKintone" target="_blank" rel="noopener">GitHub リポジトリ</a></li>
+          <li><a href="https://github.com/sugimomoto/CoworkAgentForKintone/issues" target="_blank" rel="noopener">Issues / バグ報告</a></li>
+          <li><a href="https://github.com/sugimomoto/CoworkAgentForKintone/releases" target="_blank" rel="noopener">Releases</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span class="mit">MIT License · © 2026 Cowork Agent contributors</span>
+      <span>Built for kintone · Powered by Claude Managed Agents</span>
+    </div>
+  </div>
+</footer>

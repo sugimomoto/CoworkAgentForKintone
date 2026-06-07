@@ -1,0 +1,133 @@
+---
+import Icon from '../Icon.astro';
+import ChatPanel from '../chat/ChatPanel.astro';
+import type { SceneStep } from '../chat/scene';
+import Greet from '../chat/Greet.astro';
+import UserMsg from '../chat/UserMsg.astro';
+import ToolCall from '../chat/ToolCall.astro';
+import ProgressCard from '../chat/ProgressCard.astro';
+import ArtifactCard from '../chat/ArtifactCard.astro';
+import Thinking from '../chat/Thinking.astro';
+
+const heroScene: SceneStep[] = [
+  { show: ['greet'], hold: 1100 },
+  { type: '今月の受注を担当者別のダッシュボードにして', cps: 40 },
+  { clear: true },
+  { show: ['greet', 'user'], hold: 650 },
+  { show: ['greet', 'user', 'think'], hold: 950 },
+  { show: ['greet', 'user', 'tool'], hold: 1000 },
+  { show: ['greet', 'user', 'tool', 'prog'], hold: 1200 },
+  { show: ['greet', 'user', 'tool', 'art'], hold: 4200 },
+];
+
+const bars = [
+  { name: '田中', v: 348, disp: '34.8' },
+  { name: '佐藤', v: 274, disp: '27.4' },
+  { name: '山田', v: 216, disp: '21.6' },
+  { name: '中村', v: 146, disp: '14.6' },
+  { name: '鈴木', v: 98, disp: '9.8' },
+];
+const maxV = 348;
+const chartH = 112;
+---
+
+<section class="hero" id="top">
+  <div class="container">
+    <div class="hero-grid">
+      <div>
+        <span class="hero-eyebrow"><span class="tag">OSS</span>kintone プラグイン · MIT License</span>
+        <h1 class="headline">
+          kintone の隣に、<br />いつでも仕事を<br />お願いできる<br /><span class="accent">AI コワーカー</span>を。
+        </h1>
+        <p class="hero-sub">
+          レコードの検索・集計はもちろん、更新・転記やレポート作成、カスタマイズ JS の生成まで。
+          サイドパネルに常駐する Cowork Agent for kintone に、ふだんの言葉で頼むだけ。
+        </p>
+        <div class="hero-cta">
+          <a
+            href="https://github.com/sugimomoto/CoworkAgentForKintone"
+            target="_blank"
+            rel="noopener"
+            class="btn btn-ink btn-lg"
+          >
+            <Icon name="github" size={17} /> GitHub で見る
+          </a>
+          <a href="#setup" class="btn btn-ghost btn-lg">
+            <Icon name="download" size={16} /> インストール手順
+          </a>
+        </div>
+        <div class="hero-meta">
+          <div class="hero-meta-item"><span class="ck"><Icon name="check" size={14} /></span>kintone 標準 API で動作</div>
+          <div class="hero-meta-item"><span class="ck"><Icon name="check" size={14} /></span>破壊的操作は必ず承認</div>
+          <div class="hero-meta-item"><span class="ck"><Icon name="check" size={14} /></span>API キー持ち込みで本体無償</div>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="mock-win">
+          <div class="mock-win-bar">
+            <div class="mock-win-dots"><i></i><i></i><i></i></div>
+            <span class="mock-win-kind">HTML</span>
+            <span class="mock-win-title">受注ダッシュボード</span>
+            <span class="sp"></span>
+            <div class="mw-tabs"><span class="on">プレビュー</span><span>ソース</span></div>
+          </div>
+          <div class="sbs">
+            <ChatPanel solo={false} bottom scene={heroScene}>
+              <Greet
+                id="greet"
+                hello="どんな作業をお手伝いしましょうか？"
+                sub="検索・集計・レポート作成まで。"
+                actions={['今月の受注状況を教えて']}
+              />
+              <UserMsg id="user">今月の受注を担当者別のダッシュボードにして</UserMsg>
+              <Thinking id="think" />
+              <ToolCall
+                id="tool"
+                tool="get_records"
+                label="案件管理を集計"
+                detail="受注日=今月 → 18件 · 担当者5名"
+                items={['受注金額', '担当者']}
+              />
+              <ProgressCard id="prog" title="ダッシュボードを生成中…" pct={84} />
+              <ArtifactCard
+                id="art"
+                kind="HTML"
+                title="受注ダッシュボード"
+                summary="KPI 3件 + 担当者別グラフ · 表示中 →"
+              />
+            </ChatPanel>
+
+            <div class="art">
+              <div class="art-head">
+                <div>
+                  <div class="art-title">受注ダッシュボード</div>
+                  <div class="art-sub">今月 · 全社 · 18件の受注</div>
+                </div>
+                <span class="art-badge">● 自動生成</span>
+              </div>
+              <div class="art-kpis">
+                <div class="kpi"><div class="l">受注合計</div><div class="v">¥98.4<span style="font-size:11px;font-weight:600;">M</span></div><div class="d">↑ 12% 前月比</div></div>
+                <div class="kpi"><div class="l">平均単価</div><div class="v">¥5.5<span style="font-size:11px;font-weight:600;">M</span></div><div class="d">↑ 4%</div></div>
+                <div class="kpi"><div class="l">受注率</div><div class="v">64<span style="font-size:11px;font-weight:600;">%</span></div><div class="d flat">— 横ばい</div></div>
+              </div>
+              <div class="art-chartcap">担当者別 受注金額（百万円）</div>
+              <div class="chart">
+                {bars.map((b, i) => (
+                  <div class:list={['col', { top: i === 0 }]}>
+                    <div class="cval">{b.disp}</div>
+                    <div class="bwrap"><div class="bar" style={`height:${Math.round((b.v / maxV) * chartH)}px;`}></div></div>
+                    <div class="clab">{b.name}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="hero-float" style="top:-3%;left:-4%;">
+          <span class="pulse"></span><span>kintone 接続中 · Cowork Agent</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

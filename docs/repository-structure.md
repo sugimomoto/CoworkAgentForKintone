@@ -1,8 +1,8 @@
 # リポジトリ構造定義書 (Repository Structure)
 
 **プロダクト名**: Cowork Agent for kintone
-**バージョン**: 0.2 (Phase 1b-3)
-**最終更新日**: 2026-04-26
+**バージョン**: 0.3 (V1 wedge MVP — Settings View / Skills / Artifact renderers 追加)
+**最終更新日**: 2026-06-07
 
 ---
 
@@ -81,11 +81,23 @@ packages/plugin/
 │   │   ├── components/
 │   │   │   ├── Banner.tsx                # 上部通知 (auth エラー / OAuth 失効 / Session 終了)
 │   │   │   ├── ConnectKintoneButton.tsx  # OAuth 連携トリガー (初回バインド時)
-│   │   │   ├── Composer.tsx              # メッセージ入力欄 (auto-grow + キャンセル)
-│   │   │   ├── Header.tsx
+│   │   │   ├── Composer.tsx              # メッセージ入力欄 (auto-grow + キャンセル + quickActions ボタン行)
+│   │   │   ├── Header.tsx                # 2 段構成 (CA brand / Memory / ⚙ / × + AgentPicker pill)
 │   │   │   ├── MessageList.tsx           # tool / agent / user / thinking 振分け
 │   │   │   ├── MessageItem/              # AgentMessage (Markdown) / UserMessage / ThinkingDots / ToolCardMessage
 │   │   │   └── WelcomeMessage.tsx
+│   │   ├── settings/                     # Settings View (admin 専用 2-pane、Artifact ペインを置き換え)
+│   │   │   ├── SettingsView.tsx          # ルート (左 nav + 右 detail)
+│   │   │   ├── AgentsListPane.tsx        # 🤖 Built-in 3 variant + Custom Agent 一覧 + 公開トグル
+│   │   │   ├── AgentDetailModal.tsx      # name / icon / system prompt / skills / tools / quickActions 編集 (createFromProposal モード対応)
+│   │   │   ├── SkillsPane.tsx            # 🧠 ビルトイン Skill 同期 + Custom Skill 追加
+│   │   │   ├── SkillAddModal.tsx         # 📤 ファイル / 📝 直接入力 の 2 タブ
+│   │   │   └── MCPPane.tsx               # 🔌 V2 用 placeholder
+│   │   ├── artifacts/                    # Artifact ペイン基盤
+│   │   │   ├── ArtifactPane.tsx          # ルート (artifact kind から renderer 選択)
+│   │   │   └── renderers/                # artifact kind 別 renderer
+│   │   │       ├── KintoneCustomizeBundle.tsx  # FileTree + Monaco + WorkflowFooter (preview/apply/rollback)
+│   │   │       └── AgentDraft.tsx              # propose_agent の結果を編集可能フォームで描画
 │   │   └── hooks/
 │   │       ├── useSession.ts             # Agent + Environment bootstrap
 │   │       ├── useUserBinding.ts         # OAuth flow + Vault Credential 解決
@@ -97,14 +109,21 @@ packages/plugin/
 │   │   ├── index.tsx
 │   │   └── ConfigScreen.tsx
 │   ├── core/                        # UI 非依存のロジック層
-│   │   ├── managed-agents/          # Anthropic API (client / resources / events / types / eventInterpreter)
+│   │   ├── managed-agents/          # Anthropic API (client / resources / events / types / eventInterpreter / Custom Tool runner: propose_agent / agentDetailApi)
 │   │   ├── kintone/                 # kintone JS API ラッパ (proxyTransport / pluginConfig / user / setProxyConfigAsync)
 │   │   ├── oauth/                   # PKCE / popup / tokenExchange / credentialsUpsertClient
 │   │   ├── cloudflare/              # Worker デプロイ client + multipart 構築
-│   │   ├── bootstrap/               # resolveAgent / resolveEnvironment / resolveSession / resolveVault
-│   │   ├── constants.ts             # METADATA / DEFAULT_KINTONE_OAUTH_SCOPE / CLOUDFLARE_WORKER_SCRIPT_NAME 等
+│   │   ├── bootstrap/               # resolveAgent / resolveEnvironment / resolveSession / resolveVault + agentRecord (Custom Agent 永続化) + agentTypes (variantGroup / quickActions / archived 等)
+│   │   ├── constants.ts             # METADATA / DEFAULT_KINTONE_OAUTH_SCOPE / CLOUDFLARE_WORKER_SCRIPT_NAME / BUILTIN_AGENT_SPECS 等
 │   │   ├── format.ts                # 日付フォーマット
 │   │   └── utils.ts                 # sleep / toErrorMessage / joinUrl / buildMcpServerUrl
+│   ├── skills/                      # ビルトイン Skill ソース (build 時に skills-bundle.ts へ embed)
+│   │   ├── kintone-customize-js/
+│   │   │   ├── SKILL.md             # frontmatter: name / description / version
+│   │   │   ├── resources/           # 参考ドキュメント (任意)
+│   │   │   └── scripts/             # 実行可能スクリプト (任意)
+│   │   └── kintone-plugin-development/
+│   │       └── SKILL.md
 │   ├── store/
 │   │   └── chatStore.ts             # Zustand
 │   ├── styles/
@@ -114,7 +133,8 @@ packages/plugin/
 │   ├── test/
 │   │   └── fixtures.ts              # 共通テストフィクスチャ
 │   └── generated/                   # build 時自動生成 (gitignore)
-│       └── worker-bundle.ts         # Worker JS の文字列定数 + version
+│       ├── worker-bundle.ts         # Worker JS の文字列定数 + version
+│       └── skills-bundle.ts         # ビルトイン Skill の zip を Base64 化して embed
 ├── e2e/                             # Playwright spec
 │   ├── auth.setup.ts                # kintone ログイン (storageState 保存)
 │   ├── credential-bind.setup.ts     # OAuth flow を popup 自動化で完走
@@ -208,8 +228,11 @@ packages/kintone-mcp/
 ### 5.2 src/ 配下の責務
 
 - **`src/desktop/`**: レコード一覧画面で動く UI (React コンポーネント + フック)
+  - **`desktop/settings/`**: admin 専用 Settings View (Artifact ペインを置き換える 2-pane)
+  - **`desktop/artifacts/renderers/`**: artifact kind 別の renderer (kintone-customize-bundle / agent-draft 等)
 - **`src/config/`**: プラグイン設定画面で動く UI
-- **`src/core/`**: UI 非依存のロジック (HTTP / OAuth / kintone API / Anthropic API / 状態解決)
+- **`src/core/`**: UI 非依存のロジック (HTTP / OAuth / kintone API / Anthropic API / 状態解決 / Custom Agent 永続化 / Custom Tool runner)
+- **`src/skills/`**: ビルトイン Skill のソース。ビルド時に zip + Base64 化して `generated/skills-bundle.ts` に埋め込まれる
 - **`src/store/`**: Zustand
 - **`src/types/`**: アンビエント型定義 (グローバル `kintone` 等)
 - **`src/test/`**: vitest 用フィクスチャ (本体コードからの参照禁止)

@@ -1,0 +1,17 @@
+{
+  "name": "@cowork-agent/landing",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Cowork Agent for kintone — landing page (GitHub Pages, Astro)",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^4.16.18"
+  }
+}

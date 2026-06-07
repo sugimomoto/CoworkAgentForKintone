@@ -1,0 +1,54 @@
+---
+interface Item {
+  q: string;
+  a: string;
+}
+
+const items: Item[] = [
+  {
+    q: '料金はかかりますか？',
+    a: 'プラグイン本体は OSS（MIT License）で<b>無償</b>です。AI の実行には Anthropic の API キーをお客様自身で用意（持ち込み）いただきます。費用は実際の利用量に応じた Anthropic の API 料金のみです。',
+  },
+  {
+    q: '対応している kintone のプランは？',
+    a: 'プラグインを利用できる<b>スタンダードコース</b>に対応しています。プラグイン機能のないライトコースには現時点で未対応です。',
+  },
+  {
+    q: 'データのセキュリティは大丈夫ですか？',
+    a: '仲介する Cloudflare Worker は<b>ステートレス</b>で、レコードを保持しません。API キー等の認証情報は <code>Vault</code> に暗号化保存されます。エージェントには必要なフィールドのみを送信します。',
+  },
+  {
+    q: '間違った操作をしてしまわない？',
+    a: '更新・削除などの破壊的な操作は<b>必ず承認カード</b>を挟みます。対象アプリ・件数・取消可否を確認し、「承認して実行」を押すまで、実際の変更は一切行われません。',
+  },
+  {
+    q: 'プログラミングの知識は必要？',
+    a: '業務ユーザーには<b>一切不要</b>です。ふだんの言葉で話しかけるだけで使えます。カスタマイズ JS 生成などの高度な機能は、情シス・カスタマイザー向けのオプションです。',
+  },
+  {
+    q: 'ライセンスは？ 商用利用できる？',
+    a: '<code>MIT License</code> です。商用・非商用を問わず、改変・再配布を含めて自由にご利用いただけます。',
+  },
+  {
+    q: '導入にどれくらい時間がかかる？',
+    a: '管理者のセットアップは <b>5 ステップ</b>。追加サーバーの構築や CLI 操作は不要で、すべてブラウザの設定画面から完結します。',
+  },
+];
+---
+
+<section id="faq" class="tight">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow"><span class="dot"></span>FAQ</span>
+      <h2>よくある質問</h2>
+    </div>
+    <div class="faq-list reveal">
+      {items.map((it, i) => (
+        <details class="faq" open={i === 0}>
+          <summary>{it.q}</summary>
+          <div class="a" set:html={it.a} />
+        </details>
+      ))}
+    </div>
+  </div>
+</section>

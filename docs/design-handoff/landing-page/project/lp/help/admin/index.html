@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>管理者ガイド — Cowork Agent for kintone</title>
+<meta name="description" content="Cowork Agent for kintone の管理者向けセットアップガイド。インストール手順、セキュリティ、Agent / Skill 管理、トラブルシューティング。" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../help.css" />
+</head>
+<body>
+<header class="dochd">
+  <div class="dochd-in">
+    <a class="brand" href="../../index.html">
+      <svg width="28" height="28" viewBox="0 0 36 36" fill="none" aria-label="Cowork Agent"><rect x="2" y="6" width="22" height="22" rx="6" fill="#231200"/><rect x="12" y="8" width="22" height="22" rx="6" fill="#0d9488"/><path d="M23 17 L24.4 19.6 L27.2 20 L25.1 22 L25.6 24.8 L23 23.4 L20.4 24.8 L20.9 22 L18.8 20 L21.6 19.6 Z" fill="#fff"/></svg>
+      <span><span class="wm">Cowork <span class="a">Agent</span></span><br/><span class="sub">for kintone</span></span>
+    </a>
+    <span class="spacer"></span>
+    <span class="crumb">Docs / 管理者ガイド</span>
+    <a class="back" href="../../index.html">← サイトに戻る</a>
+  </div>
+</header>
+
+<div class="docwrap">
+  <nav class="toc">
+    <div class="toc-label">管理者ガイド</div>
+    <ul>
+      <li><a href="#intro" class="on">はじめに</a></li>
+      <li><a href="#requirements">動作環境</a></li>
+      <li><a href="#install">インストール（4 ステップ）</a></li>
+      <li><a href="#agents">Agent / Skill 管理</a></li>
+      <li><a href="#security">セキュリティ</a></li>
+      <li><a href="#troubleshooting">トラブルシューティング</a></li>
+    </ul>
+  </nav>
+
+  <main class="doc">
+    <span class="eyebrow">FOR ADMINS · 情シス</span>
+    <h1 id="intro">管理者ガイド</h1>
+    <p class="lead">Cowork Agent for kintone を自社の kintone に導入するための手順書です。すべてブラウザの設定画面から完結し、追加サーバーの構築や CLI 操作は必要ありません。</p>
+    <div class="callout tip"><span class="ic">✓</span><div class="body">所要時間の目安は <b>約 5 分</b>。Anthropic の API キーと、kintone の管理者権限があれば始められます。</div></div>
+
+    <h2 id="requirements">動作環境</h2>
+    <table class="doc-t">
+      <tr><th>項目</th><th>要件</th></tr>
+      <tr><td>kintone プラン</td><td>スタンダードコース（プラグイン機能が利用できること）。ライトコースは未対応。</td></tr>
+      <tr><td>権限</td><td>kintone の <code>cybozu.com 共通管理者</code> または アプリ管理権限</td></tr>
+      <tr><td>API キー</td><td>Anthropic Claude の API キー（持ち込み。本体は無償）</td></tr>
+      <tr><td>ブラウザ</td><td>最新の Chrome / Edge / Safari / Firefox</td></tr>
+      <tr><td>外部接続</td><td>Cloudflare Workers（MCP サーバー）への HTTPS 通信</td></tr>
+    </table>
+
+    <h2 id="install">インストール（4 ステップ）</h2>
+    <p>設定画面のウィザードに沿って、次の 4 つを順に登録します。各ステップは前のステップが完了すると次に進めます。</p>
+    <ol class="steps-doc">
+      <li>
+        <h3>プラグインをインストール</h3>
+        <p>GitHub Releases から最新の <code>.zip</code> をダウンロードし、kintone の［システム設定 › プラグイン］にアップロードします。署名が検証され、対象アプリで有効化できるようになります。</p>
+        <pre class="code"><span class="c"># 最新リリースを取得（GitHub CLI の例）</span>
+<span class="g">$</span> gh release download --repo your-org/cowork-agent-kintone --pattern '*.zip'</pre>
+      </li>
+      <li>
+        <h3>Cloudflare Worker をデプロイ</h3>
+        <p>プラグイン設定画面の「Worker をデプロイ」ボタンを押すと、kintone への REST API アクセスを仲介する MCP サーバーがブラウザだけでデプロイされます。CLI は不要です。デプロイ先 URL が自動で設定欄に入力されます。</p>
+        <div class="imgph"><span class="lab">screenshot: Worker デプロイ画面</span><span style="font-size:12px">Plugin Config › Worker Deploy</span></div>
+      </li>
+      <li>
+        <h3>Anthropic API Key を登録</h3>
+        <p>お手持ちの Anthropic API キー（<code>sk-ant-…</code>）を設定欄に貼り付けます。キーは Worker 側の <strong>Vault</strong> に暗号化して保存され、kintone やブラウザには平文で残りません。</p>
+        <div class="callout warn"><span class="ic">!</span><div class="body">API キーは Anthropic Console で発行します。利用量に応じた課金が Anthropic 側で発生します。レート上限・予算アラートの設定を推奨します。</div></div>
+      </li>
+      <li>
+        <h3>kintone OAuth クライアントを登録</h3>
+        <p>kintone の［OAuth クライアント］で新規クライアントを作成し、表示された <code>Client ID</code> / <code>Client Secret</code> をプラグイン設定に登録します。「接続をテスト」が成功すれば導入完了です。</p>
+      </li>
+    </ol>
+    <div class="callout tip"><span class="ic">✓</span><div class="body">完了後、対象アプリのレコード一覧を開くと、右側にサイドパネルが表示されます。業務ユーザーはそのまま <a href="../user/index.html">業務ユーザーガイド</a> に沿って使い始められます。</div></div>
+
+    <h2 id="agents">Agent / Skill 管理</h2>
+    <p>エージェントの振る舞いは、設定画面の「Agent」「Skill」から調整できます。</p>
+    <ul class="bullets">
+      <li><strong>Agent プロンプト</strong>：会社特有の用語・アプリ構成・禁止事項などをシステムプロンプトに追記できます。</li>
+      <li><strong>Skill（クイックアクション）</strong>：定型業務をプリセット化し、チーム全体に配布できます。Composer 下のボタンとして表示されます。</li>
+      <li><strong>権限スコープ</strong>：エージェントが操作できるアプリ・操作種別（参照 / 作成 / 更新 / 削除）を制限できます。破壊的操作は常に HITL 承認が必須です。</li>
+    </ul>
+
+    <h2 id="security">セキュリティ</h2>
+    <ul class="bullets">
+      <li><strong>ステートレスな Worker</strong>：MCP サーバーはレコード本体を保持しません。リクエストごとに必要なデータのみを仲介します。</li>
+      <li><strong>Vault による secret 管理</strong>：API キー・OAuth Secret は暗号化保存され、設定画面で再表示されません。</li>
+      <li><strong>最小権限の送信</strong>：エージェントには、タスクに必要なフィールドのみが渡されます。</li>
+      <li><strong>HITL 承認</strong>：更新・削除は人の承認を経るまで実行されません。</li>
+      <li><strong>監査ログ</strong>：会話とツール実行は履歴として保存され、後から追跡できます。</li>
+    </ul>
+
+    <h2 id="troubleshooting">トラブルシューティング</h2>
+    <div class="faq-doc">
+      <details open><summary>サイドパネルが表示されない</summary><div class="a">対象アプリでプラグインが有効化されているか、レコード一覧画面を開いているかを確認してください。ブラウザのキャッシュ削除と再読み込みも有効です。</div></details>
+      <details><summary>「接続をテスト」が失敗する</summary><div class="a">OAuth クライアントの Client ID / Secret、および Worker のデプロイ先 URL が正しいか確認してください。kintone 側の OAuth クライアントが有効化されている必要があります。</div></details>
+      <details><summary>エージェントが応答しない / エラーになる</summary><div class="a">Anthropic API キーの有効性とレート上限を確認してください。Console で利用状況とエラーログを確認できます。</div></details>
+      <details><summary>特定のアプリだけ操作できない</summary><div class="a">Agent の権限スコープと、kintone 側のアプリ・フィールドのアクセス権を確認してください。OAuth クライアントに必要なスコープが付与されている必要があります。</div></details>
+    </div>
+
+    <div class="pagenav">
+      <a href="../user/index.html"><div class="k">関連ガイド →</div><div class="t">業務ユーザーガイド</div></a>
+      <a href="../../index.html#faq"><div class="k">よくある質問 →</div><div class="t">FAQ（製品サイト）</div></a>
+    </div>
+
+    <div class="docfoot">
+      <span class="mono">MIT License · © 2026 Cowork Agent contributors</span>
+      <a href="https://github.com" target="_blank" rel="noopener">GitHub で Issue を報告</a>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('.toc a'));
+  var secs=links.map(function(a){return document.querySelector(a.getAttribute('href'));});
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      if(e.isIntersecting){
+        var id='#'+e.target.id;
+        links.forEach(function(a){a.classList.toggle('on',a.getAttribute('href')===id);});
+      }
+    });
+  },{rootMargin:'-72px 0px -70% 0px'});
+  secs.forEach(function(s){if(s)io.observe(s);});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+---
+import Icon from '../Icon.astro';
+
+interface Props {
+  hello: string;
+  sub?: string;
+  actions?: string[];
+  id?: string;
+}
+const { hello, sub, actions, id } = Astro.props;
+---
+
+<div class="msg m-greet" data-msg-id={id}>
+  <div class="hello">{hello}</div>
+  {sub && <div class="sub">{sub}</div>}
+  {actions && actions.length > 0 && (
+    <div class="m-actions">
+      {actions.map((a) => (
+        <div class="m-action"><span class="arr"><Icon name="arrow" size={12} /></span>{a}</div>
+      ))}
+    </div>
+  )}
+</div>

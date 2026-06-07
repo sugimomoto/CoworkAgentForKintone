@@ -1,0 +1,17 @@
+---
+interface Props {
+  title: string;
+  pct: number;
+  id?: string;
+}
+const { title, pct, id } = Astro.props;
+---
+
+<div class="msg m-prog" data-msg-id={id}>
+  <div class="top">
+    <span class="spin"></span>
+    <span class="pt">{title}</span>
+    <span class="pct">{pct}%</span>
+  </div>
+  <div class="track"><span class="fill" style={`width:${pct}%;`}></span></div>
+</div>

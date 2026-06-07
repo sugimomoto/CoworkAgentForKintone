@@ -1,0 +1,40 @@
+---
+interface Row {
+  ini: string;
+  name: string;
+  val: number;
+  disp: string;
+  color: string;
+}
+interface Props {
+  title: string;
+  sub?: string;
+  rows: Row[];
+  followups?: string[];
+  id?: string;
+}
+const { title, sub, rows, followups, id } = Astro.props;
+const max = Math.max(...rows.map((r) => r.val));
+---
+
+<div class="msg m-result" data-msg-id={id}>
+  <div class="rh">
+    <div class="t">{title}</div>
+    {sub && <div class="s">{sub}</div>}
+  </div>
+  <div class="rows">
+    {rows.map((r) => (
+      <div class="row">
+        <span class="ini" style={`background:${r.color};`}>{r.ini}</span>
+        <span class="rn">{r.name}</span>
+        <span class="rbartrack"><span class="rbar" style={`width:${Math.round((r.val / max) * 100)}%;`}></span></span>
+        <span class="rv">{r.disp}</span>
+      </div>
+    ))}
+  </div>
+  {followups && followups.length > 0 && (
+    <div class="followups">
+      {followups.map((f) => <span class="fu">{f}</span>)}
+    </div>
+  )}
+</div>

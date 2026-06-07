@@ -1,0 +1,21 @@
+---
+import Icon from '../Icon.astro';
+
+interface Props {
+  kind: string;
+  title: string;
+  summary: string;
+  id?: string;
+}
+const { kind, title, summary, id } = Astro.props;
+---
+
+<div class="msg m-artifact" data-msg-id={id}>
+  <span class="ai"><Icon name="doc" size={16} /></span>
+  <div class="ab">
+    <div class="ak">ARTIFACT · {kind}</div>
+    <div class="at">{title}</div>
+    <div class="asum">{summary}</div>
+  </div>
+  <span class="aopen">開く <Icon name="arrow" size={11} /></span>
+</div>

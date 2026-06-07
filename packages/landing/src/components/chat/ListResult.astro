@@ -1,0 +1,31 @@
+---
+interface Row {
+  pill: string;
+  tone: 'high' | 'mid' | 'soon' | 'over';
+  text: string;
+  meta: string;
+}
+interface Props {
+  title: string;
+  sub?: string;
+  rows: Row[];
+  id?: string;
+}
+const { title, sub, rows, id } = Astro.props;
+---
+
+<div class="msg m-result" data-msg-id={id}>
+  <div class="rh">
+    <div class="t">{title}</div>
+    {sub && <div class="s">{sub}</div>}
+  </div>
+  <div class="rows">
+    {rows.map((r) => (
+      <div class="row">
+        <span class:list={['prio', r.tone]}>{r.pill}</span>
+        <span class="rn">{r.text}</span>
+        <span class="rmeta">{r.meta}</span>
+      </div>
+    ))}
+  </div>
+</div>

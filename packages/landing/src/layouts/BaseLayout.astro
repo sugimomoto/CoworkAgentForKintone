@@ -1,0 +1,54 @@
+---
+import '../styles/styles.css';
+import '../styles/sections.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** path of the current page, relative to site root, e.g. '/' or '/help/admin/' */
+  canonical?: string;
+}
+
+const {
+  title = 'Cowork Agent for kintone — kintone の隣に、AI コワーカーを。',
+  description = 'kintone のレコード一覧に常駐する AI コワーカー。自然言語で検索・集計・更新、カスタマイズ JS 生成まで。OSS / MIT License の kintone プラグイン。',
+  canonical,
+} = Astro.props;
+
+// Compose canonical URL as site + base + relative path.
+// `canonical` is given relative to the site root (e.g. '/' or '/help/admin/').
+const baseHref = import.meta.env.BASE_URL.replace(/\/$/, '');
+const canonicalSuffix = (canonical ?? '/').replace(/^\//, '');
+const ogUrl = Astro.site
+  ? new URL(`${baseHref}/${canonicalSuffix}`, Astro.site).toString()
+  : undefined;
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    {ogUrl && <meta property="og:url" content={ogUrl} />}
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

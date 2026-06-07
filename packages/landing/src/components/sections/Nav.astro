@@ -1,0 +1,25 @@
+---
+import Icon from '../Icon.astro';
+import Wordmark from '../Wordmark.astro';
+---
+
+<nav class="nav" id="nav">
+  <div class="nav-inner">
+    <a href="#top" style="text-decoration:none;"><Wordmark size={28} /></a>
+    <div class="nav-links">
+      <a href="#concept">特徴</a>
+      <a href="#roles">使い方</a>
+      <a href="#wedge">カスタマイズ</a>
+      <a href="#setup">導入</a>
+      <a href="#faq">FAQ</a>
+      <a
+        href="https://github.com/sugimomoto/CoworkAgentForKintone"
+        class="nav-gh"
+        target="_blank"
+        rel="noopener"
+      >
+        <Icon name="github" size={15} /> GitHub <span class="star">★</span>
+      </a>
+    </div>
+  </div>
+</nav>

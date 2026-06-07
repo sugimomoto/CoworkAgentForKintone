@@ -1,0 +1,95 @@
+---
+import HelpLayout from '../../../layouts/HelpLayout.astro';
+
+const toc = [
+  { href: '#start', label: 'チャットの始め方' },
+  { href: '#quick', label: 'クイックアクション' },
+  { href: '#ask', label: '依頼の書き方（例）' },
+  { href: '#approve', label: '承認（HITL）の操作' },
+  { href: '#errors', label: 'うまくいかないとき' },
+];
+
+const baseHref = import.meta.env.BASE_URL.replace(/\/$/, '');
+const adminHelpHref = `${baseHref}/help/admin/`;
+const homeUsecasesHref = `${baseHref}/#usecases`;
+---
+
+<HelpLayout
+  title="業務ユーザーガイド — Cowork Agent for kintone"
+  description="Cowork Agent for kintone の業務ユーザー向けガイド。チャットの始め方、クイックアクション、依頼の書き方、承認の操作、エラー時の対処。"
+  canonical="/help/user/"
+  crumb="業務ユーザーガイド"
+  tocLabel="業務ユーザーガイド"
+  toc={toc}
+>
+  <span class="eyebrow">FOR EVERYONE · 業務ユーザー</span>
+  <h1 id="start">業務ユーザーガイド</h1>
+  <p class="lead">
+    プログラミングの知識はいりません。kintone のレコード一覧を開いて、右側のパネルにふだんの言葉で話しかけるだけ。このページでは基本的な使い方を紹介します。
+  </p>
+
+  <h3>3 ステップで使い始める</h3>
+  <ol class="steps-doc">
+    <li>
+      <h3>レコード一覧を開く</h3>
+      <p>使いたいアプリのレコード一覧画面を開くと、右側に「Cowork Agent for kintone」のサイドパネルが表示されます。表示されない場合は管理者にお問い合わせください。</p>
+    </li>
+    <li>
+      <h3>話しかける</h3>
+      <p>下の入力欄に、やりたいことをそのまま書きます。例：「今月の受注状況を教えて」。<code>⌘K</code> でどの画面からでも呼び出せます。</p>
+    </li>
+    <li>
+      <h3>結果を確認する</h3>
+      <p>Cowork Agent for kintone が kintone を調べて、件数や金額をカードで返します。続けて「グラフにして」などと頼むこともできます。</p>
+    </li>
+  </ol>
+  <div class="imgph"><span class="lab">screenshot: サイドパネルの基本画面</span><span style="font-size:12px">レコード一覧 + Cowork Agent パネル</span></div>
+
+  <h2 id="quick">クイックアクション</h2>
+  <p>入力欄の上には、よく使う操作がボタンとして並んでいます（管理者が設定）。クリックするだけで、毎回文章を打たなくても定型業務を実行できます。</p>
+  <ul class="bullets">
+    <li><strong>今日の新着</strong>：本日追加されたレコードをまとめて表示</li>
+    <li><strong>未対応を集計</strong>：ステータスが未対応の件数をカテゴリ別に集計</li>
+    <li><strong>週次レポート</strong>：今週のサマリーを Artifact として生成</li>
+  </ul>
+  <div class="callout tip"><span class="ic">✓</span><div class="body">よく使う依頼があれば、管理者に頼んで <b>クイックアクションに追加</b>してもらえます。チーム全員のボタンとして配布できます。</div></div>
+
+  <h2 id="ask">依頼の書き方（例）</h2>
+  <p>うまく伝えるコツは「<strong>いつ・誰の・どんな条件で・何をしたいか</strong>」を自然な言葉で書くことです。難しい記号や条件式は必要ありません。</p>
+  <table class="doc-t">
+    <tr><th>やりたいこと</th><th>こう話しかける</th></tr>
+    <tr><td>集計</td><td>「今月の受注金額を担当者ごとに合計して」</td></tr>
+    <tr><td>絞り込み</td><td>「未対応の問い合わせを、古い順に見せて」</td></tr>
+    <tr><td>レポート</td><td>「先月のサポート対応を要約してレポートにして」</td></tr>
+    <tr><td>転記</td><td>「この問い合わせを案件アプリに登録して」</td></tr>
+    <tr><td>更新</td><td>「完了した案件のステータスをアーカイブにして」</td></tr>
+  </table>
+  <div class="callout tip"><span class="ic">✓</span><div class="body">結果が思っていたものと違うときは、続けて「<b>担当者は田中さんだけで</b>」のように追加で伝えれば、会話の流れで絞り込めます。</div></div>
+
+  <h2 id="approve">承認（HITL）の操作</h2>
+  <p>レコードの<strong>更新・削除</strong>など、データが変わる操作は、いきなり実行されません。Cowork Agent for kintone が「これから何をするか」をカードで提示するので、内容を確認してから承認します。</p>
+  <ul class="bullets">
+    <li>カードには <strong>対象アプリ・件数・取り消せるかどうか</strong> が表示されます。</li>
+    <li>問題なければ <strong>「承認して実行」</strong> を押すと、はじめて kintone に反映されます。</li>
+    <li>やめたいときは <strong>「キャンセル」</strong>。何も変更されません。</li>
+  </ul>
+  <div class="callout warn"><span class="ic">!</span><div class="body">承認するまで、実際のデータは <b>一切変わりません</b>。内容に不安があるときは無理に承認せず、キャンセルして担当者に相談してください。</div></div>
+
+  <h2 id="errors">うまくいかないとき</h2>
+  <div class="faq-doc">
+    <details open><summary>パネルが出てこない</summary><div class="a">レコード一覧画面を開いているか確認してください。それでも表示されない場合は、管理者にプラグインが有効か確認を依頼してください。</div></details>
+    <details><summary>「うまく集計できませんでした」と出る</summary><div class="a">条件をもう少し具体的に伝えてみてください。例：「今月」「田中さんの」「受注ステータスの」など。アプリ名を添えると確実です。</div></details>
+    <details><summary>返事が遅い</summary><div class="a">大量のレコードを扱う集計は時間がかかることがあります。進捗バーが表示されている間は処理中です。別の作業をしながら待てます。</div></details>
+    <details><summary>間違った操作をしそうで怖い</summary><div class="a">更新・削除は必ず承認カードを挟みます。承認しない限りデータは変わりませんので、安心して試してください。</div></details>
+  </div>
+
+  <div class="pagenav">
+    <a href={adminHelpHref}><div class="k">管理者の方へ →</div><div class="t">管理者ガイド</div></a>
+    <a href={homeUsecasesHref}><div class="k">もっと見る →</div><div class="t">活用例（製品サイト）</div></a>
+  </div>
+
+  <div class="docfoot">
+    <span class="mono">MIT License · © 2026 Cowork Agent contributors</span>
+    <a href="https://github.com/sugimomoto/CoworkAgentForKintone/issues" target="_blank" rel="noopener">GitHub で質問する</a>
+  </div>
+</HelpLayout>

@@ -1,0 +1,30 @@
+---
+import Icon from '../Icon.astro';
+
+interface Row {
+  text: string;
+  meta: string;
+  warn?: boolean;
+}
+interface Props {
+  title: string;
+  rows: Row[];
+  id?: string;
+}
+const { title, rows, id } = Astro.props;
+---
+
+<div class="msg m-result" data-msg-id={id}>
+  <div class="rh"><div class="t">{title}</div></div>
+  <div class="rows">
+    {rows.map((r) => (
+      <div class="row">
+        <span class:list={['chk', r.warn ? 'warn' : 'ok']}>
+          {r.warn ? '!' : <Icon name="check" size={12} />}
+        </span>
+        <span class="rn">{r.text}</span>
+        <span class="rmeta">{r.meta}</span>
+      </div>
+    ))}
+  </div>
+</div>
