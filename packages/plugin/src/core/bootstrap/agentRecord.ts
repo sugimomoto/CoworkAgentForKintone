@@ -5,7 +5,12 @@
 // 不在 metadata を補完する。Custom (purpose=custom) は metadata 100% 依存。
 
 import { BUILTIN_AGENT_SPECS } from './builtInAgents';
-import { META_KEY_QUICK_ACTIONS } from './agentTypes';
+import {
+  META_KEY_ALLOWED_GROUPS,
+  META_KEY_ALLOWED_ORGANIZATIONS,
+  META_KEY_ALLOWED_USERS,
+  META_KEY_QUICK_ACTIONS,
+} from './agentTypes';
 
 import type {
   AgentColor,
@@ -52,6 +57,10 @@ export function agentToRecord(agent: Agent): AgentRecord {
       ...(spec.variantGroup ? { variantGroup: spec.variantGroup } : {}),
       source: 'builtin',
       quickActions: spec.quickActions,
+      // built-in は ACL を持たない (= 常に全員に見える)
+      allowedUsers: [],
+      allowedGroups: [],
+      allowedOrganizations: [],
     };
   }
 
@@ -72,15 +81,18 @@ export function agentToRecord(agent: Agent): AgentRecord {
       ? { variantGroup: 'customizer' as AgentVariantGroup }
       : {}),
     source: 'custom',
-    quickActions: parseQuickActions(meta[META_KEY_QUICK_ACTIONS]),
+    quickActions: parseJsonStringArray(meta[META_KEY_QUICK_ACTIONS]),
+    allowedUsers: parseJsonStringArray(meta[META_KEY_ALLOWED_USERS]),
+    allowedGroups: parseJsonStringArray(meta[META_KEY_ALLOWED_GROUPS]),
+    allowedOrganizations: parseJsonStringArray(meta[META_KEY_ALLOWED_ORGANIZATIONS]),
   };
 }
 
 /**
- * Anthropic Agent.metadata.quickActions (JSON 配列の文字列) を string[] に復元する。
- * 不正形式は無視して空配列を返す (UI 側は配列前提)。
+ * Anthropic Agent.metadata 上の JSON 配列文字列 (quickActions / allowedUsers 等) を
+ * string[] に復元する。不正形式・空文字列・配列以外は silent fallback で空配列を返す。
  */
-function parseQuickActions(raw: string | undefined): readonly string[] {
+function parseJsonStringArray(raw: string | undefined): readonly string[] {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -88,7 +100,7 @@ function parseQuickActions(raw: string | undefined): readonly string[] {
       return parsed.filter((s): s is string => typeof s === 'string' && s.length > 0);
     }
   } catch {
-    // 不正 JSON は黙って捨てる
+    /* 不正 JSON は黙って捨てる (= UI 起動を最優先) */
   }
   return [];
 }

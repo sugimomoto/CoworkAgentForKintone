@@ -27,8 +27,17 @@ import {
   type KintoneToolName,
 } from '../../core/bootstrap/builtInAgents';
 import { extractEnabledTools } from '../../core/managed-agents/buildAgentTools';
+import {
+  resolveAccessEntries,
+  searchGroups,
+  searchOrganizations,
+  searchUsers,
+} from '../../core/kintone/users';
+
+import { accessValueOf } from '../../core/access/accessControl';
 
 import { AgentIcon } from '../components/AgentIcon';
+import { AccessPicker } from './AccessPicker';
 
 import type {
   AgentColor,
@@ -549,6 +558,21 @@ function DraftForm({ draft, setDraft, availableSkills, source }: DraftFormProps)
         onChange={(next) => update('quickActions', next)}
       />
 
+      {/* 公開先 */}
+      <section>
+        <h3 className="mb-[8px] text-[11px] font-bold uppercase tracking-[0.5px] text-subtle">
+          公開先
+        </h3>
+        <AccessPicker
+          value={accessValueOf(draft)}
+          onChange={(next) => setDraft({ ...draft, ...next })}
+          searchUsers={searchUsers}
+          searchGroups={searchGroups}
+          searchOrganizations={searchOrganizations}
+          resolveEntries={resolveAccessEntries}
+        />
+      </section>
+
       {/* Skills */}
       <section>
         <h3 className="mb-[8px] text-[11px] font-bold uppercase tracking-[0.5px] text-subtle">
@@ -941,6 +965,9 @@ export function buildDraftFromAgent(
     customSkillIds,
     enabledTools,
     quickActions: [...record.quickActions],
+    allowedUsers: [...record.allowedUsers],
+    allowedGroups: [...record.allowedGroups],
+    allowedOrganizations: [...record.allowedOrganizations],
   };
 }
 
@@ -969,5 +996,9 @@ export function buildDraftFromSpec(
     customSkillIds,
     enabledTools: KINTONE_TOOL_NAMES.filter(spec.mcpToolFilter),
     quickActions: [...spec.quickActions],
+    // 「初期値に戻す」は全員公開に戻す (built-in は ACL を持たない)
+    allowedUsers: [],
+    allowedGroups: [],
+    allowedOrganizations: [],
   };
 }

@@ -67,6 +67,9 @@ const DRAFT: AgentEditDraft = {
   customSkillIds: ['sk_custom_1'],
   enabledTools: ['kintone-get-records', 'kintone-add-record'],
   quickActions: [],
+  allowedUsers: [],
+  allowedGroups: [],
+  allowedOrganizations: [],
 };
 
 describe('applyAgentEdit (#40)', () => {

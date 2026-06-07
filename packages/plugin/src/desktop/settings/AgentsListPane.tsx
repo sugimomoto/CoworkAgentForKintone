@@ -16,6 +16,11 @@ import {
   type KintoneToolName,
 } from '../../core/bootstrap/builtInAgents';
 import { SKILL_BUNDLES } from '../../generated/skills-bundle';
+import {
+  accessValueOf,
+  formatAccessFull,
+  formatAccessSummary,
+} from '../../core/access/accessControl';
 import { useChatStore } from '../../store/chatStore';
 
 import { AgentIcon } from '../components/AgentIcon';
@@ -162,6 +167,17 @@ function AgentRow({ agent, onToggleVisibility, onEdit }: AgentRowProps): JSX.Ele
             <span>スキル {counts.skillCount}</span>
             <span>ツール {counts.toolCount}</span>
             <span className="font-mono">{variantId}</span>
+            {(() => {
+              const access = accessValueOf(agent);
+              return (
+                <span
+                  data-testid={`agent-access-${agent.id}`}
+                  title={formatAccessFull(access)}
+                >
+                  公開先: {formatAccessSummary(access)}
+                </span>
+              );
+            })()}
           </div>
         )}
         {error && <div className="mt-[4px] text-[10.5px] text-warn">{error}</div>}

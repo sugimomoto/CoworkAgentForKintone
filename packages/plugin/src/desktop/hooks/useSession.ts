@@ -21,6 +21,12 @@ import { resolveBootstrapEnvironment } from '../../core/bootstrap/resolveEnviron
 import { createUserSession } from '../../core/bootstrap/resolveSession';
 import { getPluginConfig } from '../../core/kintone/pluginConfig';
 import { getCurrentSessionContext } from '../../core/kintone/user';
+import {
+  fetchCurrentUserGroups,
+  fetchCurrentUserOrganizations,
+} from '../../core/kintone/users';
+import { filterAgentsByAccess } from '../../core/access/filterAgentsByAccess';
+import { resolveIsAdmin } from '../../core/admin/useIsAdmin';
 import { resolveBundledSkillIds } from '../../core/skills/resolveBundledSkillIds';
 import { toErrorMessage } from '../../core/utils';
 import { useChatStore } from '../../store/chatStore';
@@ -57,6 +63,8 @@ export function useSession(): UseSessionResult {
   const setSessionId = useChatStore((s) => s.setSessionId);
   const setAgentId = useChatStore((s) => s.setAgentId);
   const setStatus = useChatStore((s) => s.setStatus);
+  const setCurrentUserAccess = useChatStore((s) => s.setCurrentUserAccess);
+  const setIsAdminResolved = useChatStore((s) => s.setIsAdminResolved);
   const resetConversation = useChatStore((s) => s.resetConversation);
   const startNewConversationStore = useChatStore((s) => s.startNewConversation);
   const setBuiltInAgents = useChatStore((s) => s.setBuiltInAgents);
@@ -96,9 +104,10 @@ export function useSession(): UseSessionResult {
         const envPromise = resolveBootstrapEnvironment();
 
         if (workerUrl) {
-          // built-in 3 variant + 既存 Custom Agent 一覧を並列で fetch。
-          // Custom Agent の取得に失敗してもアプリは起動できるよう catch して空配列に倒す。
-          const [set, env, customAgents] = await Promise.all([
+          // Anthropic 側 (built-in 3 + Custom Agent + env) と kintone 側 (現ユーザーの
+          // 所属 + admin 判定) は独立しているので 2 グループに分けて並列 await。
+          // どちらも失敗時は安全側 (空 / false) に倒して起動継続。
+          const anthropicSide = Promise.all([
             resolveBuiltInAgents({
               workerUrl,
               kintoneDomain: kctx.kintoneDomain,
@@ -109,6 +118,15 @@ export function useSession(): UseSessionResult {
               () => [],
             ),
           ]);
+          const kintoneSide = Promise.all([
+            fetchCurrentUserGroups(kctx.kintoneUserCode).catch(() => [] as string[]),
+            fetchCurrentUserOrganizations(kctx.kintoneUserCode).catch(
+              () => [] as string[],
+            ),
+            resolveIsAdmin().catch(() => false),
+          ]);
+          const [[set, env, customAgents], [userGroups, userOrgs, adminResolved]] =
+            await Promise.all([anthropicSide, kintoneSide]);
           if (cancelled) return;
           builtInSet = set;
           ctxRef.current = {
@@ -118,11 +136,19 @@ export function useSession(): UseSessionResult {
             kintoneUserCode: kctx.kintoneUserCode,
           };
 
-          // built-in 3 variant + 永続化済 Custom Agent を 1 つの records にして chatStore へ
-          const records = [
+          const accessCtx = {
+            code: kctx.kintoneUserCode,
+            groups: userGroups,
+            organizations: userOrgs,
+          };
+          setCurrentUserAccess(accessCtx);
+          setIsAdminResolved(adminResolved);
+
+          const allRecords = [
             ...toAgentRecords(set),
             ...customAgents.map((a) => customAgentToRecord(a)),
           ];
+          const records = filterAgentsByAccess(allRecords, accessCtx, adminResolved);
           setBuiltInAgents(records);
 
           // localStorage から復元 → 無ければ isDefault=true → それも無ければ最初の Agent
@@ -166,7 +192,7 @@ export function useSession(): UseSessionResult {
     return () => {
       cancelled = true;
     };
-  }, [setStatus, setAgentId, setBuiltInAgents, setCurrentAgentId]);
+  }, [setStatus, setAgentId, setBuiltInAgents, setCurrentAgentId, setCurrentUserAccess, setIsAdminResolved]);
 
   const ensureSession = useCallback(async (): Promise<string> => {
     const state = useChatStore.getState();
@@ -264,6 +290,10 @@ function agentToRecord(
     ...(spec.variantGroup ? { variantGroup: spec.variantGroup } : {}),
     source: 'builtin',
     quickActions: spec.quickActions,
+    // built-in は ACL を持たない (= 常に全員に見える)
+    allowedUsers: [],
+    allowedGroups: [],
+    allowedOrganizations: [],
   };
 }
 

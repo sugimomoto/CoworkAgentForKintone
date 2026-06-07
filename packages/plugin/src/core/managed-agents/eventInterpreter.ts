@@ -273,6 +273,10 @@ export function parseProposeAgentInput(
     customSkillIds: [],
     enabledTools,
     quickActions,
+    // Designer 経由の Custom Agent は全員公開で start (admin が AccessPicker で後から絞る)
+    allowedUsers: [],
+    allowedGroups: [],
+    allowedOrganizations: [],
   };
   return { draft, rationale, model };
 }

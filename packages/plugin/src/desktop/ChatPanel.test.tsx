@@ -284,6 +284,9 @@ describe('ChatPanel', () => {
           isDefault: false,
           source: 'builtin',
           quickActions: ['アプリ一覧を見せて', '案件を集計して'],
+          allowedUsers: [],
+          allowedGroups: [],
+          allowedOrganizations: [],
         },
         {
           id: 'agent_cust',
@@ -299,6 +302,9 @@ describe('ChatPanel', () => {
           variantGroup: 'customizer',
           source: 'builtin',
           quickActions: ['空フィールド保存ブロック JS', '色分け JS'],
+          allowedUsers: [],
+          allowedGroups: [],
+          allowedOrganizations: [],
         },
       ]);
       useChatStore.getState().setCurrentAgentId('agent_cust');
