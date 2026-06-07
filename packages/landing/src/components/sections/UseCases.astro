@@ -1,0 +1,218 @@
+---
+import Icon from '../Icon.astro';
+import ChatPanel from '../chat/ChatPanel.astro';
+import type { SceneStep } from '../chat/scene';
+import UserMsg from '../chat/UserMsg.astro';
+import ToolCall from '../chat/ToolCall.astro';
+import ResultCard from '../chat/ResultCard.astro';
+import ProgressCard from '../chat/ProgressCard.astro';
+import ArtifactCard from '../chat/ArtifactCard.astro';
+import PlanCard from '../chat/PlanCard.astro';
+import Thinking from '../chat/Thinking.astro';
+
+const scene1: SceneStep[] = [
+  { type: '未対応の問い合わせを、カテゴリ別に件数を出して', cps: 40 },
+  { clear: true },
+  { show: ['u'], hold: 600 },
+  { show: ['u', 'th'], hold: 950 },
+  { show: ['u', 't'], hold: 900 },
+  { show: ['u', 't', 'r'], hold: 4200 },
+];
+
+const scene2: SceneStep[] = [
+  { show: ['qa'], hold: 1400 },
+  { show: ['qa', 'u'], hold: 700 },
+  { show: ['qa', 'u', 'p'], hold: 1300 },
+  { show: ['qa', 'u', 'a'], hold: 4200 },
+];
+
+const scene3: SceneStep[] = [
+  { type: 'この問い合わせ #1042 を案件アプリに転記して', cps: 36 },
+  { clear: true },
+  { show: ['u'], hold: 600 },
+  { show: ['u', 'th'], hold: 850 },
+  { show: ['u', 't'], hold: 1000 },
+  { show: ['u', 't', 'x'], hold: 1100 },
+  { show: ['u', 't', 'x', 'p'], hold: 4200 },
+];
+
+const scene4: SceneStep[] = [
+  { type: 'ステータスが「完了」の問い合わせを一括でアーカイブして', cps: 34 },
+  { clear: true },
+  { show: ['u'], hold: 600 },
+  { show: ['u', 'th'], hold: 900 },
+  { show: ['u', 't'], hold: 1000 },
+  { show: ['u', 't', 'p'], hold: 4600 },
+];
+
+const rows1 = [
+  { ini: '請', name: '請求・支払い', val: 34, disp: '34件', color: '#0d9488' },
+  { ini: '技', name: '技術サポート', val: 27, disp: '27件', color: '#0a766c' },
+  { ini: '契', name: '契約・更新', val: 15, disp: '15件', color: '#b45309' },
+  { ini: '他', name: 'その他', val: 10, disp: '10件', color: '#6b5f4a' },
+];
+
+const quickActions = [
+  { ic: '◷', t: '今日の新着' },
+  { ic: '⚑', t: '未対応を集計' },
+  { ic: '◰', t: '週次レポート' },
+  { ic: '⟳', t: '重複を検出' },
+];
+---
+
+<section id="usecases">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow"><span class="dot"></span>CAPABILITIES · 機能</span>
+      <h2>役割は違っても、<span class="accent">やることは同じ</span>。</h2>
+      <p>検索・集計から成果物づくり、kintone への反映まで。どんな依頼も、この 4 つの流れで安全に進みます。</p>
+    </div>
+    <div class="uc-list">
+      <!-- UC1: 検索・集計 -->
+      <div class="uc reveal">
+        <div class="uc-text">
+          <span class="uc-kicker"><span class="n">1</span>検索・集計</span>
+          <h3>自然言語で、レコードを検索して集計する</h3>
+          <p>「未対応の問い合わせをカテゴリ別に」——条件を組み立てる必要も、CSV を落とす必要もありません。話した内容をそのまま集計してカードで返します。</p>
+          <div class="uc-feats">
+            <div class="uc-feat"><span class="ck"><Icon name="check" size={14} /></span><span><b>複合条件</b>も日本語のまま指定</span></div>
+            <div class="uc-feat"><span class="ck"><Icon name="check" size={14} /></span><span><b>その場で集計</b>件数・金額・カテゴリ別に</span></div>
+            <div class="uc-feat"><span class="ck"><Icon name="check" size={14} /></span><span><b>フォローアップ</b>グラフ化や比較もワンタップ</span></div>
+          </div>
+        </div>
+        <div class="uc-mock">
+          <ChatPanel solo bottom scene={scene1}>
+            <UserMsg id="u">未対応の問い合わせを、カテゴリ別に件数を出して</UserMsg>
+            <Thinking id="th" />
+            <ToolCall id="t" tool="search_records" label="問い合わせ管理を検索" detail="ステータス=未対応 → 86件 ヒット" />
+            <ResultCard
+              id="r"
+              title="カテゴリ別 未対応件数"
+              sub="86件 · 4カテゴリ"
+              rows={rows1}
+              followups={['担当者を割り当て', 'グラフにする']}
+            />
+          </ChatPanel>
+        </div>
+      </div>
+
+      <!-- UC2: クイックアクション -->
+      <div class="uc reverse reveal">
+        <div class="uc-text">
+          <span class="uc-kicker"><span class="n">2</span>クイックアクション</span>
+          <h3>よく使う操作は、ワンクリックのプリセットに</h3>
+          <p>チャット下のプリセットボタンから、定型業務をワンクリック実行。週次レポートや集計など、毎回同じ依頼を打ち込む手間がなくなります。</p>
+          <div class="uc-feats">
+            <div class="uc-feat"><span class="ck"><Icon name="check" size={14} /></span><span><b>プリセット</b>を管理者がチームに配布</span></div>
+            <div class="uc-feat"><span class="ck"><Icon name="check" size={14} /></span><span><b>成果物を自動生成</b>レポートは Artifact に</span></div>
+            <div class="uc-feat"><span class="ck"><Icon name="check" size={14} /></span><span><b>ゼロ学習</b>ボタンを押すだけ</span></div>
+          </div>
+        </div>
+        <div class="uc-mock">
+          <ChatPanel solo bottom status="プリセット待機中" scene={scene2}>
+            <div class="msg" data-msg-id="qa">
+              <div class="qa-label">クイックアクション</div>
+              <div class="qa-grid">
+                {quickActions.map((a, i) => (
+                  <div class:list={['qa-btn', { on: i === 1 }]}>
+                    <span class="qi mono">{a.ic}</span>{a.t}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <UserMsg id="u">⚑ 未対応を集計</UserMsg>
+            <ProgressCard id="p" title="週次レポートを生成中…" pct={64} />
+            <ArtifactCard
+              id="a"
+              kind="MARKDOWN"
+              title="週次サポートレポート"
+              summary="未対応86件・平均応答 4.2h・SLA超過 3件"
+            />
+          </ChatPanel>
+        </div>
+      </div>
+
+      <!-- UC3: アプリ横断 -->
+      <div class="uc reveal">
+        <div class="uc-text">
+          <span class="uc-kicker"><span class="n">3</span>アプリ横断</span>
+          <h3>アプリをまたいだ転記も、お願いひとつ</h3>
+          <p>問い合わせから案件へ。フィールドの対応付けは Cowork Agent が判断し、作成前に内容を提示します。コピペ作業から解放されます。</p>
+          <div class="uc-feats">
+            <div class="uc-feat"><span class="ck"><Icon name="check" size={14} /></span><span><b>フィールド対応</b>を自動でマッピング</span></div>
+            <div class="uc-feat"><span class="ck"><Icon name="check" size={14} /></span><span><b>関連レコード</b>として自動で紐付け</span></div>
+            <div class="uc-feat"><span class="ck"><Icon name="check" size={14} /></span><span><b>作成前に確認</b>できるから安心</span></div>
+          </div>
+        </div>
+        <div class="uc-mock">
+          <ChatPanel solo bottom scene={scene3}>
+            <UserMsg id="u">この問い合わせ #1042 を案件アプリに転記して</UserMsg>
+            <Thinking id="th" />
+            <ToolCall
+              id="t"
+              tool="get_record"
+              label="問い合わせ #1042 を取得"
+              detail="会社名・担当者・要望をフィールドに対応付け"
+              items={['会社名→顧客', '要望→案件概要']}
+            />
+            <div class="msg xfer" data-msg-id="x">
+              <div class="app">
+                <div class="an"><span class="dot" style="background:#0d9488;">問</span>問い合わせ管理</div>
+                <div class="ad">#1042 · 三井商事</div>
+              </div>
+              <span class="arrow"><Icon name="swap" size={18} /></span>
+              <div class="app">
+                <div class="an"><span class="dot" style="background:#b45309;">案</span>案件管理</div>
+                <div class="ad">新規レコード</div>
+              </div>
+            </div>
+            <PlanCard
+              id="p"
+              title="案件レコードを1件作成"
+              primaryLabel="作成する"
+              steps={[
+                { op: 'create', txt: '案件管理に「三井商事 受注案件」を新規作成' },
+                { op: 'link', txt: '問い合わせ #1042 を関連レコードとして紐付け' },
+              ]}
+            />
+          </ChatPanel>
+        </div>
+      </div>
+
+      <!-- UC4: 安全な承認 -->
+      <div class="uc reverse reveal">
+        <div class="uc-text">
+          <span class="uc-kicker"><span class="n">4</span>安全な承認</span>
+          <h3>更新・削除は、必ず「確認してから」</h3>
+          <p>影響のある操作は、対象アプリ・件数・取消可否を提示してから承認を求めます。勝手に動く AI にはなりません。現場で安心して任せられる設計です。</p>
+          <div class="uc-feats">
+            <div class="uc-feat"><span class="ck"><Icon name="check" size={14} /></span><span><b>影響範囲</b>を実行前にプレビュー</span></div>
+            <div class="uc-feat"><span class="ck"><Icon name="check" size={14} /></span><span><b>承認するまで</b>実際の変更はゼロ</span></div>
+            <div class="uc-feat"><span class="ck"><Icon name="check" size={14} /></span><span><b>取消可</b>な操作は明示</span></div>
+          </div>
+        </div>
+        <div class="uc-mock">
+          <ChatPanel solo bottom status="承認待ち" scene={scene4}>
+            <UserMsg id="u">ステータスが「完了」の問い合わせを一括でアーカイブして</UserMsg>
+            <Thinking id="th" />
+            <ToolCall
+              id="t"
+              tool="search_records"
+              label="対象レコードを確認"
+              detail="ステータス=完了 AND 30日以上経過 → 23件"
+            />
+            <PlanCard
+              id="p"
+              danger
+              title="一括アーカイブ（更新）"
+              steps={[
+                { op: 'update', txt: '23件のステータスを「アーカイブ」に変更' },
+                { op: 'note', txt: '対象アプリ: 問い合わせ管理 · 取消可（30日以内）' },
+              ]}
+            />
+          </ChatPanel>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

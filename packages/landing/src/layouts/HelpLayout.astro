@@ -1,0 +1,105 @@
+---
+import '../styles/help.css';
+import Wordmark from '../components/Wordmark.astro';
+
+interface TocEntry {
+  href: string;
+  label: string;
+}
+
+interface Props {
+  title: string;
+  description: string;
+  canonical: string;
+  /** breadcrumb suffix shown in header, e.g. "管理者ガイド" */
+  crumb: string;
+  /** TOC label (sidebar header), e.g. "管理者ガイド" */
+  tocLabel: string;
+  /** TOC entries (anchor links + labels) */
+  toc: TocEntry[];
+}
+
+const { title, description, canonical, crumb, tocLabel, toc } = Astro.props;
+const baseHref = import.meta.env.BASE_URL.replace(/\/$/, '');
+const canonicalSuffix = canonical.replace(/^\//, '');
+const ogUrl = Astro.site
+  ? new URL(`${baseHref}/${canonicalSuffix}`, Astro.site).toString()
+  : undefined;
+// path back to LP root: with base `/CoworkAgentForKintone/`, the LP is at base + '/'
+const homeHref = `${baseHref}/`;
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    {ogUrl && <meta property="og:url" content={ogUrl} />}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <header class="dochd">
+      <div class="dochd-in">
+        <a class="brand" href={homeHref}><Wordmark size={28} /></a>
+        <span class="spacer"></span>
+        <span class="crumb">Docs / {crumb}</span>
+        <a class="back" href={homeHref}>← サイトに戻る</a>
+      </div>
+    </header>
+
+    <div class="docwrap">
+      <nav class="toc">
+        <div class="toc-label">{tocLabel}</div>
+        <ul>
+          {toc.map((t, i) => (
+            <li><a href={t.href} class={i === 0 ? 'on' : ''}>{t.label}</a></li>
+          ))}
+        </ul>
+      </nav>
+
+      <main class="doc">
+        <slot />
+      </main>
+    </div>
+
+    <script>
+      // toc highlight on scroll
+      (function () {
+        const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('.toc a'));
+        const secs = links
+          .map((a) => {
+            const href = a.getAttribute('href');
+            return href ? (document.querySelector(href) as HTMLElement | null) : null;
+          })
+          .filter((el): el is HTMLElement => el !== null);
+        if (!('IntersectionObserver' in window) || !secs.length) return;
+        const io = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((e) => {
+              if (e.isIntersecting) {
+                const id = '#' + (e.target as HTMLElement).id;
+                links.forEach((a) => a.classList.toggle('on', a.getAttribute('href') === id));
+              }
+            });
+          },
+          { rootMargin: '-72px 0px -70% 0px' },
+        );
+        secs.forEach((s) => io.observe(s));
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,119 @@
+---
+import Icon from '../Icon.astro';
+
+interface Step {
+  wn: string;
+  t: string;
+  d: string;
+  badge: 'source' | 'preview' | 'apply' | 'rollback';
+  badgeLabel: string;
+  tab: 0 | 1;
+}
+
+const steps: Step[] = [
+  { wn: '01', t: '会話でカスタマイズ JS を生成', d: '「受注ステータスを色分けして」と頼むだけ。Artifact ペインにコードが現れます。', badge: 'source', badgeLabel: '✎ 生成', tab: 1 },
+  { wn: '02', t: 'preview で挙動を確認', d: 'kintone に反映する前に、サンドボックスで動作をプレビュー。安全に確かめられます。', badge: 'preview', badgeLabel: '● プレビュー中', tab: 0 },
+  { wn: '03', t: 'apply で kintone に反映', d: '納得したらワンクリックで適用。カスタマイズ設定として kintone にアップロードします。', badge: 'apply', badgeLabel: '✓ 適用済み', tab: 0 },
+  { wn: '04', t: '問題があれば rollback', d: 'おかしければ 1 つ前のバージョンへ即座に巻き戻し。試行錯誤が怖くなくなります。', badge: 'rollback', badgeLabel: '↺ 巻き戻し', tab: 1 },
+];
+
+const prompts = [
+  '案件アプリで受注金額が100万円超のレコードに、行ハイライトを付けるカスタマイズ JS を書いて',
+  '在庫数が閾値を下回ったら、画面上部にアラートバナーを表示する JS を作って',
+  '申請フォームで日付が休日のとき、保存をブロックする JS を作って',
+];
+
+const previewRows = [
+  ['三井商事 受注案件', 'win', '受注'],
+  ['パナソニック 保守更新', 'prop', '提案中'],
+  ['ソフトバンク SaaS導入', 'new', '新規'],
+  ['日立 コンサル契約', 'win', '受注'],
+];
+const bgMap: Record<string, string> = { win: '#dcfce7', prop: '#fef3c7', new: '#e0f2fe' };
+---
+
+<section id="wedge" class="wedge" data-wedge>
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow"><span class="dot"></span>FOR CUSTOMIZERS</span>
+      <h2>カスタマイズ JS を、<span class="accent">会話で</span>つくる</h2>
+      <p>情シス・カスタマイザー向け。生成 → プレビュー → 適用 → ロールバックを、チャットの流れのまま。</p>
+    </div>
+    <div class="wedge-layout">
+      <div class="wedge-steps" data-wedge-steps>
+        {steps.map((w, i) => (
+          <div class:list={['wstep', { on: i === 0 }]} data-wedge-step={i} role="button" tabindex="0">
+            <span class="wn mono">{w.wn}</span>
+            <div>
+              <div class="wt">{w.t}</div>
+              <div class="wd">{w.d}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div class="wedge-stage" data-wedge-stage>
+        <div class="wv-head">
+          <span class="wv-kind mono">JS</span>
+          <div><div class="wv-title">受注ステータス色分け.js</div><div class="wv-sub">kintone-customize-js · 更新 14:32</div></div>
+          <span class="wv-spacer"></span>
+          {steps.map((s, i) => (
+            <span
+              class:list={['wv-badge', s.badge]}
+              data-wedge-badge={i}
+              style={i === 0 ? '' : 'display:none;'}
+            >{s.badgeLabel}</span>
+          ))}
+        </div>
+
+        <div class="wv-body">
+          <!-- step 0 (source) and step 3 (rollback) show code -->
+          <div data-wedge-view="code" style="display:none;">
+<pre class="wv-code"><span class="c">// 受注ステータスを行の背景色で可視化</span>
+<span class="f">kintone</span>.events.<span class="f">on</span>(<span class="s">'app.record.index.show'</span>, (e) =&gt; {`{`}
+  <span class="k">const</span> rows = <span class="f">document</span>.<span class="f">querySelectorAll</span>(<span class="s">'.recordlist-row-gaia'</span>);
+  rows.<span class="f">forEach</span>((row) =&gt; {`{`}
+<span class="added" data-wedge-codeline>    row.style.background = COLOR[row.dataset.status];</span>
+  {`}`});
+  <span class="k">return</span> e;
+{`}`});</pre>
+          </div>
+
+          <!-- step 1 (preview) and step 2 (apply) show preview box -->
+          <div data-wedge-view="preview">
+            <div class="wv-preview-box">
+              <div class="pv-title" data-wedge-preview-title>案件管理 · レコード一覧</div>
+              <div class="pv-sub">受注ステータスを背景色で可視化</div>
+              <div style="margin-top:12px;border-radius:8px;overflow:hidden;border:1px solid var(--border);">
+                {previewRows.map((r, i) => (
+                  <div
+                    style={`display:flex;justify-content:space-between;padding:8px 11px;font-size:11.5px;background:${bgMap[r[1]]};border-bottom:${i < 3 ? '1px solid rgba(0,0,0,0.04)' : 'none'};`}
+                  >
+                    <span>{r[0]}</span><span class="mono" style="color:var(--muted);">{r[2]}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="wv-foot">
+          {steps.map((s, i) => (
+            <span class="wv-note" data-wedge-note={i} style={i === 0 ? '' : 'display:none;'}>{s.d}</span>
+          ))}
+          <span class="wv-btn go" data-wedge-action="preview" style="display:none;">preview</span>
+          <span class="wv-btn go" data-wedge-action="apply" style="display:none;">apply</span>
+          <span class="wv-btn warn" data-wedge-action="rollback" style="display:none;">rollback</span>
+          <span class="wv-btn ghost" data-wedge-action="regen" style="display:none;">再生成</span>
+        </div>
+      </div>
+    </div>
+    <div class="wedge-prompts reveal">
+      <div class="wl">情シス・カスタマイザー — こんな依頼から生成できます</div>
+      <div class="wp-grid">
+        {prompts.map((p) => (
+          <div class="wp"><span class="qi"><Icon name="bolt" size={14} /></span><span class="qt">{p}</span></div>
+        ))}
+      </div>
+    </div>
+  </div>
+</section>

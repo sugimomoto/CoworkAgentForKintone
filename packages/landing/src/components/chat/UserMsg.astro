@@ -1,0 +1,7 @@
+---
+interface Props {
+  id?: string;
+}
+const { id } = Astro.props;
+---
+<div class="msg m-user" data-msg-id={id}><slot /></div>

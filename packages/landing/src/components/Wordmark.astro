@@ -1,0 +1,41 @@
+---
+// Cowork Agent ロゴ — LogoMark A + Wordmark (ink + accent).
+// Mirrors logo.jsx (LogoMarkA + Wordmark).
+interface Props {
+  size?: number;
+  accent?: string;
+  ink?: string;
+}
+const { size = 28, accent = '#0d9488', ink = '#231200' } = Astro.props;
+const labelFontSize = size * 0.46;
+const subFontSize = size * 0.27;
+---
+
+<span class="cwm" style={`--cwm-size:${size}px;--cwm-accent:${accent};--cwm-ink:${ink};--cwm-label:${labelFontSize}px;--cwm-sub:${subFontSize}px;`}>
+  <svg width={size} height={size} viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Cowork Agent">
+    <rect x="2" y="6" width="22" height="22" rx="6" fill={ink}></rect>
+    <rect x="12" y="8" width="22" height="22" rx="6" fill={accent}></rect>
+    <path d="M23 17 L24.4 19.6 L27.2 20 L25.1 22.0 L25.6 24.8 L23 23.4 L20.4 24.8 L20.9 22.0 L18.8 20 L21.6 19.6 Z" fill="#fff"></path>
+  </svg>
+  <span class="cwm-text">
+    <span class="cwm-label">Cowork <span style={`color:${accent};`}>Agent</span></span>
+    <span class="cwm-sub">for kintone</span>
+  </span>
+</span>
+
+<style>
+  .cwm { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
+  .cwm-text { display: flex; flex-direction: column; line-height: 1; gap: 3px; }
+  .cwm-label {
+    font-size: var(--cwm-label);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--cwm-ink);
+  }
+  .cwm-sub {
+    font-size: var(--cwm-sub);
+    color: #6b5f4a;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+  }
+</style>

@@ -1,0 +1,25 @@
+---
+import Icon from '../Icon.astro';
+
+interface Props {
+  tool: string;
+  label: string;
+  detail?: string;
+  items?: string[];
+  id?: string;
+}
+const { tool, label, detail, items, id } = Astro.props;
+---
+
+<div class="msg m-tool" data-msg-id={id}>
+  <span class="ck"><Icon name="check" size={12} /></span>
+  <div class="body">
+    <div class="top"><span class="tname">{tool}</span><span class="tlabel">{label}</span></div>
+    {detail && <div class="tdetail">{detail}</div>}
+    {items && items.length > 0 && (
+      <div class="items">
+        {items.map((it) => <span class="it">{it}</span>)}
+      </div>
+    )}
+  </div>
+</div>

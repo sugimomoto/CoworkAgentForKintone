@@ -1,0 +1,37 @@
+---
+interface Step {
+  op: string;
+  txt: string;
+}
+interface Props {
+  title: string;
+  danger?: boolean;
+  steps: Step[];
+  primaryLabel?: string;
+  id?: string;
+}
+const { title, danger = false, steps, primaryLabel = '承認して実行', id } = Astro.props;
+const goStyle = danger ? '' : 'background:var(--accent);color:#fff;border-color:transparent;';
+---
+
+<div class:list={['msg m-plan', { danger }]} data-msg-id={id}>
+  <div class="ph">
+    <span class="t">{danger && '⚠️ '}{title}</span>
+    {danger && <span class="need">要承認</span>}
+  </div>
+  <div class="steps">
+    {steps.map((s, i) => (
+      <div class="pstep">
+        <span class="pnum">{i + 1}</span>
+        <div>
+          <div class="op">{s.op}</div>
+          <div class="txt">{s.txt}</div>
+        </div>
+      </div>
+    ))}
+  </div>
+  <div class="pfoot">
+    <span class:list={['pbtn', { go: danger }]} style={goStyle}>{primaryLabel}</span>
+    <span class="pbtn">キャンセル</span>
+  </div>
+</div>

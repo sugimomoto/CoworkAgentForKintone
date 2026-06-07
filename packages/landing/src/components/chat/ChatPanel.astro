@@ -1,0 +1,63 @@
+---
+import Icon from '../Icon.astro';
+import type { SceneStep } from './scene';
+
+interface Props {
+  solo?: boolean;
+  name?: string;
+  status?: string;
+  foot?: string;
+  bottom?: boolean;
+  /** typing caret on the placeholder */
+  footTyping?: boolean;
+  /** extra wrapper class */
+  class?: string;
+  /** when provided, lp.ts will animate this panel through the scene */
+  scene?: SceneStep[];
+}
+
+const {
+  solo = true,
+  name = 'Cowork Agent',
+  status = '作業中 · kintone接続',
+  foot = 'メッセージを入力…',
+  bottom = false,
+  footTyping = false,
+  class: extraClass,
+  scene,
+} = Astro.props;
+
+const hasScene = Array.isArray(scene) && scene.length > 0;
+---
+
+<div class:list={['cp', { solo }, extraClass]} data-chat-scene={hasScene ? '' : undefined}>
+  <div class="cp-head">
+    <div class="cp-avatar">
+      <Icon name="star-avatar" size={13} />
+      <span class="status"></span>
+    </div>
+    <div class="cp-id">
+      <div class="name">{name}<span class="badge">for kintone</span></div>
+      <div class="stat"><span class="ring"></span>{status}</div>
+    </div>
+    <div class="cp-head ic" style="display:inline-flex;">
+      <Icon name="clock" size={13} />
+    </div>
+  </div>
+  <div class:list={['cp-scroll', { 'anchor-bottom': bottom }]}>
+    <slot />
+  </div>
+  <div class="cp-foot">
+    <div class="cp-input">
+      <span class="ph" data-scene-ph={hasScene ? '' : undefined} data-scene-default={foot}>
+        {foot}
+        {footTyping && <span class="caret"></span>}
+      </span>
+      <span class="cp-send"><Icon name="send" size={14} /></span>
+    </div>
+    <div class="cp-hint"><span class="mono">⌘K</span> 呼び出し · Claude Managed Agents</div>
+  </div>
+  {hasScene && (
+    <script type="application/json" data-scene-script set:html={JSON.stringify(scene)} />
+  )}
+</div>
