@@ -9,7 +9,12 @@
 // find filter (purpose / workerUrl / kintoneDomain 等) が壊れないようにする。
 
 import { AGENT_TYPE, METADATA_SOURCE } from '../constants';
-import { META_KEY_QUICK_ACTIONS } from '../bootstrap/agentTypes';
+import {
+  META_KEY_ALLOWED_GROUPS,
+  META_KEY_ALLOWED_ORGANIZATIONS,
+  META_KEY_ALLOWED_USERS,
+  META_KEY_QUICK_ACTIONS,
+} from '../bootstrap/agentTypes';
 import { KINTONE_MCP_SERVER_NAME } from '../bootstrap/resolveAgent';
 
 import {
@@ -48,6 +53,14 @@ export interface AgentEditDraft {
    * 保存時に metadata.quickActions に JSON 配列文字列として永続化。
    */
   quickActions: readonly string[];
+  /**
+   * #47 公開先 ACL — 0 件 = 全員に公開、いずれか指定 = OR 結合。
+   * 保存時に metadata.allowedUsers / allowedGroups / allowedOrganizations へ
+   * それぞれ JSON 配列文字列として永続化。空配列なら key 自体を削除。
+   */
+  allowedUsers: readonly string[];
+  allowedGroups: readonly string[];
+  allowedOrganizations: readonly string[];
 }
 
 /** skill 配列を Anthropic API に渡す形式に変換 */
@@ -75,12 +88,24 @@ function mergeMetadataPatch(
     visibility: draft.visibility,
     isDefault: draft.isDefault ? '1' : '0',
   };
-  if (draft.quickActions.length > 0) {
-    merged[META_KEY_QUICK_ACTIONS] = JSON.stringify(draft.quickActions);
-  } else {
-    delete merged[META_KEY_QUICK_ACTIONS];
-  }
+  setOrDeleteJsonArrayKey(merged, META_KEY_QUICK_ACTIONS, draft.quickActions);
+  setOrDeleteJsonArrayKey(merged, META_KEY_ALLOWED_USERS, draft.allowedUsers);
+  setOrDeleteJsonArrayKey(merged, META_KEY_ALLOWED_GROUPS, draft.allowedGroups);
+  setOrDeleteJsonArrayKey(merged, META_KEY_ALLOWED_ORGANIZATIONS, draft.allowedOrganizations);
   return merged;
+}
+
+/** 値あり → JSON 化して set / 空配列 → key 自体を削除。 */
+function setOrDeleteJsonArrayKey(
+  merged: Record<string, string>,
+  key: string,
+  arr: readonly string[],
+): void {
+  if (arr.length > 0) {
+    merged[key] = JSON.stringify(arr);
+  } else {
+    delete merged[key];
+  }
 }
 
 /**

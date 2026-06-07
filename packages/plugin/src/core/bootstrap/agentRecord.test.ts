@@ -131,4 +131,65 @@ describe('agentToRecord — quickActions の復元', () => {
       expect(record.quickActions).toEqual([]);
     });
   });
+
+  describe('#47 公開先 ACL (allowedUsers / allowedGroups / allowedOrganizations)', () => {
+    it('built-in は常に 3 配列が空', () => {
+      const record = agentToRecord(
+        makeAgent({
+          metadata: {
+            purpose: 'business',
+            // 仮に metadata に入っていても built-in は無視 (spec が source-of-truth)
+            allowedUsers: JSON.stringify(['IGNORED']),
+          },
+        }),
+      );
+      expect(record.allowedUsers).toEqual([]);
+      expect(record.allowedGroups).toEqual([]);
+      expect(record.allowedOrganizations).toEqual([]);
+    });
+
+    it('custom: 3 軸とも metadata から復元', () => {
+      const record = agentToRecord(
+        makeAgent({
+          metadata: {
+            purpose: 'custom',
+            allowedUsers: JSON.stringify(['sato', 'tanaka']),
+            allowedGroups: JSON.stringify(['sales-dept']),
+            allowedOrganizations: JSON.stringify(['org-tokyo']),
+          },
+        }),
+      );
+      expect(record.allowedUsers).toEqual(['sato', 'tanaka']);
+      expect(record.allowedGroups).toEqual(['sales-dept']);
+      expect(record.allowedOrganizations).toEqual(['org-tokyo']);
+    });
+
+    it('custom: 未設定 / 不正 JSON / 配列外の値はすべて空配列フォールバック', () => {
+      const record = agentToRecord(
+        makeAgent({
+          metadata: {
+            purpose: 'custom',
+            allowedUsers: '{not json',
+            allowedGroups: JSON.stringify({ foo: 1 }),
+            // allowedOrganizations 未設定
+          },
+        }),
+      );
+      expect(record.allowedUsers).toEqual([]);
+      expect(record.allowedGroups).toEqual([]);
+      expect(record.allowedOrganizations).toEqual([]);
+    });
+
+    it('custom: 配列内の non-string 要素は除外', () => {
+      const record = agentToRecord(
+        makeAgent({
+          metadata: {
+            purpose: 'custom',
+            allowedUsers: JSON.stringify(['sato', 123, null, 'tanaka', {}]),
+          },
+        }),
+      );
+      expect(record.allowedUsers).toEqual(['sato', 'tanaka']);
+    });
+  });
 });

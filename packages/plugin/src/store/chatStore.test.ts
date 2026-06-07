@@ -166,6 +166,9 @@ describe('chatStore', () => {
           isDefault: false,
           source: 'builtin' as const,
           quickActions: [] as readonly string[],
+          allowedUsers: [],
+          allowedGroups: [],
+          allowedOrganizations: [],
         },
       ];
       useChatStore.getState().setBuiltInAgents(agents);

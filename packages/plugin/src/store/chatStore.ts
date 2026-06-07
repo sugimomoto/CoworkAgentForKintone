@@ -10,6 +10,7 @@ import { binaryArtifactIdFromFileId } from '../core/artifacts/types';
 import type { AgentRecord } from '../core/bootstrap/agentTypes';
 import type { Artifact, CreateArtifactInput } from '../core/artifacts/types';
 import type { AgentEditDraft } from '../core/managed-agents/agentDetailApi';
+import type { AccessContext } from '../core/access/filterAgentsByAccess';
 
 export interface BinaryArtifactInput {
   fileId: string;
@@ -115,6 +116,12 @@ export interface ChatState {
    * V2 で機能化されると Session 作成時に (user × agent) Memory Store を attach する。
    */
   memoryEnabled: boolean;
+  /** 現ユーザーの所属 (groups / organizations コード一覧)。null = 未取得 / 失敗。 */
+  currentUserAccess: AccessContext | null;
+
+  /** cybozu.com 共通管理者か。null = 未解決 (= filter を保留して全 Agent 表示)。 */
+  isAdmin: boolean | null;
+
   /**
    * #48 エージェントデザイナーの `propose_agent` 受信で発火する「全項目入力済モーダルを開く」シグナル。
    * ChatPanel がこれを購読して `<AgentDetailModal mode='create-from-proposal'>` を描画する。
@@ -190,6 +197,10 @@ export interface ChatState {
   /** #48 propose_agent 受信時にモーダル展開シグナルをセット。null でクリア。 */
   setPendingAgentProposal: (next: { draft: AgentEditDraft; rationale: string; model: 'opus' | 'sonnet' } | null) => void;
 
+  setCurrentUserAccess: (next: AccessContext | null) => void;
+  /** admin 判定解決後に値を入れる (true/false)。null から戻ることはない */
+  setIsAdminResolved: (value: boolean) => void;
+
   /**
    * Artifact を新規追加 or 同 id 更新する。
    * 同じ id が既にあれば content/title 等を上書きし、version を +1、updatedAt を現在時刻に。
@@ -259,6 +270,8 @@ const INITIAL_STATE = {
   workflowHistory: new Map<string, string>(),
   // #48 エージェントデザイナー
   pendingAgentProposal: null as { draft: AgentEditDraft; rationale: string; model: 'opus' | 'sonnet' } | null,
+  currentUserAccess: null as AccessContext | null,
+  isAdmin: null as boolean | null,
 };
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -373,6 +386,9 @@ export const useChatStore = create<ChatState>((set) => ({
     }),
 
   setPendingAgentProposal: (next) => set({ pendingAgentProposal: next }),
+
+  setCurrentUserAccess: (next) => set({ currentUserAccess: next }),
+  setIsAdminResolved: (value) => set({ isAdmin: value }),
 
   upsertArtifact: (input) => {
     const now = Date.now();

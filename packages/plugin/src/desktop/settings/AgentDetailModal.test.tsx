@@ -30,6 +30,9 @@ function makeBuiltInAgentRecord(overrides: Partial<AgentRecord> = {}): AgentReco
     isDefault: false,
     source: 'builtin',
     quickActions: [],
+    allowedUsers: [],
+    allowedGroups: [],
+    allowedOrganizations: [],
     ...overrides,
   };
 }
@@ -48,6 +51,9 @@ function makeCustomAgentRecord(overrides: Partial<AgentRecord> = {}): AgentRecor
     isDefault: false,
     source: 'custom',
     quickActions: [],
+    allowedUsers: [],
+    allowedGroups: [],
+    allowedOrganizations: [],
     ...overrides,
   };
 }
@@ -303,6 +309,9 @@ describe('AgentDetailModal — quickActions 編集 (#45)', () => {
           source: 'custom',
           purpose: 'custom',
           quickActions: [],
+          allowedUsers: [],
+          allowedGroups: [],
+          allowedOrganizations: [],
         }),
       },
     });
@@ -325,6 +334,9 @@ describe('AgentDetailModal — quickActions 編集 (#45)', () => {
           source: 'custom',
           purpose: 'custom',
           quickActions: [],
+          allowedUsers: [],
+          allowedGroups: [],
+          allowedOrganizations: [],
         }),
       },
     });
@@ -348,6 +360,9 @@ describe('AgentDetailModal — quickActions 編集 (#45)', () => {
           source: 'custom',
           purpose: 'custom',
           quickActions: [],
+          allowedUsers: [],
+          allowedGroups: [],
+          allowedOrganizations: [],
         }),
       },
     });

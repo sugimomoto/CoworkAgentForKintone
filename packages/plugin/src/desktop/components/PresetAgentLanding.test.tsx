@@ -24,6 +24,9 @@ function makeAgent(overrides: Partial<AgentRecord> = {}): AgentRecord {
     isDefault: false,
     source: 'builtin',
     quickActions: [],
+    allowedUsers: [],
+    allowedGroups: [],
+    allowedOrganizations: [],
     ...overrides,
   };
 }

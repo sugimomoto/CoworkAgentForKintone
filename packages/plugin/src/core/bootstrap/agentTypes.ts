@@ -110,6 +110,15 @@ export interface AgentRecord {
    * Built-in は spec カタログから注入、Custom は metadata.quickActions (JSON 配列) から復元。
    */
   quickActions: readonly string[];
+  /**
+   * 公開先 ACL (#47) — 0 件 = 全員に見える、いずれか指定 = OR 結合で絞り込み。
+   * Built-in は常に空配列 (= 全員に見える)。Custom は metadata から復元。
+   */
+  allowedUsers: readonly string[];
+  /** 公開先 ACL — kintone グループコード */
+  allowedGroups: readonly string[];
+  /** 公開先 ACL — kintone 組織コード */
+  allowedOrganizations: readonly string[];
 }
 
 /**
@@ -159,3 +168,10 @@ export const AGENT_PICKER_COLORS: readonly AgentColor[] = [
 
 /** Anthropic Agent.metadata 上で quickActions を保存するキー名 (parse / build 両側で共有)。 */
 export const META_KEY_QUICK_ACTIONS = 'quickActions';
+
+/** #47 公開先 ACL: kintone ユーザーコード配列の metadata キー (JSON 配列文字列で保存)。 */
+export const META_KEY_ALLOWED_USERS = 'allowedUsers';
+/** #47 公開先 ACL: kintone グループコード配列の metadata キー */
+export const META_KEY_ALLOWED_GROUPS = 'allowedGroups';
+/** #47 公開先 ACL: kintone 組織コード配列の metadata キー */
+export const META_KEY_ALLOWED_ORGANIZATIONS = 'allowedOrganizations';
