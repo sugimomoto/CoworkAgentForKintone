@@ -1,8 +1,8 @@
 # ユビキタス言語定義 (Glossary)
 
 **プロダクト名**: Cowork Agent for kintone
-**バージョン**: 0.3 (Customizer wedge 戦略反映)
-**最終更新日**: 2026-05-17
+**バージョン**: 0.4 (V1 wedge MVP 機能群反映 — Designer / Skill / Quick Action)
+**最終更新日**: 2026-06-07
 
 ドキュメント・UI・コード全体で一貫した用語を使うための定義集。新しい用語を導入する際は本書を更新する。
 
@@ -14,13 +14,26 @@
 |--------|---------------------|------|
 | Cowork Agent | `CoworkAgent` | 本プロダクトの AI エージェント本体を指す呼称 |
 | サイドパネル | `SidePanel` / `ChatPanel` | レコード一覧画面の右側に表示されるチャット UI コンテナ |
-| Built-in Agent | `builtInAgent` | Plugin 同梱の auto-ensure 対象 Agent。V1 では業務 / Customizer Opus / Customizer Sonnet の 3 variant |
+| Built-in Agent | `builtInAgent` | Plugin 同梱の auto-ensure 対象 Agent。V1 では業務 / カスタマイザー / デザイナー の **3 variant** (Designer は 2026-06-07 追加で旧 customizer-opus の枠を repurpose) |
 | 業務エージェント | `businessAgent` (purpose: `business`) | Built-in Agent の 1 つ。Sonnet 4.6 + ドキュメント生成系 skill + kintone MCP 参照/書込系。一般業務ユーザー向け |
-| カスタマイザーエージェント | `customizerAgent` (purpose: `customizer-opus` / `customizer-sonnet`) | Built-in Agent の 2 variant。kintone JS / Plugin 開発支援に特化。Opus 4.7 (高品質) / Sonnet 4.6 (速度・低コスト) を選択可 |
-| Variant | `agentVariant` | 同じ purpose で model だけ違う Agent (Anthropic API 制約上、別 Agent として登録)。`variantGroup` metadata で同系列を識別 |
-| Custom Agent | `customAgent` | admin が Settings View で新規作成する Agent (V3 機能)。system prompt / model / skill / tool / アイコン (8 glyph × 8 color) を編集可 |
+| カスタマイザーエージェント | `customizerAgent` (purpose: `customizer-sonnet`) | Built-in Agent の 1 variant。kintone JS / Plugin 開発支援に特化 (Sonnet 4.6) |
+| エージェントデザイナー | `designerAgent` (purpose: `customizer-opus` を repurpose) | Built-in 3rd variant。**Agent 自体を会話で設計する Agent** (Opus 4.7)。`propose_agent` Custom Tool で agent-draft artifact を生成し、admin が承認・編集して Custom Agent として永続化する |
+| Variant / variantGroup | `agentVariant` / `variantGroup` | 同じ purpose で model だけ違う Agent (Anthropic API 制約上、別 Agent として登録)。`variantGroup` metadata で同系列を識別 (例: customizer グループ) |
+| Custom Agent | `customAgent` | admin が Settings View で新規作成する Agent。system prompt / model / skill / tool / quickActions / アイコン (8 glyph × 8 color) を編集可。エージェントデザイナー経由 (createFromProposal) または手動雛形コピーで作成 |
+| AgentEditDraft | `AgentEditDraft` | Agent 詳細編集の **編集中差分** を保持する一時オブジェクト。保存ボタンで diff のみが Agent record に反映される。キャンセルすると破棄 |
+| createFromProposal モード | `createFromProposal` | AgentDetailModal の起動モードの 1 つ。エージェントデザイナーが生成した agent-draft を雛形として Custom Agent を作成する経路 |
+| archive (Agent) | `archived` | Agent の論理削除フラグ (`metadata.archived=true`)。Anthropic 側 Agent は残り再表示可能。物理削除 UI は提供しない |
+| rationale | `rationale` | デザイナーが Custom Agent を提案する際に添える設計意図のテキスト。なぜこの system prompt / skill / model 構成かの説明 |
 | デフォルト Agent | `defaultAgent` | (旧用語、V1 以降は **業務エージェント** または **カスタマイザーエージェント** と呼ぶ) Phase 1b 時代の単一 Agent への暫定呼称 |
 | wedge / wedge ループ | `wedge` | 情シス向け差別化機能の中核。カスタマイズ JS 生成 → preview → apply → rollback の完結ループ |
+| previewSnapshot | `previewSnapshot` | Customizer wedge apply 直前に取得する kintone app の現状スナップショット (desktop.js URL 群 / revisionHash)。rollback 時の復元先。V1 は in-memory のみ |
+| Custom Skill | `customSkill` | 組織固有のコーディング規約・ナレッジを `.skill` バンドルとしてエージェントに注入する仕組み。Plugin 同梱のビルトイン Skill (`kintone-customize-js` / `kintone-plugin-development`) と、admin が Chat Panel から追加する Custom Skill の両方を含む |
+| Skill bundle | `skillBundle` / `.skill` | Skill の配布形式 (zip)。ルートに `SKILL.md` (フロントマター: name / description / version) を持ち、`resources/` `scripts/` 配下に補助ファイルを置く |
+| skillsVersion | `skillsVersion` | Agent が attach している Skill のバージョン識別子。ビルトイン Skill 更新時は bump して再同期が必要 |
+| quickActions | `quickActions` | AgentRecord に紐づくプリセット依頼文の配列 (最大 6 件想定)。Composer 下にボタンとして並び、クリックで prompt が Composer に **注入** される (自動送信はしない) |
+| agent-draft | `agent-draft` (artifact kind) | エージェントデザイナーが提案する Custom Agent ドラフトの artifact 種別。artifact ペインに編集可能な形で描画される |
+| propose_agent | `propose_agent` (Custom Tool 名) | エージェントデザイナー専用の Custom Tool。name / icon / systemPrompt / skills / quickActions / rationale を引数に取り、agent-draft artifact を生成する |
+| kintone-customize-bundle | `kintone-customize-bundle` (artifact kind) | Customizer wedge が生成する JS バンドルの artifact 種別。FileTree + Monaco エディタ + 5 状態 step bar (ready / previewed / applying / applied / rolled-back) を伴う |
 | Surface 分割 | `surfaceSeparation` | Plugin Config = Bootstrap 専用 / Chat Panel = プロダクト本体 という UI 配置原則 |
 | ユーザーバインディング | `userBinding` | kintone OAuth で発行した access/refresh token を Anthropic Vault Credential に保管し、ユーザーと紐付ける状態 |
 | 実行計画 | `executionPlan` | 破壊的操作 (更新 / 削除) 前に Agent が提示する処理内容のプレビュー |
@@ -39,7 +52,7 @@
 | Vault Credential | `vaultCredential` | Vault 内の個別認証情報。`type: 'mcp_oauth'` の場合は MCP server URL × access/refresh token を保管 |
 | `mcp_oauth` 認証 | `mcpOAuth` | Vault Credential の auth type。MCP server へのリクエスト時 Anthropic が access_token を Bearer で自動付与し、期限切れ時に refresh も自動実行 |
 | Session | `session` | Agent + Environment + Vault の組合せで動作する 1 会話単位 |
-| Custom Tool | `customTool` | クライアント側で実行されるツール (本プロダクトでは未使用) |
+| Custom Tool | `customTool` | クライアント側 (Plugin) で実行されるツール。V1 では `propose_agent` (エージェントデザイナー専用) で使用 |
 | agent_toolset | `agent_toolset_20260401` | Environment 内で使える組込ツール群 (`bash` / `write` / `read` 等) |
 | MCP Toolset | `mcp_toolset` | mcp_servers として登録された MCP server のツールを Agent に公開する toolset 種別 |
 | メタデータ | `metadata` | 各リソースに付与する key-value ラベル。識別・検索に利用 |
@@ -194,3 +207,7 @@
   - Section 1: Built-in Agent / 業務エージェント / カスタマイザーエージェント / Variant / Custom Agent / wedge / Surface 分割 を追加
   - Section 4: Header (2 段構成) / Agent プルダウン / MODEL バッジ / Memory トグル / Settings View 関連用語 / Workflow Footer / FileTree / Plugin Config (縮小後) を追加
   - `defaultAgent` は旧用語として非推奨化、V1 以降は 3 variant 命名に統一
+- 2026-06-07: V1 wedge MVP 機能群反映 (Designer / Skill / Quick Action / Custom Agent 永続化)
+  - Section 1: エージェントデザイナー / AgentEditDraft / createFromProposal モード / archive / rationale / previewSnapshot / Custom Skill / Skill bundle / skillsVersion / quickActions / agent-draft / propose_agent / kintone-customize-bundle を追加
+  - Section 2: Custom Tool の定義を「V1 では `propose_agent` で使用」に更新
+  - Built-in Agent の variant 構成を「業務 / カスタマイザー / デザイナー」に再整理 (旧 customizer-opus 枠を Designer に repurpose)

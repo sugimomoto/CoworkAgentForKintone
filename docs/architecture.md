@@ -1,8 +1,8 @@
 # 技術仕様書 (Architecture Document)
 
 **プロダクト名**: Cowork Agent for kintone
-**バージョン**: 0.2 (Phase 1b-3 / OAuth pivot)
-**最終更新日**: 2026-04-26
+**バージョン**: 0.3 (V1 wedge MVP — Custom Skills / Settings View / Custom Tool 反映)
+**最終更新日**: 2026-06-07
 
 ---
 
@@ -55,18 +55,25 @@ packages/plugin/
 │   ├── desktop/            # レコード一覧画面の Chat UI
 │   │   ├── ChatPanel.tsx
 │   │   ├── components/     # MessageList / Composer / Header / ConnectKintoneButton 等
+│   │   ├── settings/       # Settings View (admin 専用 2-pane) — AgentsListPane / AgentDetailModal / SkillsPane / SkillAddModal / MCPPane
+│   │   ├── artifacts/      # Artifact ペイン基盤
+│   │   │   └── renderers/  # artifact kind 別 renderer (kintone-customize-bundle / agent-draft 等)
 │   │   └── hooks/          # useSession / useUserBinding / useEventPoller / usePanelOpenState
 │   ├── core/
-│   │   ├── bootstrap/      # resolveAgent / resolveEnvironment / resolveSession / resolveVault
-│   │   ├── managed-agents/ # Anthropic API client + types + event interpreter
+│   │   ├── bootstrap/      # resolveAgent / resolveEnvironment / resolveSession / resolveVault + agentRecord / agentTypes (V1 で Custom Agent 永続化対応)
+│   │   ├── managed-agents/ # Anthropic API client + types + event interpreter + Custom Tool runner (propose_agent)
 │   │   ├── kintone/        # kintone JS API ラッパ (proxy transport, plugin config, login user)
 │   │   ├── oauth/          # PKCE / popup / token exchange / credentials upsert client
 │   │   ├── cloudflare/     # Worker デプロイ client + multipart 構築
 │   │   ├── constants.ts
 │   │   └── utils.ts        # sleep / toErrorMessage / joinUrl / buildMcpServerUrl
+│   ├── skills/             # ビルトイン Skill ソース (kintone-customize-js / kintone-plugin-development)
+│   │   └── <skill-name>/
+│   │       ├── SKILL.md
+│   │       └── resources/
 │   ├── store/chatStore.ts  # Zustand
-│   └── generated/          # build 時に自動生成 (worker-bundle.ts)
-├── scripts/build.mjs       # 1 回の pnpm plugin:build で Worker bundle + Plugin JS + CSS を生成
+│   └── generated/          # build 時に自動生成 (worker-bundle.ts / skills-bundle.ts)
+├── scripts/build.mjs       # 1 回の pnpm plugin:build で Worker bundle + Skill bundle + Plugin JS + CSS を生成
 └── e2e/                    # Playwright spec 群
 ```
 
@@ -164,6 +171,9 @@ packages/plugin/
 - `tools: [{ type: 'agent_toolset_20260401', ... }, { type: 'mcp_toolset', mcp_server_name: 'kintone', ... }]`
 - `mcp_toolset.configs` は **配列形式** `[{name, enabled, permission_policy}]`。書き込み系は基本 `always_allow`、`kintone-delete-records` のみ `always_ask` (UI 承認 = HITL を発火させる)
 - `metadata.promptVersion` を持たせ、システムプロンプトを変更したら bump して **新 Agent を強制再作成** (旧 Agent は残置、自然消滅)
+- `metadata.variantGroup` で variant 系列を識別 (例: `customizer` → Sonnet / Designer の枠)。`metadata.archived` で論理削除フラグ。Custom Agent は `metadata.kind: 'custom'` を持つ
+- **Custom Tool (V1 で導入)**: エージェントデザイナー variant のみ `propose_agent` を Custom Tool として登録。Plugin 側 ([core/managed-agents/](../packages/plugin/src/core/managed-agents/)) の Custom Tool runner が呼ばれると `agent-draft` artifact を生成し、artifact ペインに描画する
+- **Built-in Agent 3 variant** (V1): `business` (Sonnet) / `customizer-sonnet` / `customizer-opus` (Designer に repurpose)。auto-ensure ロジックは [core/bootstrap/agentRecord.ts](../packages/plugin/src/core/bootstrap/agentRecord.ts) を参照
 
 ### 5.4 Environment 構成
 
@@ -298,8 +308,13 @@ ConfigScreen → kintone.proxy() (admin が入力した API Token を直接 Auth
 
 1. `manifest.json` の build 番号を +1
 2. **Worker JS を esbuild でバンドル** (`__BUILD_VERSION__` / `__BUILD_TIME__` 注入) → `src/generated/worker-bundle.ts` に文字列として書き出し
-3. `desktop.js` / `config.js` を esbuild で IIFE 化 (Promise.all で並列)
-4. Tailwind CSS をビルド
+3. **ビルトイン Skill バンドル生成** — `src/skills/<name>/` 配下の `SKILL.md` + `resources/` + `scripts/` を zip 化し、Base64 化して `src/generated/skills-bundle.ts` に embed。Settings View の Skill 同期ボタンが呼ばれたときに Anthropic API へ POST する素材として使用
+4. `desktop.js` / `config.js` を esbuild で IIFE 化 (Promise.all で並列)
+5. Tailwind CSS をビルド
+
+### 8.1.1 Custom Skill のアップロード経路
+
+Admin が Chat Panel の Settings View → Skills タブから `.skill` zip をアップロードした場合は、Plugin がブラウザ上で zip を直接 base64 化して `POST /v1/skills` に送る (ビルトイン Skill と同じ API)。ビルド時生成された `skills-bundle.ts` は経由しない。
 
 ### 8.2 Plugin デプロイ
 
