@@ -34,10 +34,10 @@ export function ProgressIndicator(): JSX.Element | null {
       className="
         pointer-events-none absolute bottom-[10px] left-[10px] z-10
         flex max-w-[280px] items-center gap-[6px]
-        rounded-full border border-card-border bg-card/95
+        rounded-full border border-card-border bg-card
         px-[10px] py-[5px]
         text-[11px] text-muted
-        shadow-[0_1px_3px_rgba(0,0,0,0.06)]
+        shadow-[0_2px_6px_rgba(0,0,0,0.08)]
         animate-[cw-progress-fade-in_150ms_ease-out]
       "
     >
