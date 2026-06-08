@@ -526,25 +526,6 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
 
       </section>
 
-      {/*
-        Skills 同期 UI は Customizer wedge V1 (#41) で Chat Panel Settings (🧠 スキル)
-        に完全移管されました。admin はチャットパネルのヘッダー ⚙ から開く Settings View で
-        skill の同期 / カスタム skill の追加を行えます。
-      */}
-      <section
-        data-testid="skills-migrated-callout"
-        className="mb-[20px] rounded-[12px] border border-card-border bg-accent-soft/30 p-[14px]"
-      >
-        <h2 className="mb-[4px] text-[13px] font-semibold text-text">
-          Skills の管理について
-        </h2>
-        <p className="text-[11px] leading-[1.6] text-muted">
-          Plugin 同梱 skill の同期 / カスタム skill の追加は、<strong>チャットパネルのヘッダー ⚙ →
-          設定 → 🧠 スキル</strong> から行います。Plugin Config 画面ではなく Chat Panel で
-          完結する設計に V1 (#41) で変更しました。
-        </p>
-      </section>
-
       {errorMessage && (
         <div role="alert" className="mb-[12px] rounded-[8px] border border-warn/40 bg-warn-soft px-[12px] py-[8px] text-[12px] text-warn">
           ⚠ {errorMessage}
