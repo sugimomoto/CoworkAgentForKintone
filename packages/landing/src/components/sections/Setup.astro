@@ -5,11 +5,15 @@ interface Step {
   name: string;
   h: string;
   d: string;
+  /** when set, `d` is rendered as raw HTML (used to embed links) */
+  html?: boolean;
   url: string;
 }
 
+const releasesUrl = 'https://github.com/sugimomoto/CoworkAgentForKintone/releases';
+
 const steps: Step[] = [
-  { name: 'STEP 1 · プラグイン', h: 'Plugin をインストール', d: 'GitHub Releases から .zip をダウンロードし、kintone のプラグイン管理画面にアップロードするだけ。', url: 'kintone.com/admin/plugins' },
+  { name: 'STEP 1 · プラグイン', h: 'Plugin をインストール', d: `<a href="${releasesUrl}" target="_blank" rel="noopener">GitHub Releases</a> から最新の <code>.zip</code> をダウンロードし、kintone の［システム設定 › プラグイン］にアップロードするだけ。`, html: true, url: 'kintone.com/admin/plugins' },
   { name: 'STEP 2 · Worker', h: 'Cloudflare Worker をデプロイ', d: 'MCP サーバーとなる Worker を、Plugin 設定画面のボタンからブラウザだけでデプロイ。CLI は不要です。', url: 'config / worker-deploy' },
   { name: 'STEP 3 · API Key', h: 'Anthropic API Key を登録', d: 'お手持ちの Anthropic API キーを設定画面に貼り付け。キーは Vault に暗号化保存されます。', url: 'config / anthropic' },
   { name: 'STEP 4 · OAuth', h: 'kintone OAuth クライアントを登録', d: 'kintone 側で OAuth クライアントを作成し、Client ID / Secret を登録。これで接続準備が完了します。', url: 'kintone.com/admin/oauth' },
@@ -34,7 +38,7 @@ const steps: Step[] = [
             <span class="setup-dot" data-setup-dot={i}>{i + 1}</span>
             <div class="setup-body">
               <h3>{s.h}</h3>
-              <p>{s.d}</p>
+              {s.html ? <p set:html={s.d} /> : <p>{s.d}</p>}
               {i === 1 && <div class="badge-row"><span class="chip">CLI 不要</span><span class="chip">ブラウザ完結</span></div>}
               {i === 2 && <div class="badge-row"><span class="chip"><Icon name="lock" size={11} /> Vault 暗号化</span><span class="chip">キー持ち込み</span></div>}
             </div>
