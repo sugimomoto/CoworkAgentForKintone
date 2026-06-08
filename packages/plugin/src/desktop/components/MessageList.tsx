@@ -105,7 +105,10 @@ export function MessageList({
     messages.some((m) => m.kind === 'agent' || m.kind === 'tool' || m.kind === 'artifact-ref');
 
   return (
-    <div className="relative flex flex-1 flex-col">
+    // min-h-0: 親 (ChatPanel) の flex 列内で本要素が flex-1 だけだとコンテンツの自然高さに
+    // 押し負けて Composer を画面外へ追いやってしまう。min-h-0 で「親より小さくなれる」状態に
+    // して、内側の overflow-y-auto を効かせる (flex+overflow ネストの定石)。
+    <div className="relative flex flex-1 flex-col min-h-0">
       <div className="flex flex-1 flex-col gap-[14px] overflow-y-auto overscroll-contain px-[16px] py-[18px]">
       {messages.map((m) => {
         const showRetry = m.kind === 'tool' && m.id === lastErrorToolId;
