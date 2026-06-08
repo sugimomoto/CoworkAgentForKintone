@@ -10,6 +10,7 @@ import { binaryArtifactIdFromFileId } from '../core/artifacts/types';
 import type { AgentRecord } from '../core/bootstrap/agentTypes';
 import type { Artifact, CreateArtifactInput } from '../core/artifacts/types';
 import type { AgentEditDraft } from '../core/managed-agents/agentDetailApi';
+import type { ProgressEventKind } from '../core/managed-agents/progressEvent';
 import type { AccessContext } from '../core/access/filterAgentsByAccess';
 
 export interface BinaryArtifactInput {
@@ -76,6 +77,15 @@ export interface ChatState {
    * UI で「○秒待機中」の表示や「応答が遅い」バナーの判定に使う。
    */
   agentRunningSince: number | null;
+  /**
+   * 直近の進行 event を受信した時刻 (epoch ms)。進行インジケータの経過秒表示に使う。
+   * ターン非アクティブ時は null。
+   */
+  lastEventAt: number | null;
+  /** 直近 event の進行種別 (思考中 / ツール実行中 / 等)。null は「まだ event 未受信」。 */
+  lastEventKind: ProgressEventKind | null;
+  /** 直近 tool_use event の tool 名。tool_use 系以外では null。 */
+  lastToolName: string | null;
   /** Session が terminated (Anthropic 側で完全終了) になったかどうか */
   sessionTerminated: boolean;
   /** 現在のパネル表示 (チャット or 履歴) */
@@ -170,6 +180,10 @@ export interface ChatState {
   setStatus: (status: ChatStatus, error?: string | null) => void;
   /** Agent ターン進行中フラグの更新 */
   setAgentRunning: (running: boolean) => void;
+  /** 進行 event 受信。`at` は epoch ms、`toolName` は tool_use 系のみ */
+  setLastEvent: (at: number, kind: ProgressEventKind, toolName?: string | null) => void;
+  /** 進行 event 状態をクリア (= 進行インジケータが消える) */
+  clearLastEvent: () => void;
   /** Session terminated フラグの更新 */
   setSessionTerminated: (terminated: boolean) => void;
   /** 表示モードを切替 */
@@ -257,6 +271,9 @@ const INITIAL_STATE = {
   error: null,
   isAgentRunning: false,
   agentRunningSince: null as number | null,
+  lastEventAt: null as number | null,
+  lastEventKind: null as ProgressEventKind | null,
+  lastToolName: null as string | null,
   sessionTerminated: false,
   view: 'chat' as ChatView,
   artifacts: new Map<string, Artifact>(),
@@ -334,15 +351,27 @@ export const useChatStore = create<ChatState>((set) => ({
   setAgentRunning: (running) =>
     set((s) => {
       // false → true への遷移でだけ開始時刻を記録 (true → true では更新しない)。
-      // false に戻ったら null にリセット。
+      // false に戻ったら null にリセット。あわせて進行 event 状態もクリアして
+      // ProgressIndicator が確実に消えるようにする。
       if (running && !s.isAgentRunning) {
         return { isAgentRunning: true, agentRunningSince: Date.now() };
       }
       if (!running && s.isAgentRunning) {
-        return { isAgentRunning: false, agentRunningSince: null };
+        return {
+          isAgentRunning: false,
+          agentRunningSince: null,
+          lastEventAt: null,
+          lastEventKind: null,
+          lastToolName: null,
+        };
       }
       return { isAgentRunning: running };
     }),
+
+  setLastEvent: (at, kind, toolName) =>
+    set({ lastEventAt: at, lastEventKind: kind, lastToolName: toolName ?? null }),
+
+  clearLastEvent: () => set({ lastEventAt: null, lastEventKind: null, lastToolName: null }),
 
   setSessionTerminated: (terminated) => set({ sessionTerminated: terminated }),
 
@@ -529,6 +558,9 @@ export const useChatStore = create<ChatState>((set) => ({
       sessionId: null,
       isAgentRunning: false,
       agentRunningSince: null,
+      lastEventAt: null,
+      lastEventKind: null,
+      lastToolName: null,
       sessionTerminated: false,
       artifacts: new Map(),
       activeArtifactId: null,

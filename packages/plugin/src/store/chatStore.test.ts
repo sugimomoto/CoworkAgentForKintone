@@ -293,6 +293,57 @@ describe('chatStore', () => {
     });
   });
 
+  describe('setLastEvent / clearLastEvent (進行インジケータ用)', () => {
+    it('初期値はすべて null', () => {
+      const s = useChatStore.getState();
+      expect(s.lastEventAt).toBeNull();
+      expect(s.lastEventKind).toBeNull();
+      expect(s.lastToolName).toBeNull();
+    });
+
+    it('setLastEvent で 3 field 同時更新', () => {
+      useChatStore.getState().setLastEvent(1700000000000, 'tool_use', 'kintone-get-records');
+      const s = useChatStore.getState();
+      expect(s.lastEventAt).toBe(1700000000000);
+      expect(s.lastEventKind).toBe('tool_use');
+      expect(s.lastToolName).toBe('kintone-get-records');
+    });
+
+    it('setLastEvent で toolName 省略時は null', () => {
+      useChatStore.getState().setLastEvent(1700000000000, 'thinking');
+      expect(useChatStore.getState().lastToolName).toBeNull();
+    });
+
+    it('clearLastEvent で 3 field とも null に戻る', () => {
+      useChatStore.getState().setLastEvent(1700000000000, 'tool_use', 'foo');
+      useChatStore.getState().clearLastEvent();
+      const s = useChatStore.getState();
+      expect(s.lastEventAt).toBeNull();
+      expect(s.lastEventKind).toBeNull();
+      expect(s.lastToolName).toBeNull();
+    });
+
+    it('setAgentRunning(false) で進行 event 状態も自動クリア', () => {
+      useChatStore.getState().setAgentRunning(true);
+      useChatStore.getState().setLastEvent(1700000000000, 'tool_use', 'kintone-get-apps');
+      useChatStore.getState().setAgentRunning(false);
+      const s = useChatStore.getState();
+      expect(s.isAgentRunning).toBe(false);
+      expect(s.lastEventAt).toBeNull();
+      expect(s.lastEventKind).toBeNull();
+      expect(s.lastToolName).toBeNull();
+    });
+
+    it('startNewConversation で進行 event 状態もクリア', () => {
+      useChatStore.getState().setLastEvent(1700000000000, 'tool_use', 'foo');
+      useChatStore.getState().startNewConversation();
+      const s = useChatStore.getState();
+      expect(s.lastEventAt).toBeNull();
+      expect(s.lastEventKind).toBeNull();
+      expect(s.lastToolName).toBeNull();
+    });
+  });
+
   describe('updateTool', () => {
     it('既存 tool message を id で部分更新する', () => {
       useChatStore.getState().addMessage({

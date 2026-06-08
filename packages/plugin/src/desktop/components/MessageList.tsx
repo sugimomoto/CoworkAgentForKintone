@@ -4,9 +4,10 @@
 
 import { AgentMessage } from './MessageItem/AgentMessage';
 import { ArtifactRefMessage } from './MessageItem/ArtifactRefMessage';
-import { ThinkingDots } from './MessageItem/ThinkingDots';
+import { ThinkingStatic } from './MessageItem/ThinkingStatic';
 import { ToolCardMessage } from './MessageItem/ToolCardMessage';
 import { UserMessage } from './MessageItem/UserMessage';
+import { ProgressIndicator } from './ProgressIndicator';
 
 import type { ArtifactKind } from '../../core/artifacts/types';
 import type { AgentPhase } from '../hooks/useAgentPhase';
@@ -104,7 +105,8 @@ export function MessageList({
     messages.some((m) => m.kind === 'agent' || m.kind === 'tool' || m.kind === 'artifact-ref');
 
   return (
-    <div className="flex flex-1 flex-col gap-[14px] overflow-y-auto overscroll-contain px-[16px] py-[18px]">
+    <div className="relative flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col gap-[14px] overflow-y-auto overscroll-contain px-[16px] py-[18px]">
       {messages.map((m) => {
         const showRetry = m.kind === 'tool' && m.id === lastErrorToolId;
         const rendered = renderMessage(
@@ -143,6 +145,8 @@ export function MessageList({
           <span className="h-px flex-1 bg-emerald-200" aria-hidden />
         </div>
       )}
+      </div>
+      <ProgressIndicator />
     </div>
   );
 }
@@ -160,7 +164,7 @@ function renderMessage(
     case 'agent':
       return <AgentMessage text={m.text} />;
     case 'thinking':
-      return <ThinkingDots />;
+      return <ThinkingStatic />;
     case 'tool':
       return (
         <ToolCardMessage

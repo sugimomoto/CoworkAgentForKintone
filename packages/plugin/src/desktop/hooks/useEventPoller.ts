@@ -14,6 +14,7 @@ import { POLLING_INTERVAL_MS } from '../../core/constants';
 import { debug, warn } from '../../core/debug';
 import { interpretEvent, isTerminalEvent } from '../../core/managed-agents/eventInterpreter';
 import { fetchAllEventsSince } from '../../core/managed-agents/events';
+import { mapEventToProgressKind } from '../../core/managed-agents/progressEvent';
 import { retrieveSession } from '../../core/managed-agents/resources';
 import { useChatStore } from '../../store/chatStore';
 
@@ -57,6 +58,7 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
   const addPendingCustomToolUse = useChatStore((s) => s.addPendingCustomToolUse);
   const removePendingCustomToolUse = useChatStore((s) => s.removePendingCustomToolUse);
   const setAgentRunning = useChatStore((s) => s.setAgentRunning);
+  const setLastEvent = useChatStore((s) => s.setLastEvent);
   const setSessionTerminated = useChatStore((s) => s.setSessionTerminated);
   const setBindingStatus = useChatStore((s) => s.setBindingStatus);
   const lastEventIdRef = useRef<string | undefined>(undefined);
@@ -211,6 +213,12 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
           // terminated は実質「もう動かない」状態なので running も明示的に下げる
           setAgentRunning(false);
         }
+        // 進行インジケータ用に「最後に受信した進行 event」を記録する。
+        // 表示対象外 event (session.*/span.*/user.* 等) は null が返るのでスキップ。
+        const progress = mapEventToProgressKind(e);
+        if (progress) {
+          setLastEvent(Date.now(), progress.kind, progress.toolName ?? null);
+        }
         lastEventIdRef.current = e.id;
         if (isTerminalEvent(e)) sawTerminal = true;
       }
@@ -268,6 +276,7 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
     addPendingCustomToolUse,
     removePendingCustomToolUse,
     setAgentRunning,
+    setLastEvent,
     setSessionTerminated,
     setBindingStatus,
   ]);
