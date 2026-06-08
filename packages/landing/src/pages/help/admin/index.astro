@@ -54,7 +54,10 @@ const homeFaqHref = `${baseHref}/#faq`;
     <li>
       <h3>Cloudflare Worker をデプロイ</h3>
       <p>プラグイン設定画面の「Worker をデプロイ」ボタンを押すと、kintone への REST API アクセスを仲介する MCP サーバーがブラウザだけでデプロイされます。CLI は不要です。デプロイ先 URL が自動で設定欄に入力されます。</p>
-      <div class="imgph"><span class="lab">screenshot: Worker デプロイ画面</span><span style="font-size:12px">Plugin Config › Worker Deploy</span></div>
+      <figure class="docshot">
+        <img src={`${baseHref}/images/help/admin-worker-deploy.png`} alt="プラグイン設定画面の「Step 0. Cloudflare Workers をデプロイ」セクション。Cloudflare Account ID と API Token を入力するフォーム、および Worker (cowork-agent-kintone-mcp) をデプロイ するボタン" loading="lazy" />
+        <figcaption>Plugin Config › Step 0. Cloudflare Workers をデプロイ</figcaption>
+      </figure>
     </li>
     <li>
       <h3>Anthropic API Key を登録</h3>
