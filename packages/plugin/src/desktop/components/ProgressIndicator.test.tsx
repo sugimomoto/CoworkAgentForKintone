@@ -7,9 +7,7 @@ import { ProgressIndicator } from './ProgressIndicator';
 function resetStore(): void {
   useChatStore.setState({
     isAgentRunning: false,
-    lastEventAt: null,
-    lastEventKind: null,
-    lastToolName: null,
+    lastEvent: null,
     messages: [],
     pendingCustomToolUseIds: new Map(),
   });
@@ -36,12 +34,10 @@ describe('ProgressIndicator', () => {
     expect(getByTestId('progress-indicator-label').textContent).toBe('思考中…');
   });
 
-  it('lastEventKind=tool_use + lastToolName で「ツール実行中: <name>」', () => {
+  it('lastEvent.kind=tool_use + toolName で「ツール実行中: <name>」', () => {
     useChatStore.setState({
       isAgentRunning: true,
-      lastEventAt: Date.now(),
-      lastEventKind: 'tool_use',
-      lastToolName: 'kintone-get-records',
+      lastEvent: { at: Date.now(), kind: 'tool_use', toolName: 'kintone-get-records' },
     });
     const { getByTestId } = render(<ProgressIndicator />);
     expect(getByTestId('progress-indicator-label').textContent).toBe(
@@ -49,23 +45,19 @@ describe('ProgressIndicator', () => {
     );
   });
 
-  it('lastEventKind=tool_result で「結果を読んでいます…」', () => {
+  it('lastEvent.kind=tool_result で「結果を読んでいます…」', () => {
     useChatStore.setState({
       isAgentRunning: true,
-      lastEventAt: Date.now(),
-      lastEventKind: 'tool_result',
-      lastToolName: null,
+      lastEvent: { at: Date.now(), kind: 'tool_result', toolName: null },
     });
     const { getByTestId } = render(<ProgressIndicator />);
     expect(getByTestId('progress-indicator-label').textContent).toBe('結果を読んでいます…');
   });
 
-  it('lastEventKind=custom_tool_use で「アーティファクト処理中」', () => {
+  it('lastEvent.kind=custom_tool_use で「アーティファクト処理中」', () => {
     useChatStore.setState({
       isAgentRunning: true,
-      lastEventAt: Date.now(),
-      lastEventKind: 'custom_tool_use',
-      lastToolName: null,
+      lastEvent: { at: Date.now(), kind: 'custom_tool_use', toolName: null },
     });
     const { getByTestId } = render(<ProgressIndicator />);
     expect(getByTestId('progress-indicator-label').textContent).toBe('アーティファクト処理中');
@@ -74,8 +66,7 @@ describe('ProgressIndicator', () => {
   it('経過秒が表示される (初期 0s)', () => {
     useChatStore.setState({
       isAgentRunning: true,
-      lastEventAt: Date.now(),
-      lastEventKind: 'thinking',
+      lastEvent: { at: Date.now(), kind: 'thinking', toolName: null },
     });
     const { getByTestId } = render(<ProgressIndicator />);
     expect(getByTestId('progress-indicator-elapsed').textContent?.replace(/\s/g, '')).toBe('·0s');

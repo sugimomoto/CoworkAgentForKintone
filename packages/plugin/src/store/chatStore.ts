@@ -78,14 +78,13 @@ export interface ChatState {
    */
   agentRunningSince: number | null;
   /**
-   * 直近の進行 event を受信した時刻 (epoch ms)。進行インジケータの経過秒表示に使う。
-   * ターン非アクティブ時は null。
+   * 直近の進行 event スナップショット。進行インジケータの表示元。
+   * - at:       受信時刻 (epoch ms)。経過秒の起点
+   * - kind:     進行種別 (思考中 / ツール実行中 / 等)
+   * - toolName: tool_use 系のみ tool 名、それ以外 null
+   * ターン非アクティブ時は全体が null (= インジケータ非表示扱い)。
    */
-  lastEventAt: number | null;
-  /** 直近 event の進行種別 (思考中 / ツール実行中 / 等)。null は「まだ event 未受信」。 */
-  lastEventKind: ProgressEventKind | null;
-  /** 直近 tool_use event の tool 名。tool_use 系以外では null。 */
-  lastToolName: string | null;
+  lastEvent: { at: number; kind: ProgressEventKind; toolName: string | null } | null;
   /** Session が terminated (Anthropic 側で完全終了) になったかどうか */
   sessionTerminated: boolean;
   /** 現在のパネル表示 (チャット or 履歴) */
@@ -180,10 +179,10 @@ export interface ChatState {
   setStatus: (status: ChatStatus, error?: string | null) => void;
   /** Agent ターン進行中フラグの更新 */
   setAgentRunning: (running: boolean) => void;
-  /** 進行 event 受信。`at` は epoch ms、`toolName` は tool_use 系のみ */
-  setLastEvent: (at: number, kind: ProgressEventKind, toolName?: string | null) => void;
-  /** 進行 event 状態をクリア (= 進行インジケータが消える) */
-  clearLastEvent: () => void;
+  /** 進行 event スナップショットを設定 (null で消去)。`at` は epoch ms */
+  setLastEvent: (
+    snapshot: { at: number; kind: ProgressEventKind; toolName: string | null } | null,
+  ) => void;
   /** Session terminated フラグの更新 */
   setSessionTerminated: (terminated: boolean) => void;
   /** 表示モードを切替 */
@@ -271,9 +270,7 @@ const INITIAL_STATE = {
   error: null,
   isAgentRunning: false,
   agentRunningSince: null as number | null,
-  lastEventAt: null as number | null,
-  lastEventKind: null as ProgressEventKind | null,
-  lastToolName: null as string | null,
+  lastEvent: null as ChatState['lastEvent'],
   sessionTerminated: false,
   view: 'chat' as ChatView,
   artifacts: new Map<string, Artifact>(),
@@ -360,18 +357,13 @@ export const useChatStore = create<ChatState>((set) => ({
         return {
           isAgentRunning: false,
           agentRunningSince: null,
-          lastEventAt: null,
-          lastEventKind: null,
-          lastToolName: null,
+          lastEvent: null,
         };
       }
       return { isAgentRunning: running };
     }),
 
-  setLastEvent: (at, kind, toolName) =>
-    set({ lastEventAt: at, lastEventKind: kind, lastToolName: toolName ?? null }),
-
-  clearLastEvent: () => set({ lastEventAt: null, lastEventKind: null, lastToolName: null }),
+  setLastEvent: (snapshot) => set({ lastEvent: snapshot }),
 
   setSessionTerminated: (terminated) => set({ sessionTerminated: terminated }),
 
@@ -558,9 +550,7 @@ export const useChatStore = create<ChatState>((set) => ({
       sessionId: null,
       isAgentRunning: false,
       agentRunningSince: null,
-      lastEventAt: null,
-      lastEventKind: null,
-      lastToolName: null,
+      lastEvent: null,
       sessionTerminated: false,
       artifacts: new Map(),
       activeArtifactId: null,

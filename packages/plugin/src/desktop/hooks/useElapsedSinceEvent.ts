@@ -8,11 +8,11 @@ export function useElapsedSinceEvent(lastEventAt: number | null): number {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
     if (lastEventAt === null) {
-      setSeconds((s) => (s === 0 ? s : 0));
+      setSeconds(0);
       return;
     }
     const tick = (): void => {
-      setSeconds(Math.max(0, Math.floor((Date.now() - lastEventAt) / 1000)));
+      setSeconds(Math.floor((Date.now() - lastEventAt) / 1000));
     };
     tick(); // マウント / lastEventAt 変更直後に即時 0 を反映
     const id = setInterval(tick, 1000);

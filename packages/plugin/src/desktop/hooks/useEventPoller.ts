@@ -15,6 +15,8 @@ import { debug, warn } from '../../core/debug';
 import { interpretEvent, isTerminalEvent } from '../../core/managed-agents/eventInterpreter';
 import { fetchAllEventsSince } from '../../core/managed-agents/events';
 import { mapEventToProgressKind } from '../../core/managed-agents/progressEvent';
+
+import type { ProgressEventKind } from '../../core/managed-agents/progressEvent';
 import { retrieveSession } from '../../core/managed-agents/resources';
 import { useChatStore } from '../../store/chatStore';
 
@@ -147,6 +149,11 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
 
       let sawTerminal = false;
       let sawAgentMessage = false;
+      // バッチ内の最後の進行 event を 1 つだけ覚えておき、ループ終了後に 1 回 setLastEvent する。
+      // event 1 件ずつ store に書くと subscribers が 1 batch で N 回 re-render され、
+      // useElapsedSinceEvent の setInterval も無駄に teardown→再生成される (どうせ中間値は
+      // <1 frame で消費されないので意味がない)。
+      let lastProgress: { kind: ProgressEventKind; toolName?: string } | null = null;
       for (const e of events) {
         const effects = interpretEvent(e);
         for (const r of effects) {
@@ -213,14 +220,19 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
           // terminated は実質「もう動かない」状態なので running も明示的に下げる
           setAgentRunning(false);
         }
-        // 進行インジケータ用に「最後に受信した進行 event」を記録する。
-        // 表示対象外 event (session.*/span.*/user.* 等) は null が返るのでスキップ。
+        // 進行インジケータ用: 表示対象外 event (session.*/span.*/user.* 等) は null。
+        // 進行 event ならローカル変数で上書き → ループ後にまとめて 1 回 setLastEvent。
         const progress = mapEventToProgressKind(e);
-        if (progress) {
-          setLastEvent(Date.now(), progress.kind, progress.toolName ?? null);
-        }
+        if (progress) lastProgress = progress;
         lastEventIdRef.current = e.id;
         if (isTerminalEvent(e)) sawTerminal = true;
+      }
+      if (lastProgress) {
+        setLastEvent({
+          at: Date.now(),
+          kind: lastProgress.kind,
+          toolName: lastProgress.toolName ?? null,
+        });
       }
       // ターン終了 (end_turn / retries_exhausted / max_tokens / error) で running フラグを下げる。
       // (Custom Tool の `requires_action` は terminal ではないので isAgentRunning は維持される)
