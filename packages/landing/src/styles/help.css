@@ -80,6 +80,10 @@ pre.code .s{color:#fcd34d}
 .imgph{border:1px dashed var(--border-strong);border-radius:var(--r-lg);background:repeating-linear-gradient(135deg,var(--bg-alt),var(--bg-alt) 11px,var(--bg) 11px,var(--bg) 22px);min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;margin:0 0 20px;color:var(--subtle)}
 .imgph .lab{font-family:'JetBrains Mono',monospace;font-size:11.5px;background:var(--card);border:1px solid var(--border);padding:4px 10px;border-radius:6px;color:var(--muted)}
 
+figure.docshot{margin:0 0 20px}
+figure.docshot img{display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:0 1px 3px rgba(0,0,0,.04)}
+figure.docshot figcaption{margin-top:8px;font-size:12px;color:var(--subtle);text-align:center}
+
 table.doc-t{width:100%;border-collapse:collapse;font-size:13.5px;margin:0 0 20px}
 table.doc-t th{text-align:left;padding:10px 12px;border-bottom:2px solid var(--border-strong);font-weight:700;color:var(--ink)}
 table.doc-t td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);vertical-align:top}
