@@ -1,7 +1,7 @@
 {
   "name": "@cowork-agent/plugin",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Cowork Agent for kintone — kintone プラグイン本体",
   "license": "MIT",
   "scripts": {
