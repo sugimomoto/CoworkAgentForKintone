@@ -48,9 +48,8 @@ const homeFaqHref = `${baseHref}/#faq`;
   <ol class="steps-doc">
     <li>
       <h3>プラグインをインストール</h3>
-      <p>GitHub Releases から最新の <code>.zip</code> をダウンロードし、kintone の［システム設定 › プラグイン］にアップロードします。署名が検証され、対象アプリで有効化できるようになります。</p>
-      <pre class="code"><span class="c"># 最新リリースを取得（GitHub CLI の例）</span>
-<span class="g">$</span> gh release download --repo sugimomoto/CoworkAgentForKintone --pattern '*.zip'</pre>
+      <p><a href="https://github.com/sugimomoto/CoworkAgentForKintone/releases" target="_blank" rel="noopener">GitHub Releases ページ</a> を開き、最新版の <code>.zip</code>（例: <code>cowork-agent-for-kintone-v0.1.0.zip</code>）をダウンロードします。続けて kintone の［システム設定 › その他 › プラグイン › 読み込む］から <code>.zip</code> をアップロードすると、署名が検証され、対象アプリで有効化できるようになります。</p>
+      <div class="callout tip"><span class="ic">✓</span><div class="body">GitHub CLI を使う場合: <code>gh release download --repo sugimomoto/CoworkAgentForKintone --pattern '*.zip'</code> で最新版をワンコマンドで取得できます。</div></div>
     </li>
     <li>
       <h3>Cloudflare Worker をデプロイ</h3>
