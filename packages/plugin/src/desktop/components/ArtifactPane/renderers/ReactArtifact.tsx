@@ -66,10 +66,14 @@ try {
   const runtimeExports = module.exports;
   // Babel の modules: 'cjs' 変換で生成される require(...) を解決するシム。
   // LLM が import { useState } from "react" 等を書いても動かせる。
+  const modules = {
+    react: React,
+    'react-dom': ReactDOMNS,
+    'react-dom/client': ReactDOMNS,
+    recharts: RechartsNS,
+  };
   const requireShim = (name) => {
-    if (name === 'react') return React;
-    if (name === 'react-dom' || name === 'react-dom/client') return ReactDOMNS;
-    if (name === 'recharts') return RechartsNS;
+    if (name in modules) return modules[name];
     throw new Error('module not available in sandbox: ' + name);
   };
   new Function('React', 'Recharts', 'module', 'exports', 'require', transformed)

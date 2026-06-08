@@ -90,11 +90,7 @@ export function escapeHtml(s: string): string {
 export const POST_HELPER_SCRIPT = `
 const post = (type, payload) => parent.postMessage({ source: 'artifact', type, payload }, '*');
 const fmtErr = (err, fallback) => {
-  if (err && typeof err === 'object') {
-    const msg = err.message ? String(err.message) : '';
-    const stack = err.stack ? String(err.stack) : '';
-    return msg && stack && !stack.includes(msg) ? msg + '\\n' + stack : (stack || msg || String(err));
-  }
+  if (err && typeof err === 'object') return String(err.stack || err.message || err);
   return String(err ?? fallback ?? 'unknown error');
 };
 window.addEventListener('error', (e) => post('error', fmtErr(e.error, e.message)));

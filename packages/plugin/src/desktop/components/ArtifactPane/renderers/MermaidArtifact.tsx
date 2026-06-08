@@ -34,7 +34,7 @@ try {
   document.getElementById('out').innerHTML = svg;
   post('rendered', null);
 } catch (err) {
-  const msg = String(err && err.stack || err);
+  const msg = fmtErr(err, 'mermaid render failed');
   document.getElementById('out').innerHTML = '<div class="err"></div>';
   document.querySelector('.err').textContent = msg;
   post('error', msg);
