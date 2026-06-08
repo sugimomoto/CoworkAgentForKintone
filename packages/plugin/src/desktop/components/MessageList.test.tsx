@@ -21,10 +21,11 @@ describe('MessageList', () => {
     expect(screen.getByText('了解しました')).toBeInTheDocument();
   });
 
-  it('thinking kind は ThinkingDots として表示される', () => {
+  it('thinking kind は ThinkingStatic として表示される (アニメなし)', () => {
     const messages: ChatMessage[] = [{ id: 'm1', kind: 'thinking' }];
     render(<MessageList messages={messages} />);
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByTestId('thinking-static')).toBeInTheDocument();
+    expect(screen.getByText('考え中…')).toBeInTheDocument();
   });
 
   it('複数メッセージを順序通りに表示する', () => {

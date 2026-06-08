@@ -30,7 +30,6 @@ import { buildUserMessageContent } from '../core/files/messageContent';
 
 import { useAgentPhase } from './hooks/useAgentPhase';
 import { useCustomToolResponder } from './hooks/useCustomToolResponder';
-import { useElapsedSeconds } from './hooks/useElapsedSeconds';
 import { useEventPoller } from './hooks/useEventPoller';
 import { useFileAttacher } from './hooks/useFileAttacher';
 import { useSession } from './hooks/useSession';
@@ -81,11 +80,6 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   useCustomToolResponder({ sessionId, enabled: status === 'ready' && sessionId !== null });
   useSessionFiles({ sessionId, enabled: status === 'ready' && sessionId !== null });
   const agentPhase = useAgentPhase();
-
-  // Agent ターン進行中の経過秒数。30 秒以上で「応答が遅い」バナーを出す目印。
-  const elapsedSeconds = useElapsedSeconds(isAgentRunning);
-  const SLOW_THRESHOLD_S = 30;
-  const isSlow = isAgentRunning && elapsedSeconds >= SLOW_THRESHOLD_S;
 
   const handleSubmit = useCallback(
     async (text: string) => {
@@ -329,7 +323,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
         - 履歴 / 新規会話 / 再連携は将来 Conversation View 内のヘッダー二次行や
           メッセージ間のアフォーダンスで提供する想定 (V2)。
         - 暫定: status 系イベントは下の Banner 群でカバー (error / sessionTerminated /
-          oauth-rebind / slow-response)。
+          oauth-rebind)。進行中の状態表示は MessageList の ProgressIndicator が担う。
       */}
 
       {status === 'error' && error && (
@@ -360,22 +354,6 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
       {status === 'ready' && bindingStatus === 'error' && isMidSession && (
         <Banner testId="oauth-rebind" actionLabel="再連携" onAction={handleConnect}>
           kintone の連携が切れています。{bindingError ? `(${bindingError})` : ''}
-        </Banner>
-      )}
-
-      {/*
-        応答遅延バナー: Agent ターンが 30 秒以上続いているときに表示。
-        Anthropic 側の処理が長い (e.g. 大きな SVG 生成) ことがあるので、
-        ユーザーが「フリーズしたのか待つべきか」を判断できるようにする。
-      */}
-      {isSlow && (
-        <Banner
-          testId="slow-response"
-          actionLabel="中断"
-          onAction={handleCancel}
-        >
-          応答に時間がかかっています ({elapsedSeconds}秒経過)。
-          そのまま待つか、中断して新しいセッションで試してください。
         </Banner>
       )}
 

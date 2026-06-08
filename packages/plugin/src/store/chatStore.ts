@@ -10,6 +10,7 @@ import { binaryArtifactIdFromFileId } from '../core/artifacts/types';
 import type { AgentRecord } from '../core/bootstrap/agentTypes';
 import type { Artifact, CreateArtifactInput } from '../core/artifacts/types';
 import type { AgentEditDraft } from '../core/managed-agents/agentDetailApi';
+import type { ProgressEventKind } from '../core/managed-agents/progressEvent';
 import type { AccessContext } from '../core/access/filterAgentsByAccess';
 
 export interface BinaryArtifactInput {
@@ -76,6 +77,14 @@ export interface ChatState {
    * UI で「○秒待機中」の表示や「応答が遅い」バナーの判定に使う。
    */
   agentRunningSince: number | null;
+  /**
+   * 直近の進行 event スナップショット。進行インジケータの表示元。
+   * - at:       受信時刻 (epoch ms)。経過秒の起点
+   * - kind:     進行種別 (思考中 / ツール実行中 / 等)
+   * - toolName: tool_use 系のみ tool 名、それ以外 null
+   * ターン非アクティブ時は全体が null (= インジケータ非表示扱い)。
+   */
+  lastEvent: { at: number; kind: ProgressEventKind; toolName: string | null } | null;
   /** Session が terminated (Anthropic 側で完全終了) になったかどうか */
   sessionTerminated: boolean;
   /** 現在のパネル表示 (チャット or 履歴) */
@@ -170,6 +179,10 @@ export interface ChatState {
   setStatus: (status: ChatStatus, error?: string | null) => void;
   /** Agent ターン進行中フラグの更新 */
   setAgentRunning: (running: boolean) => void;
+  /** 進行 event スナップショットを設定 (null で消去)。`at` は epoch ms */
+  setLastEvent: (
+    snapshot: { at: number; kind: ProgressEventKind; toolName: string | null } | null,
+  ) => void;
   /** Session terminated フラグの更新 */
   setSessionTerminated: (terminated: boolean) => void;
   /** 表示モードを切替 */
@@ -257,6 +270,7 @@ const INITIAL_STATE = {
   error: null,
   isAgentRunning: false,
   agentRunningSince: null as number | null,
+  lastEvent: null as ChatState['lastEvent'],
   sessionTerminated: false,
   view: 'chat' as ChatView,
   artifacts: new Map<string, Artifact>(),
@@ -334,15 +348,22 @@ export const useChatStore = create<ChatState>((set) => ({
   setAgentRunning: (running) =>
     set((s) => {
       // false → true への遷移でだけ開始時刻を記録 (true → true では更新しない)。
-      // false に戻ったら null にリセット。
+      // false に戻ったら null にリセット。あわせて進行 event 状態もクリアして
+      // ProgressIndicator が確実に消えるようにする。
       if (running && !s.isAgentRunning) {
         return { isAgentRunning: true, agentRunningSince: Date.now() };
       }
       if (!running && s.isAgentRunning) {
-        return { isAgentRunning: false, agentRunningSince: null };
+        return {
+          isAgentRunning: false,
+          agentRunningSince: null,
+          lastEvent: null,
+        };
       }
       return { isAgentRunning: running };
     }),
+
+  setLastEvent: (snapshot) => set({ lastEvent: snapshot }),
 
   setSessionTerminated: (terminated) => set({ sessionTerminated: terminated }),
 
@@ -529,6 +550,7 @@ export const useChatStore = create<ChatState>((set) => ({
       sessionId: null,
       isAgentRunning: false,
       agentRunningSince: null,
+      lastEvent: null,
       sessionTerminated: false,
       artifacts: new Map(),
       activeArtifactId: null,

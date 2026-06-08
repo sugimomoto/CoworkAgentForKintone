@@ -293,6 +293,48 @@ describe('chatStore', () => {
     });
   });
 
+  describe('setLastEvent (進行インジケータ用)', () => {
+    it('初期値は null', () => {
+      expect(useChatStore.getState().lastEvent).toBeNull();
+    });
+
+    it('setLastEvent で snapshot をまとめて設定', () => {
+      useChatStore.getState().setLastEvent({
+        at: 1700000000000,
+        kind: 'tool_use',
+        toolName: 'kintone-get-records',
+      });
+      expect(useChatStore.getState().lastEvent).toEqual({
+        at: 1700000000000,
+        kind: 'tool_use',
+        toolName: 'kintone-get-records',
+      });
+    });
+
+    it('setLastEvent(null) で消去できる', () => {
+      useChatStore.getState().setLastEvent({ at: 1700000000000, kind: 'tool_use', toolName: 'foo' });
+      useChatStore.getState().setLastEvent(null);
+      expect(useChatStore.getState().lastEvent).toBeNull();
+    });
+
+    it('setAgentRunning(false) で進行 event 状態も自動クリア', () => {
+      useChatStore.getState().setAgentRunning(true);
+      useChatStore
+        .getState()
+        .setLastEvent({ at: 1700000000000, kind: 'tool_use', toolName: 'kintone-get-apps' });
+      useChatStore.getState().setAgentRunning(false);
+      const s = useChatStore.getState();
+      expect(s.isAgentRunning).toBe(false);
+      expect(s.lastEvent).toBeNull();
+    });
+
+    it('startNewConversation で進行 event 状態もクリア', () => {
+      useChatStore.getState().setLastEvent({ at: 1700000000000, kind: 'tool_use', toolName: 'foo' });
+      useChatStore.getState().startNewConversation();
+      expect(useChatStore.getState().lastEvent).toBeNull();
+    });
+  });
+
   describe('updateTool', () => {
     it('既存 tool message を id で部分更新する', () => {
       useChatStore.getState().addMessage({
