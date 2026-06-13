@@ -4,10 +4,20 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { handleOAuthCallback } from '../src/oauth-callback';
+import { handleOAuthCallback, targetOriginFromState } from '../src/oauth-callback';
 
 function callbackRequest(query: string): Request {
   return new Request(`https://example.com/oauth/callback${query}`, { method: 'GET' });
+}
+
+/** base64url エンコード (テスト用) */
+function b64url(s: string): string {
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** `<random>.<base64url(origin)>` 形式の state を組み立てる */
+function stateWithOrigin(origin: string, random = 'nonce123'): string {
+  return `${random}.${b64url(origin)}`;
 }
 
 describe('handleOAuthCallback', () => {
@@ -57,5 +67,58 @@ describe('handleOAuthCallback', () => {
     // 表示部の </script> ではなく、payload 内の </script> リテラルが現れないこと
     // (表示部 <pre> は escapeHtml で &lt;/script&gt; になるので生 < は無い)
     expect(html).not.toMatch(/code:\s*"[^"]*<\/script>/);
+  });
+});
+
+describe('targetOriginFromState', () => {
+  it('有効な kintone オリジンを含む state → そのオリジンを返す', () => {
+    expect(targetOriginFromState(stateWithOrigin('https://demo.cybozu.com'))).toBe(
+      'https://demo.cybozu.com',
+    );
+    expect(targetOriginFromState(stateWithOrigin('https://foo.kintone.com'))).toBe(
+      'https://foo.kintone.com',
+    );
+    expect(targetOriginFromState(stateWithOrigin('https://x.cybozu-dev.com'))).toBe(
+      'https://x.cybozu-dev.com',
+    );
+  });
+
+  it('オリジンセグメントが無い (旧形式) → null', () => {
+    expect(targetOriginFromState('justanonce')).toBeNull();
+  });
+
+  it('許可外オリジン → null', () => {
+    expect(targetOriginFromState(stateWithOrigin('https://evil.example'))).toBeNull();
+    // kintone を含む紛らわしいドメインも弾く
+    expect(targetOriginFromState(stateWithOrigin('https://cybozu.com.evil.example'))).toBeNull();
+    // http (非 https) も弾く
+    expect(targetOriginFromState(stateWithOrigin('http://demo.cybozu.com'))).toBeNull();
+  });
+});
+
+describe('handleOAuthCallback — postMessage targetOrigin', () => {
+  it('有効オリジンの state → そのオリジンに postMessage する script を吐く', async () => {
+    const state = stateWithOrigin('https://demo.cybozu.com');
+    const res = handleOAuthCallback(callbackRequest(`?code=ABC123&state=${encodeURIComponent(state)}`));
+    const html = await res.text();
+    // targetOrigin が検証済みオリジンに設定され、ワイルドカードは使われない
+    expect(html).toContain('"https://demo.cybozu.com"');
+    expect(html).not.toContain("postMessage(payload, '*')");
+    expect(html).toContain('window.opener && targetOrigin');
+  });
+
+  it('許可外オリジンの state → targetOrigin は null (postMessage しない)', async () => {
+    const state = stateWithOrigin('https://evil.example');
+    const res = handleOAuthCallback(callbackRequest(`?code=ABC123&state=${encodeURIComponent(state)}`));
+    const html = await res.text();
+    expect(html).toContain('var targetOrigin = null;');
+    // code はページ上には残る (手動コピーのフォールバック)
+    expect(html).toContain('ABC123');
+  });
+
+  it('旧形式 state (オリジン無し) → targetOrigin は null', async () => {
+    const res = handleOAuthCallback(callbackRequest('?code=ABC123&state=legacyonly'));
+    const html = await res.text();
+    expect(html).toContain('var targetOrigin = null;');
   });
 });

@@ -3,13 +3,20 @@ import { afterEach, describe, expect, it, beforeEach } from 'vitest';
 import { clearPkce, generatePkce, loadPkce, savePkce } from './pkce';
 
 describe('generatePkce', () => {
-  it('codeVerifier / codeChallenge / state は base64url 文字列', async () => {
+  it('codeVerifier / codeChallenge は base64url 文字列', async () => {
     const p = await generatePkce();
     expect(p.codeVerifier).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(p.codeChallenge).toMatch(/^[A-Za-z0-9_-]+$/);
-    expect(p.state).toMatch(/^[A-Za-z0-9_-]+$/);
     // verifier は 43+ 文字 (32 bytes base64url = 43 chars)
     expect(p.codeVerifier.length).toBeGreaterThanOrEqual(43);
+  });
+
+  it('state は <random>.<base64url(origin)> 形式で、後半が現在の origin をエンコードしている', async () => {
+    const p = await generatePkce();
+    expect(p.state).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+    const originSegment = p.state.slice(p.state.indexOf('.') + 1);
+    const b64 = originSegment.replace(/-/g, '+').replace(/_/g, '/');
+    expect(atob(b64)).toBe(location.origin);
   });
 
   it('codeChallenge = SHA256(codeVerifier) base64url', async () => {
