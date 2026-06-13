@@ -291,5 +291,6 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
     setLastEvent,
     setSessionTerminated,
     setBindingStatus,
+    setActiveArtifact,
   ]);
 }
