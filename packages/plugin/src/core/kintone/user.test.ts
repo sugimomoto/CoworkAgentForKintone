@@ -26,6 +26,7 @@ function makeKintoneStub(overrides: Partial<KintoneLoginUser> = {}): KintoneGlob
   };
   return {
     getLoginUser: () => user,
+    getRequestToken: () => 'test-token',
     app: { getId: () => 42 },
     events: { on: () => {} },
     plugin: {
@@ -36,7 +37,7 @@ function makeKintoneStub(overrides: Partial<KintoneLoginUser> = {}): KintoneGlob
         setProxyConfig: () => {},
       },
     },
-    api: () => Promise.resolve({}),
+    api: (() => Promise.resolve({})) as unknown as KintoneApiFn,
     proxy: () => Promise.resolve(['', 200, {}] as [string, number, Record<string, string>]),
   };
 }

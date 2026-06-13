@@ -246,7 +246,7 @@ function StatusDot({ tone }: { tone: StatusTone }): JSX.Element {
 
 interface WorkflowActionProps {
   wf: ApplyWorkflowApi;
-  previewUrl?: string;
+  previewUrl?: string | undefined;
 }
 
 function WorkflowAction({ wf, previewUrl }: WorkflowActionProps): JSX.Element {

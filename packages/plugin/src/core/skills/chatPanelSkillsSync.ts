@@ -111,6 +111,9 @@ async function postSkillsSync(
    */
   files?: Array<{ path: string; content: string }>,
 ): Promise<SkillSyncResponse> {
+  if (typeof kintone === 'undefined') {
+    throw new Error('kintone JavaScript API is not available (Plugin context 外)');
+  }
   const url = `${workerUrl.replace(/\/$/, '')}/skills/sync`;
   const body = {
     skills: bundles.map((b, idx) => {

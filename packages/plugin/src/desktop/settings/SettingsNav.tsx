@@ -15,7 +15,7 @@ export interface SettingsNavProps {
   /** 各セクションのアイテム件数バッジ (任意) */
   counts?: Partial<Record<SettingsSection, number>>;
   /** Plugin Config (kintone admin 画面) へのリンクをクリック */
-  onPluginConfigClick?: () => void;
+  onPluginConfigClick?: (() => void) | undefined;
 }
 
 interface NavItemDef {

@@ -73,6 +73,16 @@ declare global {
     app: KintonePluginApp;
   }
 
+  /**
+   * `kintone.api` は呼び出し可能 (REST API 実行) かつ `.url()` 等のヘルパを持つ。
+   * 公式: https://cybozu.dev/ja/kintone/docs/js-api/utility/get-url/
+   */
+  interface KintoneApiFn {
+    (path: string, method: string, params: unknown): Promise<unknown>;
+    url(path: string, detectGuestSpace?: boolean): string;
+    urlForGet(path: string, params: Record<string, unknown>, detectGuestSpace?: boolean): string;
+  }
+
   interface KintoneGlobal {
     getLoginUser(): KintoneLoginUser;
     /**
@@ -83,7 +93,7 @@ declare global {
     app: KintoneApp;
     events: KintoneEvents;
     plugin: KintonePlugin;
-    api(path: string, method: string, params: unknown): Promise<unknown>;
+    api: KintoneApiFn;
     /**
      * 任意の外部 URL に対する HTTP リクエストを kintone サーバ経由で送る (CORS 回避)。
      * Plugin 設定画面 / カスタマイズ JS どこからでも呼べる (proxyConfig 不要)。

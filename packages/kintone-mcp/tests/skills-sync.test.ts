@@ -31,7 +31,7 @@ function makeReq(opts: {
   return new Request('https://worker.example.com/skills/sync', {
     method: 'POST',
     headers,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
   });
 }
 

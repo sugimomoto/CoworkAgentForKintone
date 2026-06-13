@@ -155,19 +155,19 @@ export interface Artifact {
   kind: ArtifactKind;
   title: string;
   /** kind=code 時の言語ヒント (任意) */
-  language?: string;
+  language?: string | undefined;
   /** 本文 (kind=binary 以外で使用)。kind=binary では空文字 */
   content: string;
   /** 1 行要約 (任意) */
-  summary?: string;
+  summary?: string | undefined;
   /** kind=binary 時の Anthropic Files API の file_id (DL に使う) */
   fileId?: string;
   /** kind=binary 時のファイル名 (Anthropic から返ってきた filename) */
   filename?: string;
   /** kind=binary 時の MIME */
-  mime?: string;
+  mime?: string | undefined;
   /** kind=binary 時のバイト数 (Anthropic から返ってきた size_bytes) */
-  sizeBytes?: number;
+  sizeBytes?: number | undefined;
   /** 初回作成 epoch ms */
   createdAt: number;
   /** 最終更新 epoch ms */

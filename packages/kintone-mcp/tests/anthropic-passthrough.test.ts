@@ -45,7 +45,7 @@ describe('handleAnthropicPassthrough', () => {
     });
     const res = await handleAnthropicPassthrough(req, '/v1/agents');
     expect(res.status).toBe(401);
-    const json = await res.json();
+    const json = (await res.json()) as { error?: string };
     expect(json.error).toBe('missing_anthropic_api_key');
   });
 
@@ -113,7 +113,7 @@ describe('handleAnthropicPassthrough', () => {
     );
     const res = await handleAnthropicPassthrough(req, '/v1/files/file_xyz/content');
     expect(res.status).toBe(415);
-    const json = await res.json();
+    const json = (await res.json()) as { error?: string };
     expect(json.error).toBe('use_files_endpoint');
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -131,7 +131,7 @@ describe('handleAnthropicPassthrough', () => {
     });
     const res = await handleAnthropicPassthrough(req, '/v1/agents');
     expect(res.status).toBe(400);
-    const json = await res.json();
+    const json = (await res.json()) as { error: { message: string } };
     expect(json.error.message).toBe('invalid');
   });
 

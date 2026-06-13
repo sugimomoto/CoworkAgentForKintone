@@ -9,9 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveIsAdmin, useIsAdmin } from './useIsAdmin';
 
 type KintoneGlobal = {
-  kintone?: {
-    isUsersAndSystemAdministrator?: () => Promise<boolean>;
-  };
+  kintone?:
+    | {
+        isUsersAndSystemAdministrator?: () => Promise<boolean>;
+      }
+    | undefined;
 };
 
 const g = globalThis as KintoneGlobal;
