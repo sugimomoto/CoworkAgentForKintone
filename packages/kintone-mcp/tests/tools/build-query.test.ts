@@ -104,3 +104,59 @@ describe('buildQueryFromFilters — 複合', () => {
     ).toBe('title like "A" and status = "open" and amount >= 100');
   });
 });
+
+describe('buildQueryFromFilters — インジェクション対策', () => {
+  it('値に含まれる " はエスケープされる', () => {
+    expect(
+      buildQueryFromFilters({
+        filters: { equals: [{ field: 'status', value: 'a" or status = "b' }] },
+      }),
+    ).toBe('status = "a\\" or status = \\"b"');
+  });
+
+  it('値に含まれる \\ はエスケープされる', () => {
+    expect(
+      buildQueryFromFilters({ filters: { textContains: [{ field: 'path', value: 'C:\\temp' }] } }),
+    ).toBe('path like "C:\\\\temp"');
+  });
+
+  it('inValues の各値もエスケープされる', () => {
+    expect(
+      buildQueryFromFilters({
+        filters: { inValues: [{ field: 'tag', values: ['x"y', 'z'] }] },
+      }),
+    ).toBe('tag in ("x\\"y", "z")');
+  });
+
+  it('フィールド名に構文破壊文字 (引用符) を含むと throw する', () => {
+    expect(() =>
+      buildQueryFromFilters({
+        filters: { equals: [{ field: 'status") or (1 = "1', value: 'x' }] },
+      }),
+    ).toThrow(/invalid field code/);
+  });
+
+  it('フィールド名に空白を含むと throw する', () => {
+    expect(() =>
+      buildQueryFromFilters({ filters: { textContains: [{ field: 'a or b', value: 'x' }] } }),
+    ).toThrow(/invalid field code/);
+  });
+
+  it('orderBy のフィールド名経由のインジェクションも throw する', () => {
+    expect(() =>
+      buildQueryFromFilters({ orderBy: [{ field: 'created_time desc, (select', order: 'asc' }] }),
+    ).toThrow(/invalid field code/);
+  });
+
+  it('日本語フィールドコードは通る (正常系)', () => {
+    expect(
+      buildQueryFromFilters({ filters: { equals: [{ field: '会社名', value: 'サイボウズ' }] } }),
+    ).toBe('会社名 = "サイボウズ"');
+  });
+
+  it('非有限な数値は throw する', () => {
+    expect(() =>
+      buildQueryFromFilters({ filters: { numberRange: [{ field: 'amount', min: Infinity }] } }),
+    ).toThrow(/invalid numeric value/);
+  });
+});

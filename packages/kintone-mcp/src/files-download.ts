@@ -6,7 +6,7 @@
 // Worker でバイナリを **base64** 化した JSON にして返すことで、
 // kintone proxy の string 返しでも安全に渡せる。
 
-import { isString, jsonResponse } from './_http';
+import { isString, jsonResponse, sanitizeText } from './_http';
 
 const ANTHROPIC_BASE = 'https://api.anthropic.com';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -49,7 +49,7 @@ export async function handleFilesDownload(request: Request, fileId: string): Pro
   if (!upstream.ok) {
     const text = await upstream.text().catch(() => '');
     return jsonResponse(
-      { error: 'anthropic_error', status: upstream.status, body: text },
+      { error: 'anthropic_error', status: upstream.status, body: sanitizeText(text) },
       upstream.status,
     );
   }

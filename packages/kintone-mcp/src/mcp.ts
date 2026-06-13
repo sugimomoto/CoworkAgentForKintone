@@ -5,7 +5,8 @@
 // Authorization: Bearer <kintone_oauth_access_token> をそのまま kintone API
 // リクエストに転送する。Worker は何の env / secret も保持しない。
 
-import { jsonResponse, maskToken } from './_http';
+import { jsonResponse, maskToken, sanitizeError, sanitizeText } from './_http';
+import { mcpPathPattern } from './kintone-domains';
 import type { KintoneCreds } from './kintone';
 import { tools } from './tools';
 
@@ -48,7 +49,7 @@ function rpcError(id: number | string | null, code: number, message: string): Js
 /** URL `/mcp/<domain>` の domain 部分を取り出す。形式: `<sub>.cybozu.com` 等 */
 function extractDomain(request: Request): string | null {
   const url = new URL(request.url);
-  const match = url.pathname.match(/^\/mcp\/([a-z0-9.-]+\.(cybozu\.com|kintone\.com|cybozu-dev\.com|cybozu\.cn))$/i);
+  const match = url.pathname.match(mcpPathPattern());
   return match ? match[1]! : null;
 }
 
@@ -66,7 +67,7 @@ export async function handleMcp(request: Request): Promise<Response> {
   request.headers.forEach((v, k) => {
     allHeaders[k] = k.toLowerCase() === 'authorization' ? maskToken(v.replace(/^Bearer /, '')) : v;
   });
-  console.log('[/mcp] headers:', JSON.stringify(allHeaders));
+  console.log('[/mcp] headers:', sanitizeText(JSON.stringify(allHeaders)));
 
   const domain = extractDomain(request);
   if (!domain) {
@@ -127,7 +128,7 @@ export async function handleMcp(request: Request): Promise<Response> {
         const result = await tool.callback(params.arguments ?? {}, { creds });
         return jsonResponse(rpcSuccess(id, result));
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = sanitizeError(err);
         console.log('[/mcp] tool error:', message);
         return jsonResponse(
           rpcSuccess(id, {
