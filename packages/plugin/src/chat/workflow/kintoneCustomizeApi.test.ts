@@ -52,7 +52,9 @@ function makeDeps(overrides: Partial<{
   uploadFile: ReturnType<typeof vi.fn>;
   deps: { appId: number; apiFn: KintoneApiFn; uploadFile: FileUploadFn; pollIntervalMs: number };
 } {
-  const apiFn = vi.fn(async (url: string, method: string) => {
+  // KintoneApiFn は (path, method, params) の 3 引数。mock.calls を 3-tuple にし、
+  // 戻り値も unknown に揃えて override (KintoneApiFn) を mockImplementation に渡せるようにする。
+  const apiFn = vi.fn(async (url: string, method: string, _params: unknown): Promise<unknown> => {
     if (url.endsWith('/customize.json') && method === 'GET') {
       return EMPTY_CUSTOMIZE;
     }
@@ -67,9 +69,15 @@ function makeDeps(overrides: Partial<{
     }
     return null;
   });
-  const uploadFile = vi.fn(async (name: string) => `uuid-${name}`);
-  if (overrides.apiFn) apiFn.mockImplementation(overrides.apiFn);
-  if (overrides.uploadFile) uploadFile.mockImplementation(overrides.uploadFile);
+  const uploadFile = vi.fn(async (fileName: string, _content: string) => `uuid-${fileName}`);
+  // override は KintoneApiFn (method はリテラル union)。mock は method: string なので
+  // 反変で直接代入できない。テスト内の互換キャストで吸収する。
+  if (overrides.apiFn)
+    apiFn.mockImplementation(overrides.apiFn as Parameters<typeof apiFn.mockImplementation>[0]);
+  if (overrides.uploadFile)
+    uploadFile.mockImplementation(
+      overrides.uploadFile as Parameters<typeof uploadFile.mockImplementation>[0],
+    );
   return {
     apiFn,
     uploadFile,
@@ -124,7 +132,7 @@ describe('makeKintoneCustomizeWorkflow.apply', () => {
 
   it('403 + scope 文言で OAuthScopeError を throw', async () => {
     const { deps } = makeDeps({
-      apiFn: vi.fn(async (url: string, method: string) => {
+      apiFn: vi.fn(async (url: string, method: string, _params?: unknown) => {
         if (url.endsWith('/customize.json') && method === 'GET') {
           const err = new Error(
             'HTTP 403: 認証エラー — k:app_settings:write スコープが不足しています',
@@ -146,7 +154,7 @@ describe('makeKintoneCustomizeWorkflow.apply', () => {
 describe('makeKintoneCustomizeWorkflow.rollback', () => {
   it('現状の customize.json を GET → cowork-agent-* FILE entry を除去 → PUT + deploy', async () => {
     // 現在の preview には cowork-agent-* が適用済 + admin 手動登録の URL も混在
-    const apiFn = vi.fn(async (url: string, method: string) => {
+    const apiFn = vi.fn(async (url: string, method: string, _params?: unknown) => {
       if (url.endsWith('/customize.json') && method === 'GET') {
         return {
           scope: 'ALL',

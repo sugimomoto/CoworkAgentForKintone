@@ -4,6 +4,7 @@
 // FILE フィールド値として `[{ fileKey }]` の形で渡す。
 
 import { kintoneUploadFile } from '../kintone';
+
 import { createTool } from './factory';
 import { base64ToBytes } from './utils/base64';
 

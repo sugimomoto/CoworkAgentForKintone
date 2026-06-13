@@ -6,7 +6,7 @@
 // - 保存時 setProxyConfig が 3 経路 (oauth2/token + Worker root POST + Worker root GET) — kintone proxy URL 前方一致を活用
 // - setConfig には secret (client_secret / anthropic_api_key) が含まれない
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

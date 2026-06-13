@@ -4,6 +4,7 @@
 // 上限は 20 サブリクエスト / 1 bulk (kintone 仕様)。
 
 import { kintoneRequest } from '../kintone';
+
 import { createTool } from './factory';
 
 const MAX_BULK = 20;

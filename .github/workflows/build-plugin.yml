@@ -54,12 +54,13 @@ jobs:
       - name: Build plugin assets (esbuild + Tailwind)
         run: pnpm --filter @cowork-agent/plugin run build
 
-      # pack より前に lint + ユニットテストを実行し、品質ゲートを通過しない plugin.zip が
-      # リリースされないようにする。lint は error のみで fail する (warning は許容)。
-      # NOTE: `pnpm typecheck` は現状 main でも既存の型エラーが残っており (exactOptionalPropertyTypes
-      #       由来など)、ゲート化すると即ブロックされるため未追加。別タスクで解消後に追加する。
+      # pack より前に lint + typecheck + ユニットテストを実行し、品質ゲートを通過しない
+      # plugin.zip がリリースされないようにする。lint は error のみで fail する (warning は許容)。
       - name: Lint
         run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
 
       - name: Run unit tests (plugin + kintone-mcp)
         run: pnpm -r run test

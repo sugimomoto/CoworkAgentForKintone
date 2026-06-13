@@ -2,6 +2,7 @@
 // レコード操作前に呼んで、利用可能なフィールドコードと型を確認するためのツール。
 
 import { kintoneRequest } from '../kintone';
+
 import { createTool } from './factory';
 
 interface Args {

@@ -2,6 +2,9 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { _resetResolveDefaultAgentCache } from '../../core/bootstrap/resolveAgent';
+import { resolveDefaultAgent } from '../../core/bootstrap/resolveAgent';
+import { resolveBootstrapEnvironment } from '../../core/bootstrap/resolveEnvironment';
+import { createUserSession } from '../../core/bootstrap/resolveSession';
 import { useChatStore } from '../../store/chatStore';
 import { makeAgent, makeEnv, makeSession } from '../../test/fixtures';
 
@@ -26,9 +29,6 @@ vi.mock('../../core/kintone/user', () => ({
   })),
 }));
 
-import { resolveDefaultAgent } from '../../core/bootstrap/resolveAgent';
-import { resolveBootstrapEnvironment } from '../../core/bootstrap/resolveEnvironment';
-import { createUserSession } from '../../core/bootstrap/resolveSession';
 
 const mockResolveAgent = vi.mocked(resolveDefaultAgent);
 const mockResolveEnv = vi.mocked(resolveBootstrapEnvironment);

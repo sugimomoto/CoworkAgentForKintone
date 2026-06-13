@@ -11,7 +11,7 @@ export interface MemoryToggleProps {
   /** トグル ON/OFF (enabled=true 時のみ有効) */
   on?: boolean;
   /** クリックハンドラ (enabled=true 時のみ呼ばれる) */
-  onToggle?: () => void;
+  onToggle?: (() => void) | undefined;
 }
 
 export function MemoryToggle({

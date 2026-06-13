@@ -285,9 +285,9 @@ function CustomSkillActions({
   disabled,
 }: {
   skill: BundledSkillEntry;
-  onEdit?: () => void;
-  onDelete?: () => void | Promise<void>;
-  disabled?: boolean;
+  onEdit?: (() => void) | undefined;
+  onDelete?: (() => void | Promise<void>) | undefined;
+  disabled?: boolean | undefined;
 }): JSX.Element {
   return (
     <div className="flex shrink-0 items-center gap-[4px]">

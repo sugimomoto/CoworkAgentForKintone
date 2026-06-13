@@ -7,11 +7,13 @@ import { create } from 'zustand';
 
 import { binaryArtifactIdFromFileId } from '../core/artifacts/types';
 
-import type { AgentRecord } from '../core/bootstrap/agentTypes';
+import type { AccessContext } from '../core/access/filterAgentsByAccess';
 import type { Artifact, CreateArtifactInput } from '../core/artifacts/types';
+import type { AgentRecord } from '../core/bootstrap/agentTypes';
+import type { AttachedFile } from '../core/files/types';
 import type { AgentEditDraft } from '../core/managed-agents/agentDetailApi';
 import type { ProgressEventKind } from '../core/managed-agents/progressEvent';
-import type { AccessContext } from '../core/access/filterAgentsByAccess';
+import type { ChatMessage, ToolMessage } from '../desktop/components/MessageList';
 
 export interface BinaryArtifactInput {
   fileId: string;
@@ -19,8 +21,6 @@ export interface BinaryArtifactInput {
   mime?: string;
   sizeBytes?: number;
 }
-import type { AttachedFile } from '../core/files/types';
-import type { ChatMessage, ToolMessage } from '../desktop/components/MessageList';
 
 export type ChatStatus = 'idle' | 'bootstrapping' | 'ready' | 'error';
 

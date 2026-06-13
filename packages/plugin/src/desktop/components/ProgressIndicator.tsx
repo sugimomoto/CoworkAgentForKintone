@@ -11,8 +11,8 @@
 //   - dot / fade-in アニメは `styles/global.css` の `cw-progress-*` クラスで定義
 //     (prefers-reduced-motion 対応も global で共通化済み)
 
-import { useChatStore } from '../../store/chatStore';
 import { progressLabelOf } from '../../core/managed-agents/progressLabel';
+import { useChatStore } from '../../store/chatStore';
 import { useAgentPhase } from '../hooks/useAgentPhase';
 import { useElapsedSinceEvent } from '../hooks/useElapsedSinceEvent';
 

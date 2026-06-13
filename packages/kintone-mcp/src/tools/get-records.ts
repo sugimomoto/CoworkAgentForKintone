@@ -2,6 +2,7 @@
 // 公式 MCP の get-records と同じ設計を踏襲。
 
 import { kintoneRequest } from '../kintone';
+
 import { createTool } from './factory';
 import { type BuildQueryInput, buildQueryFromFilters } from './utils/build-query';
 

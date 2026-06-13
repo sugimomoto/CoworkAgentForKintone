@@ -1,6 +1,7 @@
 // kintone-get-app: 単一アプリの基本情報取得。
 
 import { kintoneRequest } from '../kintone';
+
 import { createTool } from './factory';
 
 interface Args {

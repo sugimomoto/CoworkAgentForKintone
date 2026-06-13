@@ -1,6 +1,7 @@
 // kintone-get-record: 単一レコード取得 (`GET /k/v1/record.json`)。
 
 import { kintoneRequest } from '../kintone';
+
 import { createTool } from './factory';
 import { appIdSchema } from './utils/schemas';
 

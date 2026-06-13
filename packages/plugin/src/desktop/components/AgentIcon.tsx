@@ -13,9 +13,9 @@
 // Tailwind 設計トークン (テーマに追従)、それ以外は Tailwind 標準パレットの -500/15
 // 背景 + -700 文字色を使う。
 
+import type { AgentColor, AgentGlyph } from '../../core/bootstrap/agentTypes';
 import type { CSSProperties } from 'react';
 
-import type { AgentColor, AgentGlyph } from '../../core/bootstrap/agentTypes';
 
 export interface AgentIconProps {
   /** glyph 種別 (9 種) */

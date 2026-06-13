@@ -10,13 +10,15 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 
+import { filterAgentsByAccess } from '../../core/access/filterAgentsByAccess';
+import { resolveIsAdmin } from '../../core/admin/useIsAdmin';
+import { agentToRecord as customAgentToRecord } from '../../core/bootstrap/agentRecord';
+import { BUILTIN_AGENT_SPECS } from '../../core/bootstrap/builtInAgents';
 import {
   listCustomAgents,
   resolveBuiltInAgents,
   resolveDefaultAgent,
 } from '../../core/bootstrap/resolveAgent';
-import { BUILTIN_AGENT_SPECS } from '../../core/bootstrap/builtInAgents';
-import { agentToRecord as customAgentToRecord } from '../../core/bootstrap/agentRecord';
 import { resolveBootstrapEnvironment } from '../../core/bootstrap/resolveEnvironment';
 import { createUserSession } from '../../core/bootstrap/resolveSession';
 import { getPluginConfig } from '../../core/kintone/pluginConfig';
@@ -25,8 +27,6 @@ import {
   fetchCurrentUserGroups,
   fetchCurrentUserOrganizations,
 } from '../../core/kintone/users';
-import { filterAgentsByAccess } from '../../core/access/filterAgentsByAccess';
-import { resolveIsAdmin } from '../../core/admin/useIsAdmin';
 import { resolveBundledSkillIds } from '../../core/skills/resolveBundledSkillIds';
 import { toErrorMessage } from '../../core/utils';
 import { useChatStore } from '../../store/chatStore';
@@ -100,7 +100,6 @@ export function useSession(): UseSessionResult {
         // Customizer wedge V1: workerUrl があれば resolveBuiltInAgents (3 variant) を ensure。
         // 無い場合 (Bootstrap 未完了) は従来の resolveDefaultAgent にフォールバック (Phase 1b 互換)。
         let activeAgentId: string;
-        let builtInSet: BuiltInAgentSet | null = null;
         const envPromise = resolveBootstrapEnvironment();
 
         if (workerUrl) {
@@ -128,7 +127,6 @@ export function useSession(): UseSessionResult {
           const [[set, env, customAgents], [userGroups, userOrgs, adminResolved]] =
             await Promise.all([anthropicSide, kintoneSide]);
           if (cancelled) return;
-          builtInSet = set;
           ctxRef.current = {
             agentId: '', // 下で activeAgentId を入れる
             environmentId: env.id,

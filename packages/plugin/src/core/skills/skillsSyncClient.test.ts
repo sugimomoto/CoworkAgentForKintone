@@ -29,6 +29,7 @@ function makeBundle(name: string): SkillBundle {
   return {
     name,
     displayTitle: name,
+    description: 'x',
     skillMd: `---\nname: ${name}\ndescription: x\n---\nbody`,
   };
 }

@@ -4,13 +4,13 @@
 // Built-in (purpose=business/customizer-*) は BUILTIN_AGENT_SPECS の値で
 // 不在 metadata を補完する。Custom (purpose=custom) は metadata 100% 依存。
 
-import { BUILTIN_AGENT_SPECS } from './builtInAgents';
 import {
   META_KEY_ALLOWED_GROUPS,
   META_KEY_ALLOWED_ORGANIZATIONS,
   META_KEY_ALLOWED_USERS,
   META_KEY_QUICK_ACTIONS,
 } from './agentTypes';
+import { BUILTIN_AGENT_SPECS } from './builtInAgents';
 
 import type {
   AgentColor,

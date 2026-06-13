@@ -152,7 +152,7 @@ export function FileTree({
 
 interface FileTreeRowProps {
   entry: FileTreeEntry;
-  onSelect?: (path: string) => void;
+  onSelect?: ((path: string) => void) | undefined;
 }
 
 function FileTreeRow({ entry, onSelect }: FileTreeRowProps): JSX.Element {

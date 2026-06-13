@@ -13,10 +13,7 @@ import {
   deployWorker,
   fetchDeployedWorkerVersion,
 } from '../core/cloudflare/cfDeploy';
-import {
-  CLOUDFLARE_WORKER_SCRIPT_NAME,
-  DEFAULT_KINTONE_OAUTH_SCOPE,
-} from '../core/constants';
+import { CLOUDFLARE_WORKER_SCRIPT_NAME } from '../core/constants';
 import { setProxyConfigAsync } from '../core/kintone/setProxyConfigAsync';
 // skillsSyncClient は ConfigScreen からは呼ばない (Customizer wedge V1 #41 で Chat Panel
 // SkillsPane に移管)。skillsSyncClient 自体は packages/plugin/src/core/skills/ に残置し、

@@ -68,7 +68,8 @@ export async function handleAnthropicPassthrough(
   const upstream = await fetch(upstreamUrl, {
     method,
     headers: forwarded,
-    body: hasBody ? await request.text() : undefined,
+    // exactOptionalPropertyTypes: body に undefined を明示代入できないため条件付きで含める
+    ...(hasBody ? { body: await request.text() } : {}),
   });
 
   // upstream のレスポンスをそのまま返す。content-type 等のヘッダは保持

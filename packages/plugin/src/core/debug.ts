@@ -23,16 +23,16 @@ function prefix(scope: Scope): string {
 
 export function debug(scope: Scope, ...args: unknown[]): void {
   if (!isDebugEnabled()) return;
-  // eslint-disable-next-line no-console
+   
   console.info(prefix(scope), ...args);
 }
 
 export function warn(scope: Scope, ...args: unknown[]): void {
-  // eslint-disable-next-line no-console
+   
   console.warn(prefix(scope), ...args);
 }
 
 export function error(scope: Scope, ...args: unknown[]): void {
-  // eslint-disable-next-line no-console
+   
   console.error(prefix(scope), ...args);
 }

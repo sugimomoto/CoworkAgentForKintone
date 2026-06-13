@@ -5,7 +5,6 @@
 import { useMemo } from 'react';
 
 import { sanitizeMermaidContent } from '../../../../core/artifacts/sanitizeContent';
-
 import { POST_HELPER_SCRIPT, SandboxFrame, safeStringLiteral } from '../SandboxFrame';
 
 import type { Artifact } from '../../../../core/artifacts/types';

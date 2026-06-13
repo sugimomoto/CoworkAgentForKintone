@@ -7,6 +7,17 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  applyAgentEdit,
+  archiveAgentById,
+  createCustomAgentFrom,
+} from '../../core/managed-agents/agentDetailApi';
+import { setAgentVisibility } from '../../core/managed-agents/agentVisibility';
+import { retrieveAgent } from '../../core/managed-agents/resources';
+import {
+  syncBundledSkillsFromChatPanel,
+  syncCustomSkillFromChatPanel,
+} from '../../core/skills/chatPanelSkillsSync';
 import { useChatStore } from '../../store/chatStore';
 
 import { SettingsViewBound } from './SettingsViewBound';
@@ -41,17 +52,6 @@ vi.mock('../../core/skills/resolveBundledSkillIds', () => ({
   resolveSkillSet: vi.fn().mockResolvedValue({ bundled: [], custom: [] }),
 }));
 
-import {
-  syncBundledSkillsFromChatPanel,
-  syncCustomSkillFromChatPanel,
-} from '../../core/skills/chatPanelSkillsSync';
-import { setAgentVisibility } from '../../core/managed-agents/agentVisibility';
-import {
-  applyAgentEdit,
-  archiveAgentById,
-  createCustomAgentFrom,
-} from '../../core/managed-agents/agentDetailApi';
-import { retrieveAgent } from '../../core/managed-agents/resources';
 
 const mockSyncBundled = vi.mocked(syncBundledSkillsFromChatPanel);
 const mockSyncCustom = vi.mocked(syncCustomSkillFromChatPanel);

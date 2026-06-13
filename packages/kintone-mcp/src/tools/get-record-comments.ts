@@ -1,6 +1,7 @@
 // kintone-get-record-comments: レコードコメント一覧取得 (`GET /k/v1/record/comments.json`)。
 
 import { kintoneRequest } from '../kintone';
+
 import { createTool } from './factory';
 import { appIdSchema } from './utils/schemas';
 

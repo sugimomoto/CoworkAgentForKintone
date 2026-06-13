@@ -32,7 +32,7 @@
   };
 
   try {
-    await new Promise((resolve, reject) => {
+    await new Promise((resolve, _reject) => {
       kintone.plugin.app.setProxyConfig(
         TARGET_URL,
         METHOD,
@@ -93,7 +93,7 @@
       METHOD,
       { 'X-Runtime-Header': 'set-by-proxy-call' },
       runtimeBody,
-      (responseBody, status, responseHeaders) => {
+      (responseBody, status, _responseHeaders) => {
         console.log('--- HTTP status ---', status);
         let echoed;
         try {

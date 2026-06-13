@@ -15,11 +15,10 @@ import { debug, warn } from '../../core/debug';
 import { interpretEvent, isTerminalEvent } from '../../core/managed-agents/eventInterpreter';
 import { fetchAllEventsSince } from '../../core/managed-agents/events';
 import { mapEventToProgressKind } from '../../core/managed-agents/progressEvent';
-
-import type { ProgressEventKind } from '../../core/managed-agents/progressEvent';
 import { retrieveSession } from '../../core/managed-agents/resources';
 import { useChatStore } from '../../store/chatStore';
 
+import type { ProgressEventKind } from '../../core/managed-agents/progressEvent';
 import type { SessionEvent } from '../../core/managed-agents/types';
 
 /**
@@ -291,5 +290,6 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
     setLastEvent,
     setSessionTerminated,
     setBindingStatus,
+    setActiveArtifact,
   ]);
 }

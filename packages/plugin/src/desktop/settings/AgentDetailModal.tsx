@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { accessValueOf } from '../../core/access/accessControl';
 import {
   AGENT_GLYPHS,
   AGENT_PICKER_COLORS,
@@ -26,17 +27,15 @@ import {
   KINTONE_TOOL_NAMES,
   type KintoneToolName,
 } from '../../core/bootstrap/builtInAgents';
-import { extractEnabledTools } from '../../core/managed-agents/buildAgentTools';
 import {
   resolveAccessEntries,
   searchGroups,
   searchOrganizations,
   searchUsers,
 } from '../../core/kintone/users';
-
-import { accessValueOf } from '../../core/access/accessControl';
-
+import { extractEnabledTools } from '../../core/managed-agents/buildAgentTools';
 import { AgentIcon } from '../components/AgentIcon';
+
 import { AccessPicker } from './AccessPicker';
 
 import type {
@@ -101,6 +100,9 @@ export interface AgentDetailModalProps {
 // ─── component ────────────────────────────────────────────────────────────
 
 export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
+  // hooks の依存配列で props 全体を参照しないよう、使用する関数/値を分割代入する
+  // (react-hooks/exhaustive-deps 対策。識別子は props.X と同一なので挙動は変わらない)。
+  const { fetchAgent, availableSkills, fallbackTemplates, onDelete, onSave } = props;
   // localMode: 「雛形から作り直す」(#48 提案 mode → create mode への移行) の遷移用。
   // 親から渡された mode が変わったら localMode も同期する。
   const [localMode, setLocalMode] = useState<AgentDetailModalMode>(props.mode);
@@ -135,7 +137,7 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
     // create-from-proposal: base に使う Agent を fallbackTemplates から選ぶ。
     // Designer が提案した model に一致する built-in を優先 (= 新 Agent の model 継承)、
     // 無ければ isDefault → 先頭の順でフォールバック。
-    const pool = props.fallbackTemplates ?? [];
+    const pool = fallbackTemplates ?? [];
     const wantModel = localMode.model;
     return (
       pool.find((t) => t.model === wantModel) ??
@@ -143,7 +145,7 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
       pool[0] ??
       null
     );
-  }, [localMode, templateId, props.fallbackTemplates]);
+  }, [localMode, templateId, fallbackTemplates]);
 
   const [draft, setDraft] = useState<AgentEditDraft | null>(null);
   const [loading, setLoading] = useState(true);
@@ -166,15 +168,14 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
     setLoading(true);
     setFetchError(null);
     setDraft(null);
-    void props
-      .fetchAgent(sourceAgent.id)
+    void fetchAgent(sourceAgent.id)
       .then((agent) => {
         if (cancelled) return;
         setDraft(
           buildDraftFromAgent(
             agent,
             sourceAgent,
-            props.availableSkills,
+            availableSkills,
             localMode.kind === 'edit' ? 'edit' : 'create',
           ),
         );
@@ -188,34 +189,34 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [sourceAgent, props.fetchAgent, props.availableSkills, localMode]);
+  }, [sourceAgent, fetchAgent, availableSkills, localMode]);
 
   /** 「雛形から作り直す」: create-from-proposal → 通常の create モードに切替 (draft 破棄) */
   const handleRebuildFromTemplate = useCallback(() => {
-    const templates = props.fallbackTemplates ?? [];
+    const templates = fallbackTemplates ?? [];
     setLocalMode({ kind: 'create', templates });
-  }, [props.fallbackTemplates]);
+  }, [fallbackTemplates]);
 
   const handleReset = useCallback(() => {
     if (!editAgent || editAgent.source !== 'builtin') return;
     const purpose = editAgent.purpose;
     if (!isBuiltInPurpose(purpose)) return;
     const spec = BUILTIN_AGENT_SPECS[purpose];
-    setDraft(buildDraftFromSpec(spec, editAgent, props.availableSkills));
-  }, [editAgent, props.availableSkills]);
+    setDraft(buildDraftFromSpec(spec, editAgent, availableSkills));
+  }, [editAgent, availableSkills]);
 
   const handleDelete = useCallback(async () => {
-    if (!editAgent || !props.onDelete) return;
+    if (!editAgent || !onDelete) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await props.onDelete(editAgent);
+      await onDelete(editAgent);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : '削除に失敗しました');
       setSubmitting(false);
       setConfirmDelete(false);
     }
-  }, [editAgent, props.onDelete]);
+  }, [editAgent, onDelete]);
 
   const handleSubmit = useCallback(async () => {
     if (!draft || !sourceAgent) return;
@@ -223,12 +224,12 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await props.onSave(draft, sourceAgent);
+      await onSave(draft, sourceAgent);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : '保存に失敗しました');
       setSubmitting(false);
     }
-  }, [draft, sourceAgent, props.onSave]);
+  }, [draft, sourceAgent, onSave]);
 
   const canSubmit =
     !submitting &&
@@ -340,7 +341,7 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
             <DraftForm
               draft={draft}
               setDraft={setDraft}
-              availableSkills={props.availableSkills}
+              availableSkills={availableSkills}
               source={editAgent?.source ?? 'custom'}
             />
           )}
@@ -366,7 +367,7 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
               初期値に戻す
             </button>
           )}
-          {editAgent?.source === 'custom' && props.onDelete && (
+          {editAgent?.source === 'custom' && onDelete && (
             <button
               type="button"
               data-testid="agent-detail-delete"

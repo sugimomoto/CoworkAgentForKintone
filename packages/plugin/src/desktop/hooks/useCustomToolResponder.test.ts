@@ -1,6 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { postCustomToolResult } from '../../core/managed-agents/events';
 import { useChatStore } from '../../store/chatStore';
 
 import { useCustomToolResponder } from './useCustomToolResponder';
@@ -12,8 +13,6 @@ vi.mock('../../core/managed-agents/events', async (importOriginal) => {
     postCustomToolResult: vi.fn(),
   };
 });
-
-import { postCustomToolResult } from '../../core/managed-agents/events';
 
 const mockPost = vi.mocked(postCustomToolResult);
 
