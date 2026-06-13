@@ -29,11 +29,21 @@ function randomBase64Url(byteLength: number): string {
   return base64url(bytes);
 }
 
+// state は `<random>.<base64url(origin)>` の 2 セグメント構成。
+// Worker (oauth-callback) が後半をデコードして postMessage の targetOrigin を決め、
+// 認可コードが想定外のオリジンへ流出しないようにする。base64url に `.` は出現しないため
+// 区切り文字として安全。前半は従来どおり CSRF 防御の random nonce。
+function encodeStateWithOrigin(random: string, origin: string): string {
+  if (!origin) return random;
+  return `${random}.${base64url(new TextEncoder().encode(origin))}`;
+}
+
 export async function generatePkce(): Promise<PkceState> {
   const codeVerifier = randomBase64Url(CODE_VERIFIER_BYTES);
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier));
   const codeChallenge = base64url(digest);
-  const state = randomBase64Url(STATE_BYTES);
+  const origin = typeof location !== 'undefined' ? location.origin : '';
+  const state = encodeStateWithOrigin(randomBase64Url(STATE_BYTES), origin);
   return { codeVerifier, codeChallenge, state };
 }
 

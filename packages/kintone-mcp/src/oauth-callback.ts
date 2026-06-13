@@ -8,6 +8,8 @@
 //   2. 同時にページ上に code/state を可視表示 (検証スクリプトでコピペするため)
 // を両立させる。Worker 自身は token 交換も client_secret も持たない。
 
+import { KINTONE_ORIGIN_RE } from './kintone-domains';
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -22,6 +24,30 @@ function jsonForScript(value: unknown): string {
   return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
 }
 
+/** base64url 文字列を UTF-8 文字列にデコードする。不正な入力は null。 */
+function base64UrlDecode(s: string): string | null {
+  try {
+    const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64);
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * state (`<random>.<base64url(origin)>`) から postMessage の targetOrigin を導出する。
+ * origin が kintone の許可ドメインに合致しない / セグメントが無い場合は null。
+ * null の場合は postMessage を行わず、認可コードの流出を防ぐ (ページ上の手動コピーは残る)。
+ */
+export function targetOriginFromState(state: string): string | null {
+  const dot = state.indexOf('.');
+  if (dot === -1) return null;
+  const origin = base64UrlDecode(state.slice(dot + 1));
+  return origin !== null && KINTONE_ORIGIN_RE.test(origin) ? origin : null;
+}
+
 export function handleOAuthCallback(request: Request): Response {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
@@ -34,6 +60,9 @@ export function handleOAuthCallback(request: Request): Response {
   const stateJson = jsonForScript(state);
   const errorJson = jsonForScript(error ?? null);
   const errorDescJson = jsonForScript(errorDescription ?? null);
+  // state に埋め込まれた呼び出し元オリジンを検証して postMessage の宛先を決める。
+  const targetOrigin = targetOriginFromState(state);
+  const targetOriginJson = jsonForScript(targetOrigin);
 
   const html = `<!doctype html>
 <html lang="ja">
@@ -78,11 +107,12 @@ error_description: ${escapeHtml(errorDescription ?? '')}</pre>`
         error: ${errorJson},
         error_description: ${errorDescJson}
       };
+      // targetOrigin は state から復元した kintone オリジン (検証済み)。
+      // 取得できなかった場合は null となり、postMessage を行わない (手動コピーにフォールバック)。
+      var targetOrigin = ${targetOriginJson};
       try {
-        if (window.opener) {
-          // Plugin (kintone ドメイン) は targetOrigin が事前に分からないため "*"
-          // ただし state を別途検証することで CSRF を防ぐ
-          window.opener.postMessage(payload, '*');
+        if (window.opener && targetOrigin) {
+          window.opener.postMessage(payload, targetOrigin);
         }
       } catch (e) {
         console.error('postMessage failed', e);
