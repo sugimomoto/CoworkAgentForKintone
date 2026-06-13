@@ -16,7 +16,7 @@
 //         無し → POST /v1/skills (新規作成)
 //   4. 結果として { name → skill_id } マッピングを返却
 
-import { isString, jsonResponse } from './_http';
+import { isString, jsonResponse, sanitizeError } from './_http';
 
 const ANTHROPIC_BASE = 'https://api.anthropic.com';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -208,7 +208,7 @@ export async function handleSkillsSync(request: Request): Promise<Response> {
   try {
     existing = await listAllCustomSkills(apiKey);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = sanitizeError(err);
     return jsonResponse({ error: 'anthropic_error', message }, 502);
   }
 
@@ -254,7 +254,7 @@ export async function handleSkillsSync(request: Request): Promise<Response> {
         });
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = sanitizeError(err);
       return jsonResponse(
         { error: 'anthropic_error', message, partialResults: results },
         502,

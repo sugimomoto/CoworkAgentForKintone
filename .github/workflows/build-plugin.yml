@@ -48,10 +48,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # build はテスト/pack の前提となる生成物を作る:
+      # - src/generated/{worker,skills}-bundle.ts はソースが import するため lint/test の前に必須
+      # - plugin/js/ plugin/css/ は .gitignore 対象で checkout 直後に存在しない (pack 用)
       - name: Build plugin assets (esbuild + Tailwind)
-        # plugin/js/ と plugin/css/ は .gitignore 対象なので checkout 直後には存在しない。
-        # esbuild + Tailwind で生成してから pack に渡す。
         run: pnpm --filter @cowork-agent/plugin run build
+
+      # pack より前に lint + ユニットテストを実行し、品質ゲートを通過しない plugin.zip が
+      # リリースされないようにする。lint は error のみで fail する (warning は許容)。
+      # NOTE: `pnpm typecheck` は現状 main でも既存の型エラーが残っており (exactOptionalPropertyTypes
+      #       由来など)、ゲート化すると即ブロックされるため未追加。別タスクで解消後に追加する。
+      - name: Lint
+        run: pnpm lint
+
+      - name: Run unit tests (plugin + kintone-mcp)
+        run: pnpm -r run test
 
       - name: Install cli-kintone
         run: npm install -g @kintone/cli

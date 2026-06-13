@@ -487,6 +487,6 @@ function looksLikeAuthError(message: string): boolean {
     lower.includes('api key') ||
     lower.includes('unauthorized') ||
     lower.includes('invalid_api_key') ||
-    /\bhttp[\s\[]+40[13]\b/.test(lower)
+    /\bhttp[\s[]+40[13]\b/.test(lower)
   );
 }

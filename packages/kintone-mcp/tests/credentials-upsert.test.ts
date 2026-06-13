@@ -111,6 +111,26 @@ describe('handleCredentialsUpsert', () => {
       expect(res.status).toBe(400);
     });
 
+    it('vaultId に不正な文字 (パストラバーサル) が含まれると 400', async () => {
+      const req = makeRequest({
+        body: { ...VALID_BODY, vaultId: 'vlt_abc/../../v1/foo' },
+        ...VALID_HEADERS,
+      });
+      const res = await handleCredentialsUpsert(req);
+      expect(res.status).toBe(400);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('credentialId に / が含まれると 400 (URL パス改変を防ぐ)', async () => {
+      const req = makeRequest({
+        body: { ...VALID_BODY, credentialId: 'vcrd/../bar' },
+        ...VALID_HEADERS,
+      });
+      const res = await handleCredentialsUpsert(req);
+      expect(res.status).toBe(400);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it('Create 時に refreshToken 無しなら client_id/secret 不要 (200)', async () => {
       fetchMock.mockResolvedValueOnce(
         new Response(JSON.stringify({ id: 'vcrd_x', vault_id: 'vlt_abc' }), { status: 200 }),
@@ -257,6 +277,19 @@ describe('handleCredentialsUpsert', () => {
       const res = await handleCredentialsUpsert(req);
 
       expect(res.status).toBe(500);
+    });
+
+    it('上流エラー body に秘匿情報が混入していても伏字にして返す', async () => {
+      fetchMock.mockResolvedValueOnce(
+        new Response('auth error: sk-ant-api03-LeakedKey_123abc was rejected', { status: 401 }),
+      );
+
+      const req = makeRequest({ body: VALID_BODY, ...VALID_HEADERS });
+      const res = await handleCredentialsUpsert(req);
+
+      const json = (await res.json()) as { body: string };
+      expect(json.body).not.toContain('sk-ant-api03-LeakedKey_123abc');
+      expect(json.body).toContain('[REDACTED]');
     });
   });
 });

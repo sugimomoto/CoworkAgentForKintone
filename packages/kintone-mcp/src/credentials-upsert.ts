@@ -8,7 +8,7 @@
 // (auth.refresh.token_endpoint_auth.client_secret) に詰めて転送するのが本ハンドラの
 // 唯一の存在意義 (kintone proxy の data 引数がフラット限定でネスト不可なため)。
 
-import { isString, jsonResponse } from './_http';
+import { isString, isValidResourceId, jsonResponse, sanitizeText } from './_http';
 
 interface UpsertRequestBody {
   vaultId: string;
@@ -50,6 +50,15 @@ export async function handleCredentialsUpsert(request: Request): Promise<Respons
   }
   if (!isString(body.vaultId)) {
     return jsonResponse({ error: 'validation_failed', message: 'vaultId is required' }, 400);
+  }
+  if (!isValidResourceId(body.vaultId)) {
+    return jsonResponse({ error: 'validation_failed', message: 'vaultId has invalid format' }, 400);
+  }
+  if (body.credentialId !== undefined && !isValidResourceId(body.credentialId)) {
+    return jsonResponse(
+      { error: 'validation_failed', message: 'credentialId has invalid format' },
+      400,
+    );
   }
   if (!isString(body.accessToken)) {
     return jsonResponse({ error: 'validation_failed', message: 'accessToken is required' }, 400);
@@ -98,9 +107,10 @@ export async function handleCredentialsUpsert(request: Request): Promise<Respons
   // ③ Anthropic body 組立
   const expiresAt = new Date(Date.now() + body.expiresIn * 1000).toISOString();
 
+  const vaultPath = encodeURIComponent(body.vaultId);
   const anthropicUrl = isUpdate
-    ? `${ANTHROPIC_BASE}/v1/vaults/${body.vaultId}/credentials/${body.credentialId}`
-    : `${ANTHROPIC_BASE}/v1/vaults/${body.vaultId}/credentials`;
+    ? `${ANTHROPIC_BASE}/v1/vaults/${vaultPath}/credentials/${encodeURIComponent(body.credentialId!)}`
+    : `${ANTHROPIC_BASE}/v1/vaults/${vaultPath}/credentials`;
 
   const anthropicBody = isUpdate
     ? buildUpdateBody({
@@ -142,7 +152,7 @@ export async function handleCredentialsUpsert(request: Request): Promise<Respons
 
   if (!upstreamRes.ok) {
     return jsonResponse(
-      { error: 'anthropic_error', status: upstreamRes.status, body: upstreamText },
+      { error: 'anthropic_error', status: upstreamRes.status, body: sanitizeText(upstreamText) },
       upstreamRes.status,
     );
   }
@@ -152,13 +162,13 @@ export async function handleCredentialsUpsert(request: Request): Promise<Respons
     upstreamJson = JSON.parse(upstreamText);
   } catch {
     return jsonResponse(
-      { error: 'anthropic_error', status: upstreamRes.status, body: upstreamText },
+      { error: 'anthropic_error', status: upstreamRes.status, body: sanitizeText(upstreamText) },
       502,
     );
   }
   if (!isString(upstreamJson.id) || !isString(upstreamJson.vault_id)) {
     return jsonResponse(
-      { error: 'anthropic_error', status: upstreamRes.status, body: upstreamText },
+      { error: 'anthropic_error', status: upstreamRes.status, body: sanitizeText(upstreamText) },
       502,
     );
   }
