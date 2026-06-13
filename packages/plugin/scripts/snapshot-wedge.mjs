@@ -16,9 +16,10 @@
 //   dist/snapshots/03-settings-agents.png — Settings View / 🤖 Agents
 //   dist/snapshots/04-settings-skills.png — Settings View / 🧠 Skills
 
-import { chromium } from '@playwright/test';
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+import { chromium } from '@playwright/test';
 
 const BASE_URL = process.env['KINTONE_BASE_URL'];
 const USERNAME = process.env['KINTONE_USERNAME'];

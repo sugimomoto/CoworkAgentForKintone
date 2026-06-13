@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* eslint-disable no-console */
+ 
 // kintone OAuth + Anthropic Vault Credential (mcp_oauth) のエンドツーエンド検証スクリプト。
 //
 // フロー:
@@ -25,10 +25,10 @@
 //   KINTONE_OAUTH_TOKEN_URL             (例: https://<sub>.cybozu.com/oauth2/token)
 
 import crypto from 'node:crypto';
-import readline from 'node:readline/promises';
-import { stdin as input, stdout as output } from 'node:process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { stdin as input, stdout as output } from 'node:process';
+import readline from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

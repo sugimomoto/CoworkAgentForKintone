@@ -4,7 +4,7 @@
 // 反映されるかを検証。
 
 import { renderHook, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { resolveIsAdmin, useIsAdmin } from './useIsAdmin';
 

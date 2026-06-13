@@ -1,6 +1,7 @@
 // 元に戻せないので Agent のガードレールで「ユーザに必ず確認してから実行」を促すこと。
 
 import { kintoneRequest } from '../kintone';
+
 import { createTool } from './factory';
 import { appIdSchema } from './utils/schemas';
 import { assertMaxBatch, assertNonEmpty } from './utils/validators';

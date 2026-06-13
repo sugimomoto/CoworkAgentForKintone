@@ -20,8 +20,8 @@ import { useChatStore } from '../../store/chatStore';
 
 import { detectMissingScopes, OAuthScopeError } from './OAuthScopeError';
 
-import type { CustomizeBundleContent, CustomizeFilePath } from '../../core/artifacts/types';
 import type { WorkflowCallbacks } from './useApplyWorkflow';
+import type { CustomizeBundleContent, CustomizeFilePath } from '../../core/artifacts/types';
 
 // ─── kintone REST API 型 ──────────────────────────────────────────────────
 
@@ -174,16 +174,6 @@ function saveSnapshot(artifactId: string, customize: CustomizeJsonResponse): voi
     capturedAt: Date.now(),
   };
   useChatStore.getState().saveWorkflowSnapshot(artifactId, JSON.stringify(snap));
-}
-
-function loadSnapshot(artifactId: string): CustomizeSnapshot | null {
-  const raw = useChatStore.getState().workflowHistory.get(artifactId);
-  if (typeof raw !== 'string') return null;
-  try {
-    return JSON.parse(raw) as CustomizeSnapshot;
-  } catch {
-    return null;
-  }
 }
 
 function clearSnapshot(artifactId: string): void {

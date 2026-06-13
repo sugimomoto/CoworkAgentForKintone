@@ -1,6 +1,7 @@
 // kintone-get-apps: アプリ一覧取得 (API トークン認証では server-side filter で除外)。
 
 import { kintoneRequest } from '../kintone';
+
 import { createTool } from './factory';
 
 interface Args {

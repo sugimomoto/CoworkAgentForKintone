@@ -16,11 +16,12 @@
 // 使い方:
 //   pnpm --filter @cowork-agent/plugin run snapshot:handoff
 
-import { chromium } from '@playwright/test';
 import { createReadStream, mkdirSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { chromium } from '@playwright/test';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..', '..');

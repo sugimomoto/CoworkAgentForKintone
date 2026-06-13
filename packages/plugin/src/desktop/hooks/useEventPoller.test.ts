@@ -1,7 +1,10 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { fetchAllEventsSince, postCustomToolResult } from '../../core/managed-agents/events';
+import { retrieveSession } from '../../core/managed-agents/resources';
 import { useChatStore } from '../../store/chatStore';
+import { makeSession } from '../../test/fixtures';
 
 import { isOAuthFailureText, useEventPoller } from './useEventPoller';
 
@@ -22,10 +25,6 @@ vi.mock('../../core/managed-agents/resources', async (importOriginal) => {
     retrieveSession: vi.fn(),
   };
 });
-
-import { fetchAllEventsSince, postCustomToolResult } from '../../core/managed-agents/events';
-import { retrieveSession } from '../../core/managed-agents/resources';
-import { makeSession } from '../../test/fixtures';
 
 const mockFetch = vi.mocked(fetchAllEventsSince);
 const mockPostCustomToolResult = vi.mocked(postCustomToolResult);

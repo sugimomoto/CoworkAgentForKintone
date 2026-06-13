@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { accessValueOf } from '../../core/access/accessControl';
 import {
   AGENT_GLYPHS,
   AGENT_PICKER_COLORS,
@@ -26,17 +27,15 @@ import {
   KINTONE_TOOL_NAMES,
   type KintoneToolName,
 } from '../../core/bootstrap/builtInAgents';
-import { extractEnabledTools } from '../../core/managed-agents/buildAgentTools';
 import {
   resolveAccessEntries,
   searchGroups,
   searchOrganizations,
   searchUsers,
 } from '../../core/kintone/users';
-
-import { accessValueOf } from '../../core/access/accessControl';
-
+import { extractEnabledTools } from '../../core/managed-agents/buildAgentTools';
 import { AgentIcon } from '../components/AgentIcon';
+
 import { AccessPicker } from './AccessPicker';
 
 import type {

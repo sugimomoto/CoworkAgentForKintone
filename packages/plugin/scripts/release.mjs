@@ -14,8 +14,8 @@
 //   5. git tag "v<new>"
 //   6. 次手順 (push) を案内
 
-import { readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const KIND = (process.argv[2] || 'patch').toLowerCase();

@@ -13,8 +13,8 @@ import { SettingsNav } from './SettingsNav';
 import { SkillsPane } from './SkillsPane';
 
 import type { SettingsSection } from './SettingsNav';
-import type { BundledSkillEntry } from './SkillsPane';
 import type { CustomSkillInput } from './SkillAddModal';
+import type { BundledSkillEntry } from './SkillsPane';
 import type { AgentRecord } from '../../core/bootstrap/agentTypes';
 
 export interface SettingsViewProps {

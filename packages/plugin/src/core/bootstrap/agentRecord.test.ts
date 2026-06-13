@@ -5,8 +5,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { BUILTIN_AGENT_SPECS } from './builtInAgents';
 import { agentToRecord } from './agentRecord';
+import { BUILTIN_AGENT_SPECS } from './builtInAgents';
 
 import type { Agent } from '../managed-agents/types';
 

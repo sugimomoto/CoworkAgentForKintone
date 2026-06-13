@@ -6,35 +6,36 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+
+
+import { useIsAdmin } from '../core/admin/useIsAdmin';
+import { buildUserMessageContent } from '../core/files/messageContent';
+import { getCurrentSessionContext } from '../core/kintone/user';
 import { postToolConfirmation, postUserInterrupt, postUserMessage } from '../core/managed-agents/events';
 import { useChatStore } from '../store/chatStore';
 
 import { ArtifactPane } from './components/ArtifactPane';
 import { Banner } from './components/Banner';
 import { Composer, type ComposerHandle } from './components/Composer';
-import { PresetAgentLanding } from './components/PresetAgentLanding';
 import { ConnectKintoneButton } from './components/ConnectKintoneButton';
 import { ConversationUtilityBar } from './components/ConversationUtilityBar';
-import { Header } from './Header';
 import { MessageList } from './components/MessageList';
+import { PresetAgentLanding } from './components/PresetAgentLanding';
 import { WelcomeMessage } from './components/WelcomeMessage';
-
-import type { AgentRecord } from '../core/bootstrap/agentTypes';
+import { Header } from './Header';
 import { HistoryView } from './HistoryView';
-import { AgentProposalBridge } from './settings/AgentProposalBridge';
-import { SettingsViewBound } from './settings/SettingsViewBound';
-import { useIsAdmin } from '../core/admin/useIsAdmin';
-import { selectAgent } from './hooks/useSession';
-import { getCurrentSessionContext } from '../core/kintone/user';
-import { buildUserMessageContent } from '../core/files/messageContent';
-
 import { useAgentPhase } from './hooks/useAgentPhase';
 import { useCustomToolResponder } from './hooks/useCustomToolResponder';
 import { useEventPoller } from './hooks/useEventPoller';
 import { useFileAttacher } from './hooks/useFileAttacher';
+import { selectAgent } from './hooks/useSession';
 import { useSession } from './hooks/useSession';
 import { useSessionFiles } from './hooks/useSessionFiles';
 import { useUserBinding } from './hooks/useUserBinding';
+import { AgentProposalBridge } from './settings/AgentProposalBridge';
+import { SettingsViewBound } from './settings/SettingsViewBound';
+
+import type { AgentRecord } from '../core/bootstrap/agentTypes';
 
 export interface ChatPanelProps {
   /** 設定画面を開くハンドラ (任意)。Header の歯車から呼ばれる */
@@ -273,27 +274,6 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
     [selectSession, setView],
   );
 
-  const statusLine = ((): string => {
-    if (status === 'bootstrapping') return '起動中...';
-    if (status === 'error') return 'エラー';
-    if (status !== 'ready') return '待機';
-    return bindingStatus === 'bound' ? '接続中' : '連携待ち';
-  })();
-
-  const agentState = ((): 'idle' | 'thinking' | 'working' | 'waiting' => {
-    const hasPendingTool = messages.some(
-      (m) => m.kind === 'tool' && m.status === 'pending-confirmation',
-    );
-    if (hasPendingTool) return 'waiting';
-    const hasRunningTool = messages.some((m) => m.kind === 'tool' && m.status === 'running');
-    if (hasRunningTool) return 'working';
-    if (isAgentRunning) {
-      const hasThinking = messages.some((m) => m.kind === 'thinking');
-      return hasThinking ? 'thinking' : 'working';
-    }
-    return 'idle';
-  })();
-
   /**
    * 初期未バインド時は ConnectKintoneButton で大きく誘導する。
    * 一度でも会話を始めたあとに失効した場合は、Composer は維持して上部に
@@ -318,8 +298,8 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
         {...(onClose ? { onClose } : {})}
       />
       {/*
-        旧 Header の handleHistoryClick / handleNewConversationClick / handleConnect /
-        agentState / statusLine は 2 段構成 Header (案 C) には統合しなかった。
+        旧 Header の handleHistoryClick / handleNewConversationClick は
+        2 段構成 Header (案 C) には統合しなかった。
         - 履歴 / 新規会話 / 再連携は将来 Conversation View 内のヘッダー二次行や
           メッセージ間のアフォーダンスで提供する想定 (V2)。
         - 暫定: status 系イベントは下の Banner 群でカバー (error / sessionTerminated /
@@ -448,7 +428,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
 function ChatViewRedirect({ onRedirect }: { onRedirect: () => void }): JSX.Element {
   // mount 直後に redirect (useEffect で副作用化)
   // setState を render 中に呼ばないようにする
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   useEffect(() => {
     onRedirect();
   }, [onRedirect]);

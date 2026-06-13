@@ -3,8 +3,8 @@
 
 import { FILE_LIMITS } from '../../core/files/types';
 
-import { AttachmentChip } from './AttachmentChip';
 import { formatAttachmentSize, WARN_ICON } from './attachmentAssets';
+import { AttachmentChip } from './AttachmentChip';
 
 import type { AttachedFile } from '../../core/files/types';
 

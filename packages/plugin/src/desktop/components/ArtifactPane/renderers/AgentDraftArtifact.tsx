@@ -12,8 +12,8 @@ import { AgentIcon } from '../../AgentIcon';
 import { ModelBadge } from '../../ModelBadge';
 
 import type { Artifact } from '../../../../core/artifacts/types';
-import type { AgentEditDraft } from '../../../../core/managed-agents/agentDetailApi';
 import type { AgentColor, AgentGlyph } from '../../../../core/bootstrap/agentTypes';
+import type { AgentEditDraft } from '../../../../core/managed-agents/agentDetailApi';
 
 interface AgentDraftContent {
   draft: AgentEditDraft;

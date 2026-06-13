@@ -8,16 +8,16 @@
 //   - 表示に関係しないイベントは空配列を返す
 
 import { parseCreateArtifactInput } from '../artifacts/types';
-import { HIDDEN_BLOCK_MARKER } from '../files/messageContent';
 import { KINTONE_TOOL_NAMES } from '../bootstrap/builtInAgents';
 import { PROPOSE_AGENT_TOOL_NAME } from '../bootstrap/resolveAgent';
+import { HIDDEN_BLOCK_MARKER } from '../files/messageContent';
 
+import type { AgentEditDraft } from './agentDetailApi';
+import type { SessionEvent } from './types';
+import type { ChatMessage, ToolMessage } from '../../desktop/components/MessageList';
 import type { ArtifactKind, CreateArtifactInput } from '../artifacts/types';
 import type { AgentColor, AgentGlyph } from '../bootstrap/agentTypes';
-import type { AgentEditDraft } from './agentDetailApi';
 import type { KintoneToolName } from '../bootstrap/builtInAgents';
-import type { ChatMessage, ToolMessage } from '../../desktop/components/MessageList';
-import type { SessionEvent } from './types';
 
 export type InterpretedEffect =
   | { kind: 'add'; message: ChatMessage }

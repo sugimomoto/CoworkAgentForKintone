@@ -10,6 +10,7 @@
 // CSS 変数 --axis で渡し、arbitrary value で着色する (ハードコード class なし)。
 // ─────────────────────────────────────────────────────────────
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+
 import {
   accessCounts,
   userLabel,

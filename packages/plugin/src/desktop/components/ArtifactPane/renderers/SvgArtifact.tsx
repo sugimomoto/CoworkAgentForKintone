@@ -5,7 +5,6 @@
 import { useMemo } from 'react';
 
 import { sanitizeSvgContent } from '../../../../core/artifacts/sanitizeContent';
-
 import { POST_HELPER_SCRIPT, SandboxFrame } from '../SandboxFrame';
 
 import type { Artifact } from '../../../../core/artifacts/types';

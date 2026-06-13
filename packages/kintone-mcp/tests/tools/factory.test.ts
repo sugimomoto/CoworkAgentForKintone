@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { KintoneCreds } from '../../src/kintone';
 import { createTool, createToolCallback } from '../../src/tools/factory';
+
+import type { KintoneCreds } from '../../src/kintone';
 
 describe('createTool', () => {
   it('name / config / callback を保持した Tool オブジェクトを返す', () => {

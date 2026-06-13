@@ -8,8 +8,8 @@
 // そもそも動かない — kintone 公式仕様で「各プラグインの設定画面」のみ利用可)。
 // 同期完了後は呼出側が `resolveBundledSkillIds` を再 fetch して UI を更新する。
 
-import { apiRequest } from '../managed-agents/client';
 import { SKILL_BUNDLES } from '../../generated/skills-bundle';
+import { apiRequest } from '../managed-agents/client';
 
 import type { CustomSkillInput } from '../../desktop/settings/SkillAddModal';
 import type { SkillBundle } from '../../generated/skills-bundle';

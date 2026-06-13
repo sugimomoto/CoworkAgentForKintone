@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 
 import { useChatStore } from '../../../store/chatStore';
-
 import { isCustomizerPurpose, useCurrentAgentPurpose } from '../../hooks/useCurrentAgentPurpose';
 
 import { ArtifactFooter } from './ArtifactFooter';
@@ -21,8 +20,8 @@ import { PlaceholderArtifact } from './renderers/PlaceholderArtifact';
 import { ReactArtifact } from './renderers/ReactArtifact';
 import { SvgArtifact } from './renderers/SvgArtifact';
 
-import type { Artifact } from '../../../core/artifacts/types';
 import type { KintoneApiFn } from '../../../chat/workflow/kintoneCustomizeApi';
+import type { Artifact } from '../../../core/artifacts/types';
 
 function renderBody(artifact: Artifact): JSX.Element {
   // version でキー再生成 → 同じ id の更新でも iframe / state を作り直して安全にリロード

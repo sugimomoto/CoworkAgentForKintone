@@ -11,18 +11,17 @@
 import { useState } from 'react';
 
 import {
+  accessValueOf,
+  formatAccessFull,
+  formatAccessSummary,
+} from '../../core/access/accessControl';
+import {
   BUILTIN_AGENT_SPECS,
   KINTONE_TOOL_NAMES,
   type KintoneToolName,
 } from '../../core/bootstrap/builtInAgents';
 import { SKILL_BUNDLES } from '../../generated/skills-bundle';
-import {
-  accessValueOf,
-  formatAccessFull,
-  formatAccessSummary,
-} from '../../core/access/accessControl';
 import { useChatStore } from '../../store/chatStore';
-
 import { AgentIcon } from '../components/AgentIcon';
 import { ModelBadge } from '../components/ModelBadge';
 

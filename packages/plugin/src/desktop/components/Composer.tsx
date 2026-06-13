@@ -15,9 +15,9 @@ import {
 
 import { ACCEPT_ATTRIBUTE } from '../../core/files/types';
 
+import { PAPERCLIP_ICON } from './attachmentAssets';
 import { AttachmentChipRow } from './AttachmentChipRow';
 import { VersionBadge } from './VersionBadge';
-import { PAPERCLIP_ICON } from './attachmentAssets';
 
 import type { AttachedFile } from '../../core/files/types';
 

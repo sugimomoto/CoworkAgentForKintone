@@ -7,8 +7,9 @@
 
 import { jsonResponse, maskToken, sanitizeError, sanitizeText } from './_http';
 import { mcpPathPattern } from './kintone-domains';
-import type { KintoneCreds } from './kintone';
 import { tools } from './tools';
+
+import type { KintoneCreds } from './kintone';
 
 const SERVER_INFO = {
   name: 'cowork-agent-kintone-mcp',

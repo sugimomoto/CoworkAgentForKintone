@@ -1,9 +1,9 @@
 // ESLint flat config (v9+)
 import js from '@eslint/js';
-import tseslint from 'typescript-eslint';
 import importPlugin from 'eslint-plugin-import';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
+import tseslint from 'typescript-eslint';
 
 export default [
   {
@@ -48,7 +48,16 @@ export default [
           alphabetize: { order: 'asc', caseInsensitive: true },
         },
       ],
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        // `_` プレフィックスは「意図的に未使用」(分割代入でのキー除外、未使用引数など) を表す
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+        },
+      ],
     },
   },
   {

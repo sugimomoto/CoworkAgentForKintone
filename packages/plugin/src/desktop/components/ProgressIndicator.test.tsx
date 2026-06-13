@@ -2,6 +2,7 @@ import { render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '../../store/chatStore';
+
 import { ProgressIndicator } from './ProgressIndicator';
 
 function resetStore(): void {

@@ -18,8 +18,8 @@
 //   bundled[].skillId が null = 未同期 / not null = synced
 //   custom[]            = 常に skillId あり (Anthropic に存在)
 
-import { apiRequest } from '../managed-agents/client';
 import { SKILL_BUNDLES, type SkillBundle } from '../../generated/skills-bundle';
+import { apiRequest } from '../managed-agents/client';
 
 /** Skills API 用 beta (apiHeaders で MANAGED_AGENTS_BETA を上書き) */
 const SKILLS_BETA = 'skills-2025-10-02';

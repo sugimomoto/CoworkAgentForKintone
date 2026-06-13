@@ -11,8 +11,9 @@
 // string で返してしまい binary が UTF-8 decode で破損するため、Worker で base64 化した
 // JSON を介して受け取る。
 
-import { apiRequest } from './client';
 import { joinUrl } from '../utils';
+
+import { apiRequest } from './client';
 
 /** Files API レスポンスの 1 件 (必要なフィールドだけ抽出) */
 export interface SessionFile {

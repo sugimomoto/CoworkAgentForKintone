@@ -11,8 +11,8 @@
 //   pnpm plugin:e2e:ui            # UI モード
 
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pluginRoot = resolve(__dirname, '..');

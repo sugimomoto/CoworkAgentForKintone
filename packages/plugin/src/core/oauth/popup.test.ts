@@ -12,7 +12,7 @@ interface FakePopup {
 }
 
 let fakePopup: FakePopup;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 let openSpy: any;
 
 beforeEach(() => {

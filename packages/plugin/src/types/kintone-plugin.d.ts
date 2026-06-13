@@ -106,7 +106,7 @@ declare global {
     ): Promise<[string, number, Record<string, string>]>;
   }
 
-  // eslint-disable-next-line no-var
+   
   var kintone: KintoneGlobal | undefined;
 }
 

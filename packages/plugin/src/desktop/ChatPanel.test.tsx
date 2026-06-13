@@ -2,11 +2,23 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ChatPanel } from './ChatPanel';
-
-import { _resetResolveDefaultAgentCache } from '../core/bootstrap/resolveAgent';
+import {
+  _resetResolveDefaultAgentCache,
+  resolveDefaultAgent,
+} from '../core/bootstrap/resolveAgent';
+import { resolveBootstrapEnvironment } from '../core/bootstrap/resolveEnvironment';
+import { createUserSession, listUserSessions } from '../core/bootstrap/resolveSession';
+import {
+  fetchAllEventsSince,
+  postToolConfirmation,
+  postUserInterrupt,
+  postUserMessage,
+} from '../core/managed-agents/events';
 import { useChatStore } from '../store/chatStore';
 import { makeAgent, makeEnv, makeSession } from '../test/fixtures';
+
+import { ChatPanel } from './ChatPanel';
+import { useUserBinding } from './hooks/useUserBinding';
 
 vi.mock('../core/bootstrap/resolveAgent', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../core/bootstrap/resolveAgent')>()),
@@ -39,17 +51,6 @@ vi.mock('../core/managed-agents/events', async (importOriginal) => ({
 vi.mock('./hooks/useUserBinding', () => ({
   useUserBinding: vi.fn(),
 }));
-
-import { resolveDefaultAgent } from '../core/bootstrap/resolveAgent';
-import { resolveBootstrapEnvironment } from '../core/bootstrap/resolveEnvironment';
-import { createUserSession, listUserSessions } from '../core/bootstrap/resolveSession';
-import {
-  fetchAllEventsSince,
-  postToolConfirmation,
-  postUserInterrupt,
-  postUserMessage,
-} from '../core/managed-agents/events';
-import { useUserBinding } from './hooks/useUserBinding';
 
 const mockAgent = vi.mocked(resolveDefaultAgent);
 const mockEnv = vi.mocked(resolveBootstrapEnvironment);

@@ -10,11 +10,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { SKILL_BUNDLES } from '../../generated/skills-bundle';
 import { resetApiBase, resetTransport, setApiBase, setTransport } from '../managed-agents/client';
 
 import { resolveBundledSkillIds } from './resolveBundledSkillIds';
 
-import { SKILL_BUNDLES } from '../../generated/skills-bundle';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

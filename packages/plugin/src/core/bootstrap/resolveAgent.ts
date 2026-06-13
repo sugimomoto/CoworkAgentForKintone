@@ -21,8 +21,8 @@ import {
   DESTRUCTIVE_TOOL_NAMES as BUILTIN_DESTRUCTIVE_TOOL_NAMES,
 } from './builtInAgents';
 
-import type { BuiltInAgentSpec, KintoneToolName } from './builtInAgents';
 import type { AgentPurpose } from './agentTypes';
+import type { BuiltInAgentSpec, KintoneToolName } from './builtInAgents';
 import type { Agent } from '../managed-agents/types';
 
 /** Default Agent の表示名 (functional-design.md §3.1.3) */

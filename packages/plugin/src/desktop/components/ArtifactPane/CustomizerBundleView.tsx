@@ -9,20 +9,20 @@
 
 import { useMemo, useState } from 'react';
 
-import { getBundleContent } from '../../../core/artifacts/types';
 import { FileTree, bundleFilesToTreeEntries } from '../../../chat/workflow/FileTree';
-import { WorkflowFooter } from '../../../chat/workflow/WorkflowFooter';
 import {
   defaultFileUpload,
   getPreviewUrl,
   useKintoneCustomizeWorkflow,
 } from '../../../chat/workflow/kintoneCustomizeApi';
 import { OAuthScopeError } from '../../../chat/workflow/OAuthScopeError';
+import { WorkflowFooter } from '../../../chat/workflow/WorkflowFooter';
+import { getBundleContent } from '../../../core/artifacts/types';
 import { useUserBinding } from '../../hooks/useUserBinding';
 
-import type { Artifact, CustomizeFilePath } from '../../../core/artifacts/types';
 import type { KintoneApiFn } from '../../../chat/workflow/kintoneCustomizeApi';
 import type { WorkflowCallbacks } from '../../../chat/workflow/useApplyWorkflow';
+import type { Artifact, CustomizeFilePath } from '../../../core/artifacts/types';
 
 export interface CustomizerBundleViewProps {
   artifact: Artifact;

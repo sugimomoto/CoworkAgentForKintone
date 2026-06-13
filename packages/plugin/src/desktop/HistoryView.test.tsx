@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { listUserSessions } from '../core/bootstrap/resolveSession';
 import { makeSession } from '../test/fixtures';
 
 import { HistoryView } from './HistoryView';
@@ -17,7 +18,6 @@ vi.mock('../core/kintone/user', () => ({
   })),
 }));
 
-import { listUserSessions } from '../core/bootstrap/resolveSession';
 const mockList = vi.mocked(listUserSessions);
 
 beforeEach(() => {

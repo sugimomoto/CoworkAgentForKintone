@@ -18,8 +18,8 @@ import {
 import { CredentialUpsertError, upsertKintoneCredential } from '../../core/oauth/credentialsUpsertClient';
 import { clearPkce, generatePkce, savePkce } from '../../core/oauth/pkce';
 import { openOAuthPopup } from '../../core/oauth/popup';
-import { buildMcpServerUrl, joinUrl, toErrorMessage } from '../../core/utils';
 import { exchangeCodeForTokens } from '../../core/oauth/tokenExchange';
+import { buildMcpServerUrl, joinUrl, toErrorMessage } from '../../core/utils';
 import { useChatStore } from '../../store/chatStore';
 
 import type { BindingStatus } from '../../store/chatStore';

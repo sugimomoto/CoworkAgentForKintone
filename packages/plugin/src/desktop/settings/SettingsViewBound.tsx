@@ -22,23 +22,23 @@ import {
 } from '../../core/managed-agents/agentDetailApi';
 import { setAgentVisibility } from '../../core/managed-agents/agentVisibility';
 import { retrieveAgent } from '../../core/managed-agents/resources';
-import { resolveSkillSet } from '../../core/skills/resolveBundledSkillIds';
 import {
   deleteCustomSkillFromChatPanel,
   editCustomSkillFromChatPanel,
   syncBundledSkillsFromChatPanel,
   syncCustomSkillFromChatPanel,
 } from '../../core/skills/chatPanelSkillsSync';
+import { resolveSkillSet } from '../../core/skills/resolveBundledSkillIds';
 import { SKILL_BUNDLES } from '../../generated/skills-bundle';
 import { useChatStore } from '../../store/chatStore';
 
 import { AgentDetailModal, type AvailableSkill } from './AgentDetailModal';
 import { SettingsView } from './SettingsView';
 
-import type { AgentRecord } from '../../core/bootstrap/agentTypes';
-import type { AgentEditDraft } from '../../core/managed-agents/agentDetailApi';
 import type { CustomSkillInput } from './SkillAddModal';
 import type { BundledSkillEntry } from './SkillsPane';
+import type { AgentRecord } from '../../core/bootstrap/agentTypes';
+import type { AgentEditDraft } from '../../core/managed-agents/agentDetailApi';
 
 export interface SettingsViewBoundProps {
   /** Settings View を閉じる (Conversation View に戻る) */
