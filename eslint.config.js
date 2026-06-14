@@ -61,6 +61,30 @@ export default [
     },
   },
   {
+    // レイヤー逆転の防止 (Phase 2): plugin の core は UI (desktop) / 状態 (store) に
+    // 依存してはならない。依存の向きは desktop → store → core の一方向に統一する。
+    // import パス文字列に対するパターンマッチで強制する (resolver 非依存)。
+    files: ['packages/plugin/src/core/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/desktop/**'],
+              message:
+                'core は desktop に依存できません (レイヤー逆転)。共有する型は core 配下に置いてください。',
+            },
+            {
+              group: ['**/store/**', '**/store'],
+              message: 'core は store に依存できません (レイヤー逆転)。',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // React Hooks の検査。コード側に既存の eslint-disable コメントがあるのに plugin 未登録で
     // 「rule not found」になっていたため、古典的な 2 ルールのみ有効化する
     // (v7 recommended-latest の React Compiler 系ルールは対象コードが未検証なので採用しない)。

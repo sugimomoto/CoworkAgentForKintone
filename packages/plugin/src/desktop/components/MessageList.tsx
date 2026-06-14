@@ -9,51 +9,17 @@ import { ToolCardMessage } from './MessageItem/ToolCardMessage';
 import { UserMessage } from './MessageItem/UserMessage';
 import { ProgressIndicator } from './ProgressIndicator';
 
-import type { ArtifactKind } from '../../core/artifacts/types';
+import type { ChatMessage } from '../../core/chat/types';
 import type { AgentPhase } from '../hooks/useAgentPhase';
 
-export type ToolStatus = 'running' | 'success' | 'error' | 'pending-confirmation' | 'rejected';
-
-export interface ToolMessage {
-  /** tool_use_id をそのまま使う (後続 tool_result の突合キー) */
-  id: string;
-  kind: 'tool';
-  /** ツール名 (例: 'kintone-update-record') */
-  name: string;
-  /** tool_use.input */
-  input: unknown;
-  status: ToolStatus;
-  /** tool_result.content (success / error 時) */
-  result?: unknown;
-  /** is_error=true の content から抽出したテキスト (リセット用に明示 undefined を許容) */
-  errorText?: string | undefined;
-}
-
-/**
- * 会話ストリームに残す Artifact 参照タイル。本文は chatStore.artifacts から取得する。
- * クリックで ArtifactPane を開く (setActiveArtifact 経由)。
- */
-export interface ArtifactRefChatMessage {
-  id: string;
-  kind: 'artifact-ref';
-  artifactId: string;
-  /** 表示用 (artifact 削除時のフォールバック) */
-  title: string;
-  artifactKind: ArtifactKind;
-}
-
-export type ChatMessage =
-  | {
-      id: string;
-      kind: 'user';
-      text: string;
-      /** 送信時に添付したファイル一覧 (バブル上部にラベル表示用) */
-      attachments?: Array<{ filename: string; kind: import('../../core/files/types').AttachmentKind }>;
-    }
-  | { id: string; kind: 'agent'; text: string }
-  | { id: string; kind: 'thinking' }
-  | ToolMessage
-  | ArtifactRefChatMessage;
+// チャットメッセージのデータ型は core/chat/types.ts に移管した (Phase 2: レイヤー是正)。
+// 既存の import を壊さないため再エクスポートを残す。
+export type {
+  ToolStatus,
+  ToolMessage,
+  ArtifactRefChatMessage,
+  ChatMessage,
+} from '../../core/chat/types';
 
 export interface MessageListProps {
   messages: ChatMessage[];
