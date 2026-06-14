@@ -386,6 +386,52 @@ type AgentDraft = {
 - ドラフトはセッションに紐づく (保存しない限り永続化されない)
 - 保存後の編集は §0.7 AgentEditDraft フローと同じ
 
+### 0.10 定期実行 (Deployments / cron) — #81
+
+Anthropic Managed Agents の **Scheduled Deployments** を用いて、エージェントを cron スケジュールで
+自律起動する。「毎朝9時に未対応レコードを集計して担当者に通知」のような定期タスクを、自前スケジューラ
+なしで回せる。実行結果の通知・書き込みは初回メッセージ + kintone MCP ツールでエージェント自身が行う。
+
+```mermaid
+sequenceDiagram
+    participant U as 業務ユーザー / admin
+    participant SP as Settings「定期実行」
+    participant W as Cloudflare Worker (passthrough)
+    participant MA as Managed Agents API
+    participant SCH as Anthropic Scheduler
+
+    U->>SP: 対象 Agent / 初回メッセージ / cron / tz を入力
+    SP->>W: POST /v1/deployments (agent, environment_id, initial_events, schedule, vault_ids, metadata.owner)
+    W->>MA: 中継 (anthropic-* ヘッダ転送)
+    MA-->>SP: Deployment (schedule.upcoming_runs_at = 次回発火 真値)
+    Note over SCH: cron 到来
+    SCH->>MA: session を自動生成 (Deployment Run を記録)
+    MA->>W: kintone MCP 初期化 (vault_ids の認証情報を解決)
+    W->>MA: MCP ツール実行 (集計 / 書き込み)
+    U->>SP: 実行履歴 → run の session_id で会話を表示
+```
+
+**設計上の要点:**
+
+- **Worker / client は改修不要**: `/anthropic/*` の汎用 passthrough が任意パス・メソッド・`anthropic-*`
+  ヘッダを転送するため、`/v1/deployments` 系はそのまま通る。beta header もクライアント既定の
+  `managed-agents-2026-04-01` が使われる。
+- **API ↔ view-model アダプタ**: API の入れ子型 (`agent` / `initial_events` / `schedule` / `paused_reason`)
+  と UI 視点の平坦な `DeploymentView` を `core/deployments/view.ts` で変換 (agentRecord 流儀)。
+- **「次回実行」の真値**: 保存済み一覧は API の `schedule.upcoming_runs_at` を表示。cron プレビュー計算
+  (`nextRuns`) は作成/編集モーダル専用 (保存前で API 応答がない場面)。
+- **MCP 認証 (vault_ids)**: scheduled run の MCP server 初期化には Vault が必須。createDeployment /
+  updateDeployment に `vault_ids: [vaultId]` を渡す (インタラクティブセッションと同じ仕組み)。未連携では作成不可。
+- **所有者 / 権限**: `metadata.owner` = 作成者の kintone ユーザーコード。一般ユーザーは自分の所有分のみ、
+  admin は全ユーザー分を一覧・操作 (`visibleDeployments`)。これは UI 上の整理であり認可ではない
+  (厳密な enforcement はサーバ側の別 Issue)。
+- **Settings ロール出し分け**: 入口を非 admin にも開放し、非 admin は「定期実行」セクションのみ表示、
+  admin は全セクション。
+- **実行履歴**: `GET /v1/deployment_runs?deployment_id=…[&has_error=true]` で run 一覧 (成否 / エラー種別)。
+  各 run の `session_id` から会話を会話ビューで開ける (設定を開いたまま左ペインにロード)。
+- **MVP 外**: 承認フロー / 作成者制限・コストガード / イベント駆動トリガー / files・github・memory・vault
+  リソース指定 / session の詳細追跡。
+
 ---
 
 ## 1. システムアーキテクチャ (Phase 1a/1b-1/1b-2 の歴史記録)
