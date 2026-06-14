@@ -1,0 +1,59 @@
+name: Sync Docs & Landing
+
+# 機能コード (packages/plugin / packages/kintone-mcp) を変更する PR で起動し、
+# docs/ や packages/landing の更新が必要かを Claude が自己判定して、必要なときだけ
+# 同じ PR ブランチに最小限の更新をコミットする (不要ならコメントして no-op)。
+#
+# 前提:
+#   - 公式 Claude GitHub App を導入済み (`/install-github-app`)
+#   - リポジトリ secret に CLAUDE_CODE_OAUTH_TOKEN を設定済み (install-github-app が自動設定)
+# ポリシー: .github/docs-sync-policy.md
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - 'packages/plugin/**'
+      - 'packages/kintone-mcp/**'
+
+concurrency:
+  group: docs-sync-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  sync-docs:
+    # draft PR と Claude 自身のコミットでは走らせない (ループ防止)
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.actor != 'claude[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            この PR の差分が、ランディングページ (packages/landing) や docs/ の
+            更新を必要とするかを判断してください。
+
+            手順:
+            1. `.github/docs-sync-policy.md` を読み、同期対象と「やらないこと」を把握する。
+            2. PR の差分 (機能コードの変更) を確認する。
+            3. ポリシーに従い:
+               - 更新が必要 → docs/ / packages/landing の該当箇所だけを最小限に編集してコミット
+                 (コミットメッセージは `docs: sync docs/landing with PR #${{ github.event.pull_request.number }}`)。
+               - 更新が不要 → 変更を一切加えず、PR に「✓ ドキュメント更新は不要」と理由つきでコメント。
+            4. 機能コード (packages/plugin, packages/kintone-mcp) は絶対に変更しない。
+            5. スクリーンショット/画像の差し替えは行わず、必要なら PR コメントで「要スクショ更新」と指摘するに留める。
+          claude_args: |
+            --max-turns 6
+            --model claude-sonnet-4-6
