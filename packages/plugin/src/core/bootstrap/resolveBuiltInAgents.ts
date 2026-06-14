@@ -10,7 +10,15 @@
 // 仕様: requirements.md §6.3, §6.4.1 / design.md §3
 
 import { AGENT_TYPE, METADATA_SOURCE } from '../constants';
-import { createAgent, findByMetadata, listAgents, pickOldest } from '../managed-agents/resources';
+import { ApiError } from '../managed-agents/client';
+import {
+  createAgent,
+  findByMetadata,
+  listAgents,
+  pickOldest,
+  retrieveAgent,
+  updateAgent,
+} from '../managed-agents/resources';
 
 import {
   CREATE_ARTIFACT_TOOL,
@@ -104,7 +112,11 @@ async function doResolveBuiltIn(
   spec: BuiltInAgentSpec,
   options: ResolveBuiltInAgentsOptions,
 ): Promise<Agent> {
-  // metadata は find filter にも create body にも同じ key で渡す (完全一致で再 list 可能)
+  // tool 構成から導出する版数。tool を変えれば変化し、既存エージェントの reconcile を駆動する。
+  const toolsVersion = computeToolsVersion(purpose, spec);
+
+  // metadata は find filter にも create body にも同じ key で渡す (完全一致で再 list 可能)。
+  // toolsVersion は filter には含めない (= エージェント identity は据え置き、tools だけ追従させる)。
   const filter: Record<string, string> = {
     source: METADATA_SOURCE,
     type: AGENT_TYPE.default,
@@ -114,10 +126,10 @@ async function doResolveBuiltIn(
     kintoneDomain: options.kintoneDomain,
   };
 
-  // 1. 既存 Agent を探索
+  // 1. 既存 Agent を探索 → 見つかれば tool ドリフトを reconcile して返す (ID 保持)
   const existing = await findDefaultAgents(filter);
   if (existing.length > 0) {
-    return pickOldest(existing);
+    return reconcileBuiltInAgentTools(pickOldest(existing), purpose, spec, toolsVersion);
   }
 
   // 2. 無ければ作成
@@ -136,6 +148,7 @@ async function doResolveBuiltIn(
   // (find filter には影響しないが、再 list 時に Plugin がここから読む)
   const fullMetadata: Record<string, string> = {
     ...filter,
+    toolsVersion,
     iconKind: spec.iconKind,
     iconColor: spec.iconColor,
     isDefault: spec.isDefault ? '1' : '0',
@@ -208,6 +221,84 @@ function buildBuiltInAgentTools(
       })),
     },
   ];
+}
+
+/**
+ * 既存 Built-in Agent の tool 構成を現行 spec に追従させる (#86 ツールドリフト修復)。
+ *
+ * find-or-create は promptVersion 等の identity で既存を再利用するだけで tools を更新しないため、
+ * propose_agent 未配線の中間ビルドで作られたエージェント等で tools が古いまま固定されてしまう。
+ * metadata.toolsVersion を現行値と突き合わせ、不一致なら updateAgent で tools を上書きする
+ * (エージェント ID は保持 = 過去セッション参照・variantGroup 切替に影響しない)。
+ *
+ * 楽観ロック (Anthropic 仕様で updateAgent は version 必須) のため、409 衝突時は retrieve して再試行。
+ * 別タブ/別プロセスが先に最新へ更新済みなら、それを採用して終了する。
+ */
+async function reconcileBuiltInAgentTools(
+  agent: Agent,
+  purpose: BuiltInPurpose,
+  spec: BuiltInAgentSpec,
+  toolsVersion: string,
+): Promise<Agent> {
+  if (agent.metadata['toolsVersion'] === toolsVersion) {
+    return agent; // 最新 — 何もしない (通常パス)
+  }
+
+  const tools = buildBuiltInAgentTools(purpose, spec);
+  let version = agent.version;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await updateAgent(agent.id, {
+        version,
+        tools,
+        metadata: { ...agent.metadata, toolsVersion },
+      });
+    } catch (err) {
+      const conflict = err instanceof ApiError && err.status === 409;
+      if (!conflict || attempt === 2) throw err;
+      // 別タブ/別プロセスが先に更新 → 最新を取り直して判定
+      const fresh = await retrieveAgent(agent.id);
+      if (fresh.metadata['toolsVersion'] === toolsVersion) return fresh;
+      version = fresh.version;
+    }
+  }
+  return agent; // 到達しない (ループ内で return/throw する)
+}
+
+/**
+ * tool 構成の意味的シグネチャから安定した版数文字列を導出する。
+ *
+ * `buildBuiltInAgentTools` の生 JSON ではなく「tool の有無 + 破壊的ツールの権限ポリシー」だけを
+ * ハッシュ対象にする (出力のキー順など見た目だけの変更で版数が動かないように)。env 依存値
+ * (workerUrl / kintoneDomain) は find filter 側にあるためここには含めない。
+ */
+function computeToolsVersion(purpose: BuiltInPurpose, spec: BuiltInAgentSpec): string {
+  const mcpSig = BUILTIN_KINTONE_TOOL_NAMES.filter((name) => spec.mcpToolFilter(name))
+    .slice()
+    .sort()
+    .map((name) => (BUILTIN_DESTRUCTIVE_TOOL_NAMES.has(name) ? `${name}!` : name))
+    .join(',');
+  const parts = [
+    'agent_toolset_20260401',
+    'create_artifact',
+    ...(purpose === 'customizer-opus' ? ['propose_agent'] : []),
+    `mcp:${mcpSig}`,
+  ];
+  return `ts_${djb2(parts.join('|'))}`;
+}
+
+/** purpose に対応する現行 toolsVersion (テスト / 参照用)。 */
+export function builtInToolsVersion(purpose: BuiltInPurpose): string {
+  return computeToolsVersion(purpose, BUILTIN_AGENT_SPECS[purpose]);
+}
+
+/** 32bit djb2 → base36。決定的でプロセス間でも安定 (Math.random / Date 不使用)。 */
+function djb2(input: string): string {
+  let hash = 5381;
+  for (let i = 0; i < input.length; i++) {
+    hash = (((hash << 5) + hash) + input.charCodeAt(i)) | 0;
+  }
+  return (hash >>> 0).toString(36);
 }
 
 /**

@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { jsonResponse, makeAgent } from '../../test/fixtures';
 
-import { _resetResolveBuiltInAgentsCache, resolveBuiltInAgents } from './resolveBuiltInAgents';
+import {
+  _resetResolveBuiltInAgentsCache,
+  builtInToolsVersion,
+  resolveBuiltInAgents,
+} from './resolveBuiltInAgents';
 
 import type { Agent, ListResponse } from '../managed-agents/types';
 
@@ -137,6 +141,7 @@ describe('resolveBuiltInAgents', () => {
                 promptVersion: 'v20-business',
                 workerUrl: OPTIONS.workerUrl,
                 kintoneDomain: OPTIONS.kintoneDomain,
+                toolsVersion: builtInToolsVersion('business'),
               },
             }),
             makeAgent({
@@ -148,6 +153,7 @@ describe('resolveBuiltInAgents', () => {
                 promptVersion: 'v23-agent-designer',
                 workerUrl: OPTIONS.workerUrl,
                 kintoneDomain: OPTIONS.kintoneDomain,
+                toolsVersion: builtInToolsVersion('customizer-opus'),
               },
             }),
             makeAgent({
@@ -159,6 +165,7 @@ describe('resolveBuiltInAgents', () => {
                 promptVersion: 'v22-customizer',
                 workerUrl: OPTIONS.workerUrl,
                 kintoneDomain: OPTIONS.kintoneDomain,
+                toolsVersion: builtInToolsVersion('customizer-sonnet'),
               },
             }),
           ],
@@ -275,5 +282,140 @@ describe('resolveBuiltInAgents', () => {
     // POST は variant ごとに 1 回ずつ = 計 3 回 (2 回呼出でも重複しない)
     const posts = fetchMock.mock.calls.filter((c) => c[1]?.method === 'POST');
     expect(posts).toHaveLength(3);
+  });
+
+  // #86: ツールドリフト修復 — 既存エージェントの toolsVersion が古い/未設定なら updateAgent で tools を追従
+  /** 3 variant の既存を返す。toolsVersion を上書きしたい variant だけ override で空文字等にする。 */
+  function existingWithToolsVersion(opusToolsVersion: string): ListResponse<Agent> {
+    return {
+      data: [
+        makeAgent({
+          id: 'biz_existing',
+          metadata: {
+            source: 'cowork-agent-for-kintone',
+            type: 'default',
+            purpose: 'business',
+            promptVersion: 'v20-business',
+            workerUrl: OPTIONS.workerUrl,
+            kintoneDomain: OPTIONS.kintoneDomain,
+            toolsVersion: builtInToolsVersion('business'),
+          },
+        }),
+        makeAgent({
+          id: 'opus_existing',
+          version: 7,
+          metadata: {
+            source: 'cowork-agent-for-kintone',
+            type: 'default',
+            purpose: 'customizer-opus',
+            promptVersion: 'v23-agent-designer',
+            workerUrl: OPTIONS.workerUrl,
+            kintoneDomain: OPTIONS.kintoneDomain,
+            // propose_agent 未配線の中間ビルドで作られた = toolsVersion なし (空文字で表現)
+            ...(opusToolsVersion ? { toolsVersion: opusToolsVersion } : {}),
+          },
+        }),
+        makeAgent({
+          id: 'sonnet_existing',
+          metadata: {
+            source: 'cowork-agent-for-kintone',
+            type: 'default',
+            purpose: 'customizer-sonnet',
+            promptVersion: 'v22-customizer',
+            workerUrl: OPTIONS.workerUrl,
+            kintoneDomain: OPTIONS.kintoneDomain,
+            toolsVersion: builtInToolsVersion('customizer-sonnet'),
+          },
+        }),
+      ],
+      next_page: null,
+    };
+  }
+
+  it('toolsVersion が古いデザイナーは updateAgent で propose_agent を含む tools に修復される', async () => {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = new URL(url);
+      if (u.pathname === '/v1/agents' && (!init?.method || init.method === 'GET')) {
+        return Promise.resolve(jsonResponse(existingWithToolsVersion('')));
+      }
+      // updateAgent: POST /v1/agents/{id}
+      if (u.pathname === '/v1/agents/opus_existing' && init?.method === 'POST') {
+        const body = JSON.parse(init.body as string) as {
+          tools: Array<{ name?: string }>;
+          metadata: Record<string, string>;
+        };
+        return Promise.resolve(
+          jsonResponse(makeAgent({ id: 'opus_existing', metadata: body.metadata })),
+        );
+      }
+      throw new Error(`unexpected fetch: ${url} ${init?.method}`);
+    });
+
+    const result = await resolveBuiltInAgents(OPTIONS);
+    expect(result.customizerOpus.id).toBe('opus_existing');
+
+    // updateAgent は opus のみ 1 回 (business / sonnet は toolsVersion 一致で no-op)
+    const updates = fetchMock.mock.calls.filter(
+      (c) => new URL(c[0] as string).pathname.startsWith('/v1/agents/') && c[1]?.method === 'POST',
+    );
+    expect(updates).toHaveLength(1);
+    const [updateUrl, updateInit] = updates[0] as [string, RequestInit];
+    expect(new URL(updateUrl).pathname).toBe('/v1/agents/opus_existing');
+
+    const body = JSON.parse(updateInit.body as string);
+    expect(body.version).toBe(7); // 楽観ロック: 既存 version を送る
+    expect(body.tools.some((t: { name?: string }) => t.name === 'propose_agent')).toBe(true);
+    expect(body.metadata.toolsVersion).toBe(builtInToolsVersion('customizer-opus'));
+  });
+
+  it('reconcile が 409 衝突したら retrieve し、別タブが修復済みなら再試行しない', async () => {
+    let updateCount = 0;
+    let retrieveCount = 0;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = new URL(url);
+      if (u.pathname === '/v1/agents' && (!init?.method || init.method === 'GET')) {
+        return Promise.resolve(jsonResponse(existingWithToolsVersion('')));
+      }
+      // retrieveAgent: GET /v1/agents/{id}
+      if (u.pathname === '/v1/agents/opus_existing' && (!init?.method || init.method === 'GET')) {
+        retrieveCount++;
+        // 別タブが先に最新 toolsVersion へ修復済み
+        return Promise.resolve(
+          jsonResponse(
+            makeAgent({
+              id: 'opus_existing',
+              version: 9,
+              metadata: {
+                source: 'cowork-agent-for-kintone',
+                type: 'default',
+                purpose: 'customizer-opus',
+                promptVersion: 'v23-agent-designer',
+                workerUrl: OPTIONS.workerUrl,
+                kintoneDomain: OPTIONS.kintoneDomain,
+                toolsVersion: builtInToolsVersion('customizer-opus'),
+              },
+            }),
+          ),
+        );
+      }
+      if (u.pathname === '/v1/agents/opus_existing' && init?.method === 'POST') {
+        updateCount++;
+        return Promise.resolve(jsonResponse({ type: 'error', message: 'conflict' }, 409));
+      }
+      throw new Error(`unexpected fetch: ${url} ${init?.method}`);
+    });
+
+    const result = await resolveBuiltInAgents(OPTIONS);
+    expect(result.customizerOpus.id).toBe('opus_existing');
+    expect(result.customizerOpus.metadata['toolsVersion']).toBe(
+      builtInToolsVersion('customizer-opus'),
+    );
+    expect(updateCount).toBe(1); // 409 一度きり、再試行しない
+    expect(retrieveCount).toBe(1);
+  });
+
+  it('builtInToolsVersion は決定的 (同一 purpose で同値・variant 間で別値)', () => {
+    expect(builtInToolsVersion('customizer-opus')).toBe(builtInToolsVersion('customizer-opus'));
+    expect(builtInToolsVersion('customizer-opus')).not.toBe(builtInToolsVersion('business'));
   });
 });
