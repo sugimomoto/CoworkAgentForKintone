@@ -327,7 +327,7 @@ function DeploymentRow({
               className={`absolute top-[2px] h-[13px] w-[13px] rounded-full bg-white transition-[left] ${active ? 'left-[15px]' : 'left-[2px]'}`}
             />
           </span>
-          {active ? '実行中' : '停止中'}
+          {active ? 'アクティブ' : '非アクティブ'}
         </button>
         <div className="flex-1" />
         <button
@@ -364,7 +364,7 @@ function StatusBadge({ active }: { active: boolean }): JSX.Element {
         className="h-[6px] w-[6px] rounded-full"
         style={{ background: active ? '#22c55e' : '#a89d85' }}
       />
-      {active ? '実行中' : '一時停止'}
+      {active ? 'アクティブ' : '非アクティブ'}
     </span>
   );
 }
