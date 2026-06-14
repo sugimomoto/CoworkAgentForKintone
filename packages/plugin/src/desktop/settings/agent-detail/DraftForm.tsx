@@ -17,6 +17,7 @@ import {
   searchUsers,
 } from '../../../core/kintone/users';
 import { AgentIcon } from '../../components/AgentIcon';
+import { FormField } from '../../components/ui/FormField';
 import { AccessPicker } from '../AccessPicker';
 
 import type { AvailableSkill } from './types';
@@ -260,15 +261,6 @@ export function DraftForm({ draft, setDraft, availableSkills, source }: DraftFor
 }
 
 // ─── form pieces ───────────────────────────────────────────────────────────
-
-function FormField({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
-  return (
-    <label className="flex flex-col gap-[4px]">
-      <span className="text-[10.5px] font-semibold text-muted">{label}</span>
-      {children}
-    </label>
-  );
-}
 
 function IconChoice({
   glyph,
