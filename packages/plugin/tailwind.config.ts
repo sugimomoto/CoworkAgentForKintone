@@ -36,6 +36,10 @@ const config: Config = {
         'warn-soft': 'var(--cw-warn-soft)',
         ok: 'var(--cw-ok)',
         'ok-soft': 'var(--cw-ok-soft)',
+        danger: 'var(--cw-danger)',
+        'danger-soft': 'var(--cw-danger-soft)',
+        success: 'var(--cw-success)',
+        'success-soft': 'var(--cw-success-soft)',
       },
       fontFamily: {
         // design ハンドオフ (variant-rich.jsx / styles.css) に準拠

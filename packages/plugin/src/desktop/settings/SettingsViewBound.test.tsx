@@ -85,6 +85,8 @@ function makeAgent(overrides: Partial<AgentRecord> = {}): AgentRecord {
 beforeEach(() => {
   useChatStore.getState().reset();
   useChatStore.getState().setPluginId('plugin_1');
+  // #81: Settings はロール出し分け。本テスト群は admin 機能 (agents/skills) を検証するため admin にする
+  useChatStore.getState().setIsAdminResolved(true);
   mockSyncBundled.mockClear();
   mockSyncCustom.mockClear();
   mockSetVisibility.mockClear();

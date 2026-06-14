@@ -45,15 +45,19 @@ export interface SettingsViewBoundProps {
   onClose: () => void;
   /** Plugin Config 画面を開く (kintone admin 画面、SettingsView Nav 下部リンク) */
   onPluginConfigClick?: () => void;
+  /** 定期実行の run セッションを会話ビューで開く (#81) */
+  onOpenSession?: (sessionId: string) => void;
 }
 
 export function SettingsViewBound({
   onClose,
   onPluginConfigClick,
+  onOpenSession,
 }: SettingsViewBoundProps): JSX.Element {
   const builtInAgents = useChatStore((s) => s.builtInAgents);
   const setBuiltInAgents = useChatStore((s) => s.setBuiltInAgents);
   const pluginId = useChatStore((s) => s.pluginId);
+  const isAdmin = useChatStore((s) => s.isAdmin) === true;
 
   const cfg = pluginId ? getPluginConfig(pluginId) : { workerUrl: null };
 
@@ -235,6 +239,8 @@ export function SettingsViewBound({
     <>
       <SettingsView
         onClose={onClose}
+        isAdmin={isAdmin}
+        {...(onOpenSession ? { onOpenSession } : {})}
         {...(onPluginConfigClick ? { onPluginConfigClick } : {})}
         bundledSkills={bundledSkills}
         customSkills={customSkills}

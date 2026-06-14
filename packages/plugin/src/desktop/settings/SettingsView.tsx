@@ -9,6 +9,7 @@
 import { useState } from 'react';
 
 import { AgentsListPane } from './AgentsListPane';
+import { DeploymentsPaneBound } from './DeploymentsPaneBound';
 import { SettingsNav } from './SettingsNav';
 import { SkillsPane } from './SkillsPane';
 
@@ -40,6 +41,10 @@ export interface SettingsViewProps {
   onEditAgent?: (agent: AgentRecord) => void;
   /** Custom Agent 追加ボタンクリック (#40 V2) */
   onCreateAgent?: () => void;
+  /** admin か。非 admin は定期実行セクションのみ表示 (#81) */
+  isAdmin?: boolean;
+  /** 定期実行の run セッションを会話ビューで開く (#81) */
+  onOpenSession?: (sessionId: string) => void;
 }
 
 export function SettingsView({
@@ -54,8 +59,11 @@ export function SettingsView({
   onToggleVisibility,
   onEditAgent,
   onCreateAgent,
+  isAdmin = false,
+  onOpenSession,
 }: SettingsViewProps): JSX.Element {
-  const [section, setSection] = useState<SettingsSection>('agents');
+  // 非 admin は「定期実行」のみアクセス可能なので初期セクションをそこに寄せる
+  const [section, setSection] = useState<SettingsSection>(isAdmin ? 'agents' : 'deployments');
 
   return (
     <div
@@ -69,7 +77,9 @@ export function SettingsView({
         </div>
         <div className="flex-1">
           <div className="text-[13px] font-semibold text-text">設定</div>
-          <div className="text-[10.5px] text-muted">管理者専用 · 変更は新規セッションから反映</div>
+          <div className="text-[10.5px] text-muted">
+            {isAdmin ? '管理者 · 全ユーザーの設定を管理' : '自分の定期実行を管理'}
+          </div>
         </div>
         <button
           type="button"
@@ -89,16 +99,20 @@ export function SettingsView({
           section={section}
           onSection={setSection}
           onPluginConfigClick={onPluginConfigClick}
+          isAdmin={isAdmin}
         />
         <div className="min-w-0 flex-1 overflow-y-auto">
-          {section === 'agents' && (
+          {section === 'deployments' && (
+            <DeploymentsPaneBound {...(onOpenSession ? { onOpenSession } : {})} />
+          )}
+          {section === 'agents' && isAdmin && (
             <AgentsListPane
               {...(onToggleVisibility ? { onToggleVisibility } : {})}
               {...(onEditAgent ? { onEditAgent } : {})}
               {...(onCreateAgent ? { onCreateAgent } : {})}
             />
           )}
-          {section === 'skills' && (
+          {section === 'skills' && isAdmin && (
             <SkillsPane
               {...(bundledSkills ? { bundledSkills } : {})}
               {...(customSkills ? { customSkills } : {})}
@@ -108,7 +122,7 @@ export function SettingsView({
               {...(onDeleteCustomSkill ? { onDeleteCustomSkill } : {})}
             />
           )}
-          {section === 'mcp' && <MCPPanePlaceholder />}
+          {section === 'mcp' && isAdmin && <MCPPanePlaceholder />}
         </div>
       </div>
     </div>
