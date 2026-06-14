@@ -121,7 +121,7 @@ export interface DeploymentDraft {
 
 export function draftToCreateParams(
   draft: DeploymentDraft,
-  ctx: { environmentId: string; owner: string },
+  ctx: { environmentId: string; owner: string; vaultId?: string | null },
 ): CreateDeploymentParams {
   return {
     name: draft.name.trim(),
@@ -135,12 +135,18 @@ export function draftToCreateParams(
       expression: buildCron(draft.schedule),
       timezone: draft.schedule.tz,
     },
+    // MCP 認証情報の Vault。scheduled run の MCP server 初期化に必須 (#81)
+    ...(ctx.vaultId ? { vault_ids: [ctx.vaultId] } : {}),
     metadata: { [META_KEY_OWNER]: ctx.owner },
   };
 }
 
-/** 編集時の部分更新 params。owner / environment は据え置き。 */
-export function draftToUpdateParams(draft: DeploymentDraft): UpdateDeploymentParams {
+/** 編集時の部分更新 params。owner / environment は据え置き。
+ *  vaultId が渡されたら vault_ids も更新 (旧 vault 未設定の deployment を修復できる)。 */
+export function draftToUpdateParams(
+  draft: DeploymentDraft,
+  ctx?: { vaultId?: string | null },
+): UpdateDeploymentParams {
   return {
     name: draft.name.trim(),
     agent: draft.agentId,
@@ -152,6 +158,7 @@ export function draftToUpdateParams(draft: DeploymentDraft): UpdateDeploymentPar
       expression: buildCron(draft.schedule),
       timezone: draft.schedule.tz,
     },
+    ...(ctx?.vaultId ? { vault_ids: [ctx.vaultId] } : {}),
   };
 }
 

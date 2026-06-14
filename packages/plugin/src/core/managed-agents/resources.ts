@@ -286,6 +286,8 @@ export interface CreateDeploymentParams {
   environment_id: string;
   initial_events: DeploymentInitialEvent[];
   schedule: { type: 'cron'; expression: string; timezone: string };
+  /** MCP 認証情報を保持する Vault。これが無いと scheduled run で MCP server が初期化できない (#81) */
+  vault_ids?: string[];
   metadata?: ManagedAgentsMetadata;
 }
 

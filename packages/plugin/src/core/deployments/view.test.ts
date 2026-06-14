@@ -90,11 +90,23 @@ describe('draftToCreateParams', () => {
     expect(p.metadata).toEqual({ owner: 'tanaka' });
   });
 
-  it('draftToUpdateParams は owner/environment を含まない', () => {
+  it('vaultId があれば vault_ids を付与 (MCP 認証用 / #81)', () => {
+    const p = draftToCreateParams(draft, { environmentId: 'env_9', owner: 'tanaka', vaultId: 'vault_1' });
+    expect(p.vault_ids).toEqual(['vault_1']);
+  });
+
+  it('vaultId 未指定なら vault_ids を付けない', () => {
+    const p = draftToCreateParams(draft, { environmentId: 'env_9', owner: 'tanaka' });
+    expect(p.vault_ids).toBeUndefined();
+  });
+
+  it('draftToUpdateParams は owner/environment を含まない / vaultId 指定で vault_ids 更新', () => {
     const p = draftToUpdateParams(draft);
     expect(p.metadata).toBeUndefined();
     expect(p.environment_id).toBeUndefined();
     expect(p.schedule?.expression).toBe('0 9 * * *');
+    expect(p.vault_ids).toBeUndefined();
+    expect(draftToUpdateParams(draft, { vaultId: 'vault_2' }).vault_ids).toEqual(['vault_2']);
   });
 });
 

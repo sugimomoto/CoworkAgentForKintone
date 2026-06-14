@@ -38,6 +38,7 @@ function currentUserCode(): string {
 export function DeploymentsPaneBound(): JSX.Element {
   const agents = useChatStore((s) => s.builtInAgents);
   const isAdmin = useChatStore((s) => s.isAdmin) === true;
+  const vaultId = useChatStore((s) => s.vaultId);
   const currentUser = currentUserCode();
 
   const [all, setAll] = useState<DeploymentView[]>([]);
@@ -74,15 +75,22 @@ export function DeploymentsPaneBound(): JSX.Element {
   const handleSave = useCallback(
     async (draft: DeploymentDraft, mode: DeploymentModalMode) => {
       if (mode.kind === 'edit') {
-        await updateDeployment(mode.deployment.id, draftToUpdateParams(draft));
+        await updateDeployment(mode.deployment.id, draftToUpdateParams(draft, { vaultId }));
       } else {
+        if (!vaultId) {
+          throw new Error(
+            'kintone との連携が必要です。先にチャット画面で kintone に接続してから作成してください。',
+          );
+        }
         const env = await resolveBootstrapEnvironment();
-        await createDeployment(draftToCreateParams(draft, { environmentId: env.id, owner: currentUser }));
+        await createDeployment(
+          draftToCreateParams(draft, { environmentId: env.id, owner: currentUser, vaultId }),
+        );
       }
       setModal(null);
       await reload();
     },
-    [currentUser, reload],
+    [currentUser, vaultId, reload],
   );
 
   const handleRun = useCallback(async (d: DeploymentView) => {

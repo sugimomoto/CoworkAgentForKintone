@@ -243,7 +243,12 @@ function DeploymentRow({
           <div className="mt-[6px] flex items-center gap-[10px] text-[10.5px]">
             <span className="text-subtle">直近</span>
             <LastRunBadge d={d} />
-            <button type="button" onClick={onOpenHistory} className="text-accent" data-testid={`deployment-history-${d.id}`}>
+            <button
+              type="button"
+              onClick={onOpenHistory}
+              className="text-[10.5px] text-accent"
+              data-testid={`deployment-history-${d.id}`}
+            >
               実行履歴 →
             </button>
             {isAdmin && (
