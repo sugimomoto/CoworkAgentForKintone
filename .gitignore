@@ -61,3 +61,10 @@ packages/plugin/.keys/
 
 # 検証スクリプト (scripts/verify-customize-rest-api.mjs) の出力
 scripts/.verify-output/
+
+# デザインツール書き出し (design-handoff)。再生成可能なコード成果物は Git 管理外にする。
+# HANDOFF.md 等の手書きドキュメント (.md) は引き続き追跡する。
+docs/**/*.jsx
+docs/**/*.tsx
+docs/**/*.js
+docs/**/*.ts

@@ -166,6 +166,13 @@ src/generated/
 dist/, dist-plugin/
 ```
 
+### 3.3 デザインツール書き出し (gitignore)
+
+`docs/` 配下の `*.jsx` / `*.tsx` / `*.ts` / `*.js` はデザインツールの書き出し成果物
+(再生成可能・アプリのソースではない) なので **Git 管理外** とする。
+`HANDOFF.md` / `chats/*.md` 等の手書きドキュメントや `tokens.json` (build-tokens.mjs の源泉) は
+引き続き追跡する。
+
 ---
 
 ## 4. packages/kintone-mcp (Cloudflare Worker)
