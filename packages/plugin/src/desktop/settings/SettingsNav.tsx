@@ -5,7 +5,7 @@
 //
 // 仕様: requirements.md §15.4 / design.md §4.3
 
-export type SettingsSection = 'agents' | 'skills' | 'mcp';
+export type SettingsSection = 'agents' | 'skills' | 'mcp' | 'deployments';
 
 export interface SettingsNavProps {
   /** 現在選択中のセクション */
@@ -16,20 +16,25 @@ export interface SettingsNavProps {
   counts?: Partial<Record<SettingsSection, number>>;
   /** Plugin Config (kintone admin 画面) へのリンクをクリック */
   onPluginConfigClick?: (() => void) | undefined;
+  /** admin か。非 admin は「定期実行」のみ表示する (#81) */
+  isAdmin?: boolean;
 }
 
 interface NavItemDef {
   id: SettingsSection;
   label: string;
-  iconName: 'bot' | 'brain' | 'plug';
+  iconName: 'bot' | 'brain' | 'plug' | 'clock';
   /** V1 で disabled 表示するか */
   disabled?: boolean;
+  /** admin 専用セクション (非 admin には出さない) */
+  adminOnly?: boolean;
 }
 
 const NAV_ITEMS: readonly NavItemDef[] = [
-  { id: 'agents', label: 'エージェント', iconName: 'bot' },
-  { id: 'skills', label: 'スキル', iconName: 'brain' },
-  { id: 'mcp', label: 'MCP サーバー', iconName: 'plug', disabled: true },
+  { id: 'agents', label: 'エージェント', iconName: 'bot', adminOnly: true },
+  { id: 'skills', label: 'スキル', iconName: 'brain', adminOnly: true },
+  { id: 'deployments', label: '定期実行', iconName: 'clock' },
+  { id: 'mcp', label: 'MCP サーバー', iconName: 'plug', disabled: true, adminOnly: true },
 ];
 
 export function SettingsNav({
@@ -37,13 +42,15 @@ export function SettingsNav({
   onSection,
   counts,
   onPluginConfigClick,
+  isAdmin = false,
 }: SettingsNavProps): JSX.Element {
+  const items = NAV_ITEMS.filter((item) => isAdmin || !item.adminOnly);
   return (
     <nav
       data-testid="settings-nav"
       className="flex w-[192px] shrink-0 flex-col gap-[2px] border-r border-border bg-card-hi px-[8px] py-[12px]"
     >
-      {NAV_ITEMS.map((item) => {
+      {items.map((item) => {
         const active = section === item.id && !item.disabled;
         const count = counts?.[item.id];
         return (
@@ -99,8 +106,22 @@ export function SettingsNav({
 
 // ─── icons ────────────────────────────────────────────────────────────────
 
-function NavIcon({ name, active }: { name: 'bot' | 'brain' | 'plug'; active: boolean }): JSX.Element {
+function NavIcon({
+  name,
+  active,
+}: {
+  name: 'bot' | 'brain' | 'plug' | 'clock';
+  active: boolean;
+}): JSX.Element {
   const stroke = active ? 'var(--cw-accent)' : 'currentColor';
+  if (name === 'clock') {
+    return (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="8" cy="8" r="6" />
+        <path d="M8 4.5V8l2.5 1.5" />
+      </svg>
+    );
+  }
   if (name === 'bot') {
     return (
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

@@ -4,7 +4,7 @@
 // 未バインディング状態 (kintone OAuth 未連携) では Composer の代わりに ConnectKintoneButton を表示。
 // connect() 完了後に保留テキストを送信する。
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 
 
@@ -156,11 +156,12 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   }, [onSettingsClick]);
 
   /**
-   * Header ⚙ ボタンから Chat Panel 内の Settings View を開く (admin のみ表示)。
+   * Header ⚙ ボタンから Chat Panel 内の Settings View を開く。
+   * #81: 全ユーザーが開ける (非 admin は定期実行セクションのみ表示)。
    */
   const handleSettingsClick = useCallback(() => {
-    if (isAdmin) setView('settings');
-  }, [isAdmin, setView]);
+    setView('settings');
+  }, [setView]);
 
   const handleSettingsClose = useCallback(() => {
     setView('chat');
@@ -294,7 +295,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
         isAdmin={isAdmin}
         memoryEnabled={false}
         memoryOn={memoryEnabled}
-        {...(isAdmin ? { onSettingsClick: handleSettingsClick } : {})}
+        onSettingsClick={handleSettingsClick}
         {...(onClose ? { onClose } : {})}
       />
       {/*
@@ -337,10 +338,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
         </Banner>
       )}
 
-      {view === 'settings' && !isAdmin ? (
-        // 安全策: 非 admin が誤って settings に到達したら chat に戻す
-        <ChatViewRedirect onRedirect={() => setView('chat')} />
-      ) : view === 'history' && agentId ? (
+      {view === 'history' && agentId ? (
         <HistoryView agentId={agentId} onSelect={handleHistorySelect} />
       ) : (
         // Conversation を常時マウントし、右ペインに Settings / Artifact を出し分ける。
@@ -394,7 +392,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
           </div>
           {/* 広い時 (≥1024px): 横並び / 狭い時: オーバーレイ表示。
               SettingsView は 左 192px nav + 右 detail のため、artifact より広めの basis を採る */}
-          {view === 'settings' && isAdmin ? (
+          {view === 'settings' ? (
             <div
               data-settings-pane-wrap
               className="absolute inset-0 z-10 bg-bg lg:static lg:z-auto lg:flex-1 lg:basis-[560px] lg:min-w-[560px]"
@@ -421,19 +419,6 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   );
 }
 
-/**
- * 非 admin が誤って view='settings' に到達した時の安全策。
- * mount 時に onRedirect で 'chat' に戻す。
- */
-function ChatViewRedirect({ onRedirect }: { onRedirect: () => void }): JSX.Element {
-  // mount 直後に redirect (useEffect で副作用化)
-  // setState を render 中に呼ばないようにする
-   
-  useEffect(() => {
-    onRedirect();
-  }, [onRedirect]);
-  return <></>;
-}
 
 /**
  * 空状態の main 領域: 公開エージェントがあれば PresetAgentLanding、

@@ -16,7 +16,7 @@ beforeEach(() => {
 
 describe('SettingsView', () => {
   it('default で agents セクションが表示される', () => {
-    render(<SettingsView onClose={vi.fn()} />);
+    render(<SettingsView onClose={vi.fn()} isAdmin />);
     expect(screen.getByTestId('settings-view')).toBeInTheDocument();
     expect(screen.getByTestId('agents-list-pane')).toBeInTheDocument();
     expect(screen.queryByTestId('skills-pane')).toBeNull();
@@ -24,7 +24,7 @@ describe('SettingsView', () => {
 
   it('Skills タブクリックで SkillsPane に切り替わる', async () => {
     const user = userEvent.setup();
-    render(<SettingsView onClose={vi.fn()} />);
+    render(<SettingsView onClose={vi.fn()} isAdmin />);
     await user.click(screen.getByTestId('settings-nav-skills'));
     expect(screen.getByTestId('skills-pane')).toBeInTheDocument();
     expect(screen.queryByTestId('agents-list-pane')).toBeNull();
@@ -32,7 +32,7 @@ describe('SettingsView', () => {
 
   it('MCP タブは disabled で click しても切り替わらない', async () => {
     const user = userEvent.setup();
-    render(<SettingsView onClose={vi.fn()} />);
+    render(<SettingsView onClose={vi.fn()} isAdmin />);
     const mcpBtn = screen.getByTestId('settings-nav-mcp');
     expect(mcpBtn).toBeDisabled();
     await user.click(mcpBtn);
@@ -43,20 +43,20 @@ describe('SettingsView', () => {
   it('Plugin Config リンクが発火する', async () => {
     const onPluginConfigClick = vi.fn();
     const user = userEvent.setup();
-    render(<SettingsView onClose={vi.fn()} onPluginConfigClick={onPluginConfigClick} />);
+    render(<SettingsView onClose={vi.fn()} isAdmin onPluginConfigClick={onPluginConfigClick} />);
     await user.click(screen.getByTestId('settings-nav-plugin-config'));
     expect(onPluginConfigClick).toHaveBeenCalledOnce();
   });
 
   it('Plugin Config ハンドラ未指定なら disabled', () => {
-    render(<SettingsView onClose={vi.fn()} />);
+    render(<SettingsView onClose={vi.fn()} isAdmin />);
     expect(screen.getByTestId('settings-nav-plugin-config')).toBeDisabled();
   });
 
   it('閉じるボタンクリックで onClose が呼ばれる', async () => {
     const onClose = vi.fn();
     const user = userEvent.setup();
-    render(<SettingsView onClose={onClose} />);
+    render(<SettingsView onClose={onClose} isAdmin />);
     await user.click(screen.getByTestId('settings-close'));
     expect(onClose).toHaveBeenCalledOnce();
   });

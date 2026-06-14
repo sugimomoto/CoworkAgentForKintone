@@ -8,6 +8,9 @@ import { apiRequest } from './client';
 
 import type {
   Agent,
+  Deployment,
+  DeploymentInitialEvent,
+  DeploymentRun,
   Environment,
   ListResponse,
   ManagedAgentsMetadata,
@@ -267,6 +270,80 @@ export function createSession(params: CreateSessionParams): Promise<Session> {
 
 export function retrieveSession(id: string): Promise<Session> {
   return get<Session>(`/v1/sessions/${id}`);
+}
+
+// ----- Deployments (cron 定期実行) -------------------------------------------
+
+export interface DeploymentsListParams {
+  limit?: number | undefined;
+  page?: string | undefined;
+  include_archived?: boolean | undefined;
+}
+
+export interface CreateDeploymentParams {
+  name: string;
+  agent: string | { id: string; version?: number };
+  environment_id: string;
+  initial_events: DeploymentInitialEvent[];
+  schedule: { type: 'cron'; expression: string; timezone: string };
+  metadata?: ManagedAgentsMetadata;
+}
+
+/** Deployment の部分更新 (`POST /v1/deployments/{id}`)。omit=保持 / 値=上書き。version 不要。 */
+export type UpdateDeploymentParams = Partial<CreateDeploymentParams>;
+
+export interface DeploymentRunsListParams {
+  deployment_id: string;
+  has_error?: boolean | undefined;
+  limit?: number | undefined;
+  page?: string | undefined;
+}
+
+export function listDeployments(params?: DeploymentsListParams): Promise<ListResponse<Deployment>> {
+  return get<ListResponse<Deployment>>('/v1/deployments', params);
+}
+
+export function createDeployment(params: CreateDeploymentParams): Promise<Deployment> {
+  return post<Deployment>('/v1/deployments', params);
+}
+
+export function retrieveDeployment(id: string): Promise<Deployment> {
+  return get<Deployment>(`/v1/deployments/${id}`);
+}
+
+/** 部分更新。`POST /v1/deployments/{id}`。version 不要。 */
+export function updateDeployment(id: string, params: UpdateDeploymentParams): Promise<Deployment> {
+  return post<Deployment>(`/v1/deployments/${id}`, params);
+}
+
+/** スケジュール外で即時実行 (テスト用)。trigger_context.type='manual' の run を生成。 */
+export async function runDeployment(id: string): Promise<void> {
+  await apiRequest<unknown>('POST', `/v1/deployments/${id}/run`, {});
+}
+
+/** 一時停止 (以後のスケジュールトリガーを停止。実行中 session は継続)。 */
+export async function pauseDeployment(id: string): Promise<void> {
+  await apiRequest<unknown>('POST', `/v1/deployments/${id}/pause`, {});
+}
+
+/** 再開 (次回スケジュール分から。backfill なし)。 */
+export async function unpauseDeployment(id: string): Promise<void> {
+  await apiRequest<unknown>('POST', `/v1/deployments/${id}/unpause`, {});
+}
+
+/** アーカイブ (不可逆)。schedule 終了。 */
+export async function archiveDeployment(id: string): Promise<void> {
+  await apiRequest<unknown>('POST', `/v1/deployments/${id}/archive`, {});
+}
+
+export function listDeploymentRuns(
+  params: DeploymentRunsListParams,
+): Promise<ListResponse<DeploymentRun>> {
+  return get<ListResponse<DeploymentRun>>('/v1/deployment_runs', params);
+}
+
+export function retrieveDeploymentRun(id: string): Promise<DeploymentRun> {
+  return get<DeploymentRun>(`/v1/deployment_runs/${id}`);
 }
 
 // ----- ヘルパ ---------------------------------------------------------------

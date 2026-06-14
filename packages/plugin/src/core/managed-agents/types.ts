@@ -120,6 +120,69 @@ export interface ListResponse<T> {
   next_page: string | null;
 }
 
+// ----- Deployments (Scheduled Deployments / cron) ---------------------------
+
+/** Deployment の初回イベント (起動時にエージェントへ送る user.message) */
+export interface DeploymentInitialEvent {
+  type: 'user.message';
+  content: Array<{ type: 'text'; text: string }>;
+}
+
+/** cron スケジュール。upcoming_runs_at は API が算出する次回以降の発火時刻 (真値)。 */
+export interface CronSchedule {
+  type: 'cron';
+  /** "分 時 日 月 曜日" (POSIX cron, 最小粒度=分) */
+  expression: string;
+  /** IANA timezone */
+  timezone: string;
+  last_run_at: string | null;
+  /** 次回以降の発火予定 (最大10秒の jitter あり) */
+  upcoming_runs_at: string[];
+}
+
+/** Deployment リソース (session 設定一式 + cron schedule) */
+export interface Deployment {
+  id: string;
+  type: 'deployment';
+  name: string;
+  description?: string | null;
+  agent: { id: string; type: 'agent'; version?: number };
+  environment_id: string;
+  initial_events: DeploymentInitialEvent[];
+  schedule: CronSchedule | null;
+  status: 'active' | 'paused' | 'archived';
+  paused_reason: { type: string } | null;
+  metadata: ManagedAgentsMetadata;
+  vault_ids?: string[];
+  resources?: unknown[];
+  created_at: string;
+  updated_at: string;
+  archived_at?: string | null;
+}
+
+export type DeploymentRunErrorType =
+  | 'environment_archived_error'
+  | 'agent_archived_error'
+  | 'session_rate_limited_error'
+  | (string & {});
+
+/** Deployment Run の失敗情報 */
+export interface DeploymentRunError {
+  type: DeploymentRunErrorType;
+  message: string;
+}
+
+/** Deployment Run = 各トリガー試行の記録。成功すると session_id を持つ。 */
+export interface DeploymentRun {
+  id: string;
+  type: 'deployment_run';
+  deployment_id: string;
+  session_id: string | null;
+  trigger_context: { type: 'scheduled' | 'manual' | (string & {}) };
+  error?: DeploymentRunError | null;
+  created_at: string;
+}
+
 /** Managed Agents API のエラーレスポンス */
 export interface ApiErrorBody {
   type?: string;

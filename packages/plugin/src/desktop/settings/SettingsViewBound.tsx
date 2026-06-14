@@ -54,6 +54,7 @@ export function SettingsViewBound({
   const builtInAgents = useChatStore((s) => s.builtInAgents);
   const setBuiltInAgents = useChatStore((s) => s.setBuiltInAgents);
   const pluginId = useChatStore((s) => s.pluginId);
+  const isAdmin = useChatStore((s) => s.isAdmin) === true;
 
   const cfg = pluginId ? getPluginConfig(pluginId) : { workerUrl: null };
 
@@ -235,6 +236,7 @@ export function SettingsViewBound({
     <>
       <SettingsView
         onClose={onClose}
+        isAdmin={isAdmin}
         {...(onPluginConfigClick ? { onPluginConfigClick } : {})}
         bundledSkills={bundledSkills}
         customSkills={customSkills}
