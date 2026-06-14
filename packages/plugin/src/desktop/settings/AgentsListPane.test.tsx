@@ -171,4 +171,24 @@ describe('AgentsListPane', () => {
     // empty placeholder は出ない
     expect(screen.queryByTestId('custom-agents-empty')).not.toBeInTheDocument();
   });
+
+  // #47 AC-6: Custom Agent 行にも公開先サマリが出る (counts=null でも表示)
+  it('Custom Agent 行に公開先サマリが表示される', () => {
+    useChatStore.getState().setBuiltInAgents([
+      makeAgent({ id: 'biz', source: 'builtin' }),
+      makeAgent({
+        id: 'custom_1',
+        name: 'My Custom',
+        source: 'custom',
+        purpose: 'custom',
+        allowedUsers: ['sales01', 'sales02'],
+      }),
+    ]);
+    render(<AgentsListPane />);
+    const summary = screen.getByTestId('agent-access-custom_1');
+    expect(summary).toBeInTheDocument();
+    expect(summary).toHaveTextContent('公開先:');
+    // 全員ではなく絞り込み済みの表現になっている
+    expect(summary).not.toHaveTextContent('公開先: 全員');
+  });
 });

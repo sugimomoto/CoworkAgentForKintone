@@ -161,24 +161,24 @@ function AgentRow({ agent, onToggleVisibility, onEdit }: AgentRowProps): JSX.Ele
           )}
         </div>
         <div className="text-[11px] leading-[1.4] text-muted">{agent.description}</div>
-        {counts && (
-          <div className="mt-[4px] flex items-center gap-[10px] text-[10px] text-subtle">
-            <span>スキル {counts.skillCount}</span>
-            <span>ツール {counts.toolCount}</span>
-            <span className="font-mono">{variantId}</span>
-            {(() => {
-              const access = accessValueOf(agent);
-              return (
-                <span
-                  data-testid={`agent-access-${agent.id}`}
-                  title={formatAccessFull(access)}
-                >
-                  公開先: {formatAccessSummary(access)}
-                </span>
-              );
-            })()}
-          </div>
-        )}
+        {/* メタ行: skill/tool/variant は built-in のみ。公開先サマリは全エージェント (Custom 含む) で表示 */}
+        <div className="mt-[4px] flex items-center gap-[10px] text-[10px] text-subtle">
+          {counts && (
+            <>
+              <span>スキル {counts.skillCount}</span>
+              <span>ツール {counts.toolCount}</span>
+              <span className="font-mono">{variantId}</span>
+            </>
+          )}
+          {(() => {
+            const access = accessValueOf(agent);
+            return (
+              <span data-testid={`agent-access-${agent.id}`} title={formatAccessFull(access)}>
+                公開先: {formatAccessSummary(access)}
+              </span>
+            );
+          })()}
+        </div>
         {error && <div className="mt-[4px] text-[10.5px] text-warn">{error}</div>}
       </div>
       <div className="flex shrink-0 items-center gap-[6px]">
