@@ -14,6 +14,8 @@ export interface DeploymentRunHistoryProps {
   filter: 'all' | 'failed';
   onFilterChange: (f: 'all' | 'failed') => void;
   onBack: () => void;
+  /** run の生成セッションを会話ビューで開く (session_id でロード) */
+  onOpenSession?: (sessionId: string) => void;
 }
 
 export function DeploymentRunHistory({
@@ -23,6 +25,7 @@ export function DeploymentRunHistory({
   filter,
   onFilterChange,
   onBack,
+  onOpenSession,
 }: DeploymentRunHistoryProps): JSX.Element {
   const total = runs.length;
   const failed = runs.filter((r) => r.error).length;
@@ -84,7 +87,7 @@ export function DeploymentRunHistory({
       ) : (
         <div className="flex flex-col gap-[8px]">
           {shown.map((r) => (
-            <RunRow key={r.id} run={r} />
+            <RunRow key={r.id} run={r} {...(onOpenSession ? { onOpenSession } : {})} />
           ))}
         </div>
       )}
@@ -92,7 +95,13 @@ export function DeploymentRunHistory({
   );
 }
 
-function RunRow({ run }: { run: DeploymentRun }): JSX.Element {
+function RunRow({
+  run,
+  onOpenSession,
+}: {
+  run: DeploymentRun;
+  onOpenSession?: (sessionId: string) => void;
+}): JSX.Element {
   const ok = !run.error;
   const errKey = run.error ? mapRunError(run.error.type) : null;
   return (
@@ -114,9 +123,19 @@ function RunRow({ run }: { run: DeploymentRun }): JSX.Element {
             : `失敗 · ${errKey ? RUN_ERRORS[errKey].label : 'エラー'}${run.error?.message ? ` — ${run.error.message}` : ''}`}
         </div>
       </div>
-      {run.session_id && (
-        <span className="shrink-0 font-mono text-[10px] text-subtle">{run.session_id}</span>
-      )}
+      {run.session_id &&
+        (onOpenSession ? (
+          <button
+            type="button"
+            data-testid={`run-open-session-${run.id}`}
+            onClick={() => onOpenSession(run.session_id!)}
+            className="shrink-0 text-[10.5px] font-medium text-accent"
+          >
+            会話を開く →
+          </button>
+        ) : (
+          <span className="shrink-0 font-mono text-[10px] text-subtle">{run.session_id}</span>
+        ))}
     </div>
   );
 }

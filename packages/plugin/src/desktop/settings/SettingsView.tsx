@@ -43,6 +43,8 @@ export interface SettingsViewProps {
   onCreateAgent?: () => void;
   /** admin か。非 admin は定期実行セクションのみ表示 (#81) */
   isAdmin?: boolean;
+  /** 定期実行の run セッションを会話ビューで開く (#81) */
+  onOpenSession?: (sessionId: string) => void;
 }
 
 export function SettingsView({
@@ -58,6 +60,7 @@ export function SettingsView({
   onEditAgent,
   onCreateAgent,
   isAdmin = false,
+  onOpenSession,
 }: SettingsViewProps): JSX.Element {
   // 非 admin は「定期実行」のみアクセス可能なので初期セクションをそこに寄せる
   const [section, setSection] = useState<SettingsSection>(isAdmin ? 'agents' : 'deployments');
@@ -99,7 +102,9 @@ export function SettingsView({
           isAdmin={isAdmin}
         />
         <div className="min-w-0 flex-1 overflow-y-auto">
-          {section === 'deployments' && <DeploymentsPaneBound />}
+          {section === 'deployments' && (
+            <DeploymentsPaneBound {...(onOpenSession ? { onOpenSession } : {})} />
+          )}
           {section === 'agents' && isAdmin && (
             <AgentsListPane
               {...(onToggleVisibility ? { onToggleVisibility } : {})}

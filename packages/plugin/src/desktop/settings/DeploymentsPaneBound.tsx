@@ -35,7 +35,12 @@ function currentUserCode(): string {
   }
 }
 
-export function DeploymentsPaneBound(): JSX.Element {
+export interface DeploymentsPaneBoundProps {
+  /** run の生成セッションを会話ビューで開く */
+  onOpenSession?: (sessionId: string) => void;
+}
+
+export function DeploymentsPaneBound({ onOpenSession }: DeploymentsPaneBoundProps = {}): JSX.Element {
   const agents = useChatStore((s) => s.builtInAgents);
   const isAdmin = useChatStore((s) => s.isAdmin) === true;
   const vaultId = useChatStore((s) => s.vaultId);
@@ -137,6 +142,7 @@ export function DeploymentsPaneBound(): JSX.Element {
         filter={runFilter}
         onFilterChange={setRunFilter}
         onBack={() => setHistory(null)}
+        {...(onOpenSession ? { onOpenSession } : {})}
       />
     );
   }

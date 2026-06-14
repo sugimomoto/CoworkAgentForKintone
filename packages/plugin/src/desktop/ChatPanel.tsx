@@ -275,6 +275,15 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
     [selectSession, setView],
   );
 
+  // #81: 定期実行の run セッションを会話ビューで開く (settings を閉じて該当セッションをロード)
+  const handleOpenDeploymentSession = useCallback(
+    (sessionId: string) => {
+      selectSession(sessionId);
+      setView('chat');
+    },
+    [selectSession, setView],
+  );
+
   /**
    * 初期未バインド時は ConnectKintoneButton で大きく誘導する。
    * 一度でも会話を始めたあとに失効した場合は、Composer は維持して上部に
@@ -399,6 +408,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
             >
               <SettingsViewBound
                 onClose={handleSettingsClose}
+                onOpenSession={handleOpenDeploymentSession}
                 {...(onSettingsClick ? { onPluginConfigClick: handlePluginConfigClick } : {})}
               />
             </div>
