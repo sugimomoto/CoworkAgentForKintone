@@ -8,7 +8,8 @@ import { fetchCurrentUserGroups, fetchCurrentUserOrganizations } from '../kinton
 import { resolveBundledSkillIds } from '../skills/resolveBundledSkillIds';
 
 import { initializeSession, selectInitialAgentId } from './initializeSession';
-import { listCustomAgents, resolveBuiltInAgents, resolveDefaultAgent } from './resolveAgent';
+import { resolveDefaultAgent } from './resolveAgent';
+import { listCustomAgents, resolveBuiltInAgents } from './resolveBuiltInAgents';
 import { resolveBootstrapEnvironment } from './resolveEnvironment';
 
 import type { AgentRecord } from './agentTypes';
@@ -24,12 +25,11 @@ vi.mock('../skills/resolveBundledSkillIds', () => ({ resolveBundledSkillIds: vi.
 vi.mock('./resolveEnvironment', () => ({ resolveBootstrapEnvironment: vi.fn() }));
 vi.mock('./resolveAgent', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./resolveAgent')>();
-  return {
-    ...actual,
-    resolveBuiltInAgents: vi.fn(),
-    listCustomAgents: vi.fn(),
-    resolveDefaultAgent: vi.fn(),
-  };
+  return { ...actual, resolveDefaultAgent: vi.fn() };
+});
+vi.mock('./resolveBuiltInAgents', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./resolveBuiltInAgents')>();
+  return { ...actual, resolveBuiltInAgents: vi.fn(), listCustomAgents: vi.fn() };
 });
 
 const mockGetPluginConfig = vi.mocked(getPluginConfig);

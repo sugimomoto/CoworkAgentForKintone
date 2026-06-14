@@ -21,10 +21,7 @@ import type { AgentGlyph, AgentColor, AgentPurpose } from './agentTypes';
 // 既存の resolveAgent.ts に存在する定数は import で再利用する。
 // (ファイル間の重複を避け、片方を変えれば両方に反映される)
 
-export {
-  CREATE_ARTIFACT_TOOL,
-  KINTONE_MCP_SERVER_NAME,
-} from './resolveAgent';
+export { CREATE_ARTIFACT_TOOL, KINTONE_MCP_SERVER_NAME } from './agentToolDefs';
 
 /**
  * Plugin が公開する kintone MCP ツール名 (mcp_toolset.configs で per-tool 設定するため)。

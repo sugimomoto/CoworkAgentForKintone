@@ -6,10 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { jsonResponse, makeAgent } from '../../test/fixtures';
 
-import {
-  _resetResolveBuiltInAgentsCache,
-  resolveBuiltInAgents,
-} from './resolveAgent';
+import { _resetResolveBuiltInAgentsCache, resolveBuiltInAgents } from './resolveBuiltInAgents';
 
 import type { Agent, ListResponse } from '../managed-agents/types';
 

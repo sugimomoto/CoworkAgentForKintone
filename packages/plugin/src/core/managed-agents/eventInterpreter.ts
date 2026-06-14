@@ -8,8 +8,8 @@
 //   - 表示に関係しないイベントは空配列を返す
 
 import { parseCreateArtifactInput } from '../artifacts/types';
+import { PROPOSE_AGENT_TOOL_NAME } from '../bootstrap/agentToolDefs';
 import { KINTONE_TOOL_NAMES } from '../bootstrap/builtInAgents';
-import { PROPOSE_AGENT_TOOL_NAME } from '../bootstrap/resolveAgent';
 import { HIDDEN_BLOCK_MARKER } from '../files/messageContent';
 
 import type { AgentEditDraft } from './agentDetailApi';

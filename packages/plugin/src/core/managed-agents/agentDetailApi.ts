@@ -8,13 +8,13 @@
 // metadata の構造は resolveAgent.ts のものを踏襲し、Anthropic Workspace 上で
 // find filter (purpose / workerUrl / kintoneDomain 等) が壊れないようにする。
 
+import { KINTONE_MCP_SERVER_NAME } from '../bootstrap/agentToolDefs';
 import {
   META_KEY_ALLOWED_GROUPS,
   META_KEY_ALLOWED_ORGANIZATIONS,
   META_KEY_ALLOWED_USERS,
   META_KEY_QUICK_ACTIONS,
 } from '../bootstrap/agentTypes';
-import { KINTONE_MCP_SERVER_NAME } from '../bootstrap/resolveAgent';
 import { AGENT_TYPE, METADATA_SOURCE } from '../constants';
 
 import { buildAgentTools } from './buildAgentTools';
