@@ -2,15 +2,21 @@
 //
 // useEventPoller が `agent.custom_tool_use` を観測すると chatStore の
 // pendingCustomToolUseIds に (toolUseId → artifactId) を追加する。
-// 本フックはその Map を購読し、未送信のエントリを `user.custom_tool_result` として
-// Anthropic に POST する (失敗時は次の tick で再試行)。
-// Anthropic が events stream に `user.custom_tool_result` を echo back すると、
-// useEventPoller 側でそれを観測して remove する → ここで送り直されることもなくなる。
+// 本フックはそれを購読し、各エントリを 1 回だけ `user.custom_tool_result` として
+// Anthropic に POST する。
+//
+// 待ちは 2 種類あり、いずれも無限には続けない (Phase 2 PR-3):
+//   1. POST 失敗 → retryWithBackoff で最大 5 回まで指数バックオフ再試行
+//   2. POST 成功後の echo back 待ち → 60s でタイムアウト
+// どちらも上限/タイムアウト到達時は pending から除去し、ユーザーに見えるエラーを表示する
+// (silent drop しない)。echo back (events stream の user.custom_tool_result) を観測すると
+// useEventPoller 側で pending から除去され、ここでのタイムアウト監視も解除される。
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
-import { debug, warn } from '../../core/debug';
+import { warn } from '../../core/debug';
 import { postCustomToolResult } from '../../core/managed-agents/events';
+import { retryWithBackoff } from '../../core/utils/retryWithBackoff';
 import { useChatStore } from '../../store/chatStore';
 
 export interface UseCustomToolResponderProps {
@@ -18,60 +24,93 @@ export interface UseCustomToolResponderProps {
   enabled: boolean;
 }
 
-const RETRY_INTERVAL_MS = 3000;
+const MAX_POST_ATTEMPTS = 5;
+/** POST 成功後、events stream に echo back されるのを待つ上限 (ms) */
+const ECHO_BACK_TIMEOUT_MS = 60_000;
 
 export function useCustomToolResponder({ sessionId, enabled }: UseCustomToolResponderProps): void {
-  const pendingMap = useChatStore((s) => s.pendingCustomToolUseIds);
-
-  // 「直近 POST 中」の id を記録して同じ id を二重に投げないようにする (失敗→retry の整合)
-  const inflightRef = useRef<Set<string>>(new Set());
-
+  // pendingMap を deps に入れず、enabled / sessionId のライフタイムで購読する
+  // (deps に Map を入れると追加/除去のたびに effect が teardown→再生成され、
+  // 進行中の retry が中断されてしまうため)。
   useEffect(() => {
     if (!enabled || !sessionId) return;
-    if (pendingMap.size === 0) return;
 
-    let cancelled = false;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const controller = new AbortController();
+    // 既に POST 処理を開始した toolUseId (二重 POST 防止)
+    const handled = new Set<string>();
+    // POST 成功後の echo back 待ちタイマー
+    const echoTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-    const sendAll = async (): Promise<void> => {
-      // pendingMap は読み取りスナップショット。送信中に追加されたものは次の effect 起動で拾う。
-      const entries = Array.from(pendingMap.entries());
-      const targets = entries.filter(([toolUseId]) => !inflightRef.current.has(toolUseId));
-      if (targets.length === 0) return;
-
-      debug('CustomTool', `responder: posting ${targets.length} pending`, targets);
-      for (const [toolUseId, artifactId] of targets) {
-        if (cancelled) return;
-        inflightRef.current.add(toolUseId);
-        try {
-          await postCustomToolResult(sessionId, toolUseId, { ok: true, artifactId });
-          debug('CustomTool', 'responder: POST OK', { toolUseId, artifactId });
-          // 成功しても remove はしない: Anthropic が events に echo back したのを
-          // useEventPoller 側で観測して chatStore.removePendingCustomToolUse する。
-          // 二重に投げる事故を inflightRef だけで防ぐ。
-        } catch (err) {
-          warn('CustomTool', 'responder: POST failed, will retry', { toolUseId, err });
-          // 失敗したら次の retry 機会で再投。inflight も解放しておく。
-        } finally {
-          inflightRef.current.delete(toolUseId);
-        }
-      }
-
-      if (cancelled) return;
-      // 失敗が残っている、または echo back を待っているなら再走する。
-      // chatStore 側で remove されれば pendingMap.size が変わり effect が再評価される。
-      if (useChatStore.getState().pendingCustomToolUseIds.size > 0) {
-        retryTimer = setTimeout(() => {
-          if (!cancelled) void sendAll();
-        }, RETRY_INTERVAL_MS);
+    const clearEchoTimer = (toolUseId: string): void => {
+      const t = echoTimers.get(toolUseId);
+      if (t !== undefined) {
+        clearTimeout(t);
+        echoTimers.delete(toolUseId);
       }
     };
 
-    void sendAll();
+    const giveUp = (toolUseId: string, reason: string): void => {
+      clearEchoTimer(toolUseId);
+      const store = useChatStore.getState();
+      if (!store.pendingCustomToolUseIds.has(toolUseId)) return; // 既に解決済みなら何もしない
+      store.removePendingCustomToolUse(toolUseId);
+      store.addMessage({
+        id: `custom-tool-error-${toolUseId}`,
+        kind: 'agent',
+        text: '⚠ アーティファクトの結果送信に失敗しました。もう一度お試しください。',
+      });
+      warn('CustomTool', `responder: give up ${toolUseId} (${reason})`);
+    };
+
+    const startEchoTimeout = (toolUseId: string): void => {
+      if (echoTimers.has(toolUseId)) return;
+      const t = setTimeout(() => {
+        // 60s 経っても pending に残っている = echo back 未着 → 諦め
+        giveUp(toolUseId, 'echo-back timeout');
+      }, ECHO_BACK_TIMEOUT_MS);
+      echoTimers.set(toolUseId, t);
+    };
+
+    const handle = async (toolUseId: string, artifactId: string): Promise<void> => {
+      try {
+        await retryWithBackoff(
+          () => postCustomToolResult(sessionId, toolUseId, { ok: true, artifactId }),
+          { maxAttempts: MAX_POST_ATTEMPTS, signal: controller.signal },
+        );
+      } catch (err) {
+        if (controller.signal.aborted) return; // unmount: 何もしない
+        giveUp(toolUseId, `POST failed after ${MAX_POST_ATTEMPTS} attempts: ${String(err)}`);
+        return;
+      }
+      if (controller.signal.aborted) return;
+      // POST 成功 → echo back (useEventPoller が観測して remove) を待つ
+      startEchoTimeout(toolUseId);
+    };
+
+    const process = (): void => {
+      const pending = useChatStore.getState().pendingCustomToolUseIds;
+      // 新規 pending を 1 回だけ handle
+      for (const [toolUseId, artifactId] of pending) {
+        if (handled.has(toolUseId)) continue;
+        handled.add(toolUseId);
+        void handle(toolUseId, artifactId);
+      }
+      // echo back 等で pending から消えた entry の echo timer を掃除
+      for (const toolUseId of [...echoTimers.keys()]) {
+        if (!pending.has(toolUseId)) clearEchoTimer(toolUseId);
+      }
+    };
+
+    process(); // 初回
+    const unsubscribe = useChatStore.subscribe((state, prev) => {
+      if (state.pendingCustomToolUseIds !== prev.pendingCustomToolUseIds) process();
+    });
 
     return () => {
-      cancelled = true;
-      if (retryTimer !== null) clearTimeout(retryTimer);
+      controller.abort();
+      for (const t of echoTimers.values()) clearTimeout(t);
+      echoTimers.clear();
+      unsubscribe();
     };
-  }, [enabled, sessionId, pendingMap]);
+  }, [enabled, sessionId]);
 }

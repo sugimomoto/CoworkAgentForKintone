@@ -16,6 +16,7 @@ import { interpretEvent, isTerminalEvent } from '../../core/managed-agents/event
 import { fetchAllEventsSince } from '../../core/managed-agents/events';
 import { mapEventToProgressKind } from '../../core/managed-agents/progressEvent';
 import { retrieveSession } from '../../core/managed-agents/resources';
+import { isTerminated } from '../../core/managed-agents/sessionLifecycle';
 import { useChatStore } from '../../store/chatStore';
 
 import type { ProgressEventKind } from '../../core/managed-agents/progressEvent';
@@ -100,10 +101,7 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
       if (!useChatStore.getState().sessionTerminated) {
         try {
           const session = await retrieveSession(sessionId);
-          if (session.archived_at !== null && session.archived_at !== undefined) {
-            setSessionTerminated(true);
-            setAgentRunning(false);
-          } else if (session.status === 'terminated') {
+          if (isTerminated({ kind: 'session-state', session })) {
             setSessionTerminated(true);
             setAgentRunning(false);
           } else if (session.status === 'idle' && useChatStore.getState().isAgentRunning) {
@@ -214,7 +212,7 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
         }
         // Agent ターン進行状態の追従
         if (e.type === 'session.status_running') setAgentRunning(true);
-        if (e.type === 'session.status_terminated') {
+        if (isTerminated({ kind: 'event', event: e })) {
           setSessionTerminated(true);
           // terminated は実質「もう動かない」状態なので running も明示的に下げる
           setAgentRunning(false);
