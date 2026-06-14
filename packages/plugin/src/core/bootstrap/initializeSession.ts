@@ -16,11 +16,12 @@ import { resolveBundledSkillIds } from '../skills/resolveBundledSkillIds';
 
 import { agentToRecord as customAgentToRecord } from './agentRecord';
 import { BUILTIN_AGENT_SPECS } from './builtInAgents';
-import { listCustomAgents, resolveBuiltInAgents, resolveDefaultAgent } from './resolveAgent';
+import { resolveDefaultAgent } from './resolveAgent';
+import { listCustomAgents, resolveBuiltInAgents } from './resolveBuiltInAgents';
 import { resolveBootstrapEnvironment } from './resolveEnvironment';
 
 import type { AgentRecord } from './agentTypes';
-import type { BuiltInAgentSet } from './resolveAgent';
+import type { BuiltInAgentSet } from './resolveBuiltInAgents';
 import type { AccessContext } from '../access/filterAgentsByAccess';
 import type { Agent } from '../managed-agents/types';
 

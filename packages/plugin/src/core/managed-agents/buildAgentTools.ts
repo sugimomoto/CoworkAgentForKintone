@@ -4,15 +4,12 @@
 // `tools[]` 配列に組み立てる。既存 `resolveAgent.ts:buildAgentTools` (built-in 用) と
 // 構造は同じだが、per-tool の enabled flag を draft の `enabledTools` に従って切替える。
 
+import { CREATE_ARTIFACT_TOOL, KINTONE_MCP_SERVER_NAME } from '../bootstrap/agentToolDefs';
 import {
   DESTRUCTIVE_TOOL_NAMES,
   KINTONE_TOOL_NAMES,
   type KintoneToolName,
 } from '../bootstrap/builtInAgents';
-import {
-  CREATE_ARTIFACT_TOOL,
-  KINTONE_MCP_SERVER_NAME,
-} from '../bootstrap/resolveAgent';
 
 /**
  * Agent 編集 UI の draft.enabledTools を Anthropic Managed Agents API tools[] 形式に
