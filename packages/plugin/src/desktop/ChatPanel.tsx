@@ -275,13 +275,14 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
     [selectSession, setView],
   );
 
-  // #81: 定期実行の run セッションを会話ビューで開く (settings を閉じて該当セッションをロード)
+  // #81: 定期実行の run セッションを会話エリアにロードする。
+  // setView は変えない = 設定 (実行履歴) は開いたまま。広い画面では左に会話・右に設定の横並び、
+  // 狭い画面では会話は背面にロードされ、設定を閉じると見える。
   const handleOpenDeploymentSession = useCallback(
     (sessionId: string) => {
       selectSession(sessionId);
-      setView('chat');
     },
-    [selectSession, setView],
+    [selectSession],
   );
 
   /**
