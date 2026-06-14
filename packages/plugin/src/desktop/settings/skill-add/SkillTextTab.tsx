@@ -1,6 +1,6 @@
 // カスタム skill 追加モーダルの「直接入力」タブ。
 
-import { FormField } from './SkillFormField';
+import { FormField } from '../../components/ui/FormField';
 
 export interface SkillTextTabProps {
   name: string;

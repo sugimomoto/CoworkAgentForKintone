@@ -3,8 +3,9 @@
 
 import { useRef } from 'react';
 
+import { FormField } from '../../components/ui/FormField';
+
 import { parseSkillFile } from './parseSkillFile';
-import { FormField } from './SkillFormField';
 
 import type { CustomSkillInput } from '../../../core/skills/types';
 

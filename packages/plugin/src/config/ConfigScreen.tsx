@@ -14,6 +14,7 @@ import { setProxyConfigAsync } from '../core/kintone/setProxyConfigAsync';
 // SkillsPane に移管)。skillsSyncClient 自体は packages/plugin/src/core/skills/ に残置し、
 // Chat Panel から消費される。
 import { joinUrl, sleep, toErrorMessage } from '../core/utils';
+import { PasswordInput } from '../desktop/components/ui/PasswordInput';
 
 import { buildProxySteps } from './buildProxySteps';
 import { useCloudflareDeployment } from './hooks/useCloudflareDeployment';
@@ -53,16 +54,13 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
   const existingClientId = existing[CONFIG_KEY_OAUTH_CLIENT_ID] ?? '';
   const [workerUrl, setWorkerUrl] = useState<string>(existingWorkerUrl);
   const [anthropicApiKey, setAnthropicApiKey] = useState<string>('');
-  const [showApiKey, setShowApiKey] = useState(false);
   const [clientId, setClientId] = useState<string>(existingClientId);
   const [clientSecret, setClientSecret] = useState<string>('');
-  const [showSecret, setShowSecret] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // ----- Step 0: Cloudflare Workers デプロイ -----
   const [cfApiToken, setCfApiToken] = useState<string>('');
-  const [showCfToken, setShowCfToken] = useState(false);
   const [cfAccountId, setCfAccountId] = useState<string>('');
   const {
     deploying: cfDeploying,
@@ -209,25 +207,12 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
         <label className="mt-[10px] mb-[4px] block text-[12px] text-text" htmlFor="cf-api-token-input">
           Cloudflare API Token
         </label>
-        <div className="relative">
-          <input
-            id="cf-api-token-input"
-            type={showCfToken ? 'text' : 'password'}
-            value={cfApiToken}
-            onChange={(e) => setCfApiToken(e.target.value)}
-            placeholder="Edit Cloudflare Workers テンプレートで作成"
-            autoComplete="off"
-            spellCheck={false}
-            className="w-full rounded-[8px] border border-card-border bg-bg px-[12px] py-[8px] pr-[64px] font-mono text-[12px] text-text outline-none focus:border-accent"
-          />
-          <button
-            type="button"
-            onClick={() => setShowCfToken((v) => !v)}
-            className="absolute right-[8px] top-1/2 -translate-y-1/2 rounded-[4px] px-[6px] py-[2px] text-[10px] text-muted hover:text-accent"
-          >
-            {showCfToken ? '隠す' : '表示'}
-          </button>
-        </div>
+        <PasswordInput
+          id="cf-api-token-input"
+          value={cfApiToken}
+          onChange={setCfApiToken}
+          placeholder="Edit Cloudflare Workers テンプレートで作成"
+        />
         <p className="mt-[4px] text-[11px] text-subtle">
           Token は Cloudflare Dashboard{' '}
           <a
@@ -294,25 +279,12 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
         <label className="mt-[12px] mb-[4px] block text-[12px] text-text" htmlFor="anthropic-api-key-input">
           Anthropic API Key
         </label>
-        <div className="relative">
-          <input
-            id="anthropic-api-key-input"
-            type={showApiKey ? 'text' : 'password'}
-            value={anthropicApiKey}
-            onChange={(e) => setAnthropicApiKey(e.target.value)}
-            placeholder={isSaved ? '●●●●●●●● (再入力で更新)' : 'sk-ant-xxxxxxxx'}
-            autoComplete="off"
-            spellCheck={false}
-            className="w-full rounded-[8px] border border-card-border bg-bg px-[12px] py-[8px] pr-[64px] font-mono text-[12px] text-text outline-none focus:border-accent"
-          />
-          <button
-            type="button"
-            onClick={() => setShowApiKey((v) => !v)}
-            className="absolute right-[8px] top-1/2 -translate-y-1/2 rounded-[4px] px-[6px] py-[2px] text-[10px] text-muted hover:text-accent"
-          >
-            {showApiKey ? '隠す' : '表示'}
-          </button>
-        </div>
+        <PasswordInput
+          id="anthropic-api-key-input"
+          value={anthropicApiKey}
+          onChange={setAnthropicApiKey}
+          placeholder={isSaved ? '●●●●●●●● (再入力で更新)' : 'sk-ant-xxxxxxxx'}
+        />
       </section>
 
       {/* Step 2 */}
@@ -401,25 +373,12 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
         <label className="mt-[12px] mb-[4px] block text-[12px] text-text" htmlFor="client-secret-input">
           client_secret
         </label>
-        <div className="relative">
-          <input
-            id="client-secret-input"
-            type={showSecret ? 'text' : 'password'}
-            value={clientSecret}
-            onChange={(e) => setClientSecret(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-            placeholder={isSaved ? '●●●●●●●● (再入力で更新)' : ''}
-            className="w-full rounded-[8px] border border-card-border bg-bg px-[12px] py-[8px] pr-[64px] font-mono text-[12px] text-text outline-none focus:border-accent"
-          />
-          <button
-            type="button"
-            onClick={() => setShowSecret((v) => !v)}
-            className="absolute right-[8px] top-1/2 -translate-y-1/2 rounded-[4px] px-[6px] py-[2px] text-[10px] text-muted hover:text-accent"
-          >
-            {showSecret ? '隠す' : '表示'}
-          </button>
-        </div>
+        <PasswordInput
+          id="client-secret-input"
+          value={clientSecret}
+          onChange={setClientSecret}
+          placeholder={isSaved ? '●●●●●●●● (再入力で更新)' : ''}
+        />
 
       </section>
 
