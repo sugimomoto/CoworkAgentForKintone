@@ -10,30 +10,11 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 
-import { filterAgentsByAccess } from '../../core/access/filterAgentsByAccess';
-import { resolveIsAdmin } from '../../core/admin/useIsAdmin';
-import { agentToRecord as customAgentToRecord } from '../../core/bootstrap/agentRecord';
-import { BUILTIN_AGENT_SPECS } from '../../core/bootstrap/builtInAgents';
-import {
-  listCustomAgents,
-  resolveBuiltInAgents,
-  resolveDefaultAgent,
-} from '../../core/bootstrap/resolveAgent';
-import { resolveBootstrapEnvironment } from '../../core/bootstrap/resolveEnvironment';
+import { initializeSession } from '../../core/bootstrap/initializeSession';
 import { createUserSession } from '../../core/bootstrap/resolveSession';
-import { getPluginConfig } from '../../core/kintone/pluginConfig';
 import { getCurrentSessionContext } from '../../core/kintone/user';
-import {
-  fetchCurrentUserGroups,
-  fetchCurrentUserOrganizations,
-} from '../../core/kintone/users';
-import { resolveBundledSkillIds } from '../../core/skills/resolveBundledSkillIds';
 import { toErrorMessage } from '../../core/utils';
 import { useChatStore } from '../../store/chatStore';
-
-import type { AgentRecord } from '../../core/bootstrap/agentTypes';
-import type { BuiltInAgentSet } from '../../core/bootstrap/resolveAgent';
-import type { Agent } from '../../core/managed-agents/types';
 
 export interface UseSessionResult {
   /** 既存 sessionId があれば返す。無ければ新規作成して store に保存し、その id を返す。 */
@@ -74,108 +55,39 @@ export function useSession(): UseSessionResult {
   const inFlightRef = useRef<Promise<string> | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     setStatus('bootstrapping');
     (async () => {
       try {
         const pluginId = useChatStore.getState().pluginId;
-        const cfg = pluginId ? getPluginConfig(pluginId) : { workerUrl: null };
-        const workerUrl = cfg.workerUrl ?? undefined;
+        // localStorage 由来の前回選択 Agent (Web Storage は core に持ち込まない)
         const kctx = getCurrentSessionContext();
+        const preferredAgentId = readStoredAgentId(kctx);
 
-        // Anthropic 側 source-of-truth から custom skill_id を解決 (Plugin Config は介在しない)。
-        // 失敗時は skill 無しで bootstrap を続行 (admin が同期ボタンを押せば後で attach される)。
-        let customSkillIds: string[] = [];
-        if (workerUrl) {
-          try {
-            const resolved = await resolveBundledSkillIds();
-            customSkillIds = resolved
-              .map((r) => r.skillId)
-              .filter((id): id is string => typeof id === 'string' && id.length > 0);
-          } catch {
-            // 解決失敗時は skill 無し継続 (Settings View 側でも fetch して UI 反映する)
-          }
+        const result = await initializeSession(
+          { pluginId, preferredAgentId },
+          { signal: controller.signal },
+        );
+
+        ctxRef.current = {
+          agentId: result.agentId,
+          environmentId: result.environmentId,
+          kintoneDomain: result.kintoneDomain,
+          kintoneUserCode: result.kintoneUserCode,
+        };
+
+        // built-in 解決経路 (workerUrl あり) のときだけ Header / ACL 関連を反映する
+        if (result.builtInAgents !== null) {
+          setCurrentUserAccess(result.currentUserAccess);
+          setIsAdminResolved(result.isAdmin ?? false);
+          setBuiltInAgents(result.builtInAgents);
+          setCurrentAgentId(result.agentId);
         }
 
-        // Customizer wedge V1: workerUrl があれば resolveBuiltInAgents (3 variant) を ensure。
-        // 無い場合 (Bootstrap 未完了) は従来の resolveDefaultAgent にフォールバック (Phase 1b 互換)。
-        let activeAgentId: string;
-        const envPromise = resolveBootstrapEnvironment();
-
-        if (workerUrl) {
-          // Anthropic 側 (built-in 3 + Custom Agent + env) と kintone 側 (現ユーザーの
-          // 所属 + admin 判定) は独立しているので 2 グループに分けて並列 await。
-          // どちらも失敗時は安全側 (空 / false) に倒して起動継続。
-          const anthropicSide = Promise.all([
-            resolveBuiltInAgents({
-              workerUrl,
-              kintoneDomain: kctx.kintoneDomain,
-              ...(customSkillIds.length > 0 ? { customSkillIds } : {}),
-            }),
-            envPromise,
-            listCustomAgents({ workerUrl, kintoneDomain: kctx.kintoneDomain }).catch(
-              () => [],
-            ),
-          ]);
-          const kintoneSide = Promise.all([
-            fetchCurrentUserGroups(kctx.kintoneUserCode).catch(() => [] as string[]),
-            fetchCurrentUserOrganizations(kctx.kintoneUserCode).catch(
-              () => [] as string[],
-            ),
-            resolveIsAdmin().catch(() => false),
-          ]);
-          const [[set, env, customAgents], [userGroups, userOrgs, adminResolved]] =
-            await Promise.all([anthropicSide, kintoneSide]);
-          if (cancelled) return;
-          ctxRef.current = {
-            agentId: '', // 下で activeAgentId を入れる
-            environmentId: env.id,
-            kintoneDomain: kctx.kintoneDomain,
-            kintoneUserCode: kctx.kintoneUserCode,
-          };
-
-          const accessCtx = {
-            code: kctx.kintoneUserCode,
-            groups: userGroups,
-            organizations: userOrgs,
-          };
-          setCurrentUserAccess(accessCtx);
-          setIsAdminResolved(adminResolved);
-
-          const allRecords = [
-            ...toAgentRecords(set),
-            ...customAgents.map((a) => customAgentToRecord(a)),
-          ];
-          const records = filterAgentsByAccess(allRecords, accessCtx, adminResolved);
-          setBuiltInAgents(records);
-
-          // localStorage から復元 → 無ければ isDefault=true → それも無ければ最初の Agent
-          activeAgentId = pickInitialAgentId(records, kctx);
-          setCurrentAgentId(activeAgentId);
-          ctxRef.current.agentId = activeAgentId;
-        } else {
-          // workerUrl 無し: 旧 resolveDefaultAgent で 1 つだけ ensure (Phase 1b 互換)
-          const agentOptions: Parameters<typeof resolveDefaultAgent>[0] = {
-            ...(customSkillIds.length > 0 ? { customSkillIds } : {}),
-          };
-          const [agent, env] = await Promise.all([
-            resolveDefaultAgent(agentOptions),
-            envPromise,
-          ]);
-          if (cancelled) return;
-          activeAgentId = agent.id;
-          ctxRef.current = {
-            agentId: agent.id,
-            environmentId: env.id,
-            kintoneDomain: kctx.kintoneDomain,
-            kintoneUserCode: kctx.kintoneUserCode,
-          };
-        }
-
-        setAgentId(activeAgentId);
+        setAgentId(result.agentId);
         setStatus('ready');
       } catch (err) {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         const message = toErrorMessage(err);
         const lower = message.toLowerCase();
         const hint =
@@ -188,7 +100,7 @@ export function useSession(): UseSessionResult {
       }
     })();
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [setStatus, setAgentId, setBuiltInAgents, setCurrentAgentId, setCurrentUserAccess, setIsAdminResolved]);
 
@@ -256,70 +168,18 @@ export function useSession(): UseSessionResult {
 // ─── Customizer wedge V1 ヘルパー ────────────────────────────────────────
 
 /**
- * resolveBuiltInAgents の戻り値 (Agent × 3) を Plugin UI 用 AgentRecord[] に変換する。
- * metadata から iconKind / iconColor / visibility / isDefault を読み、無ければ
- * BUILTIN_AGENT_SPECS のデフォルトで補完する。
+ * 前回選択した Agent ID を localStorage から読む (無ければ null)。
+ * Web Storage 依存はここ (hook 層) に閉じ込め、core の initializeSession には
+ * preferredAgentId として渡す。localStorage 不可な環境 (Vitest 含む) では null。
  */
-function toAgentRecords(set: BuiltInAgentSet): AgentRecord[] {
-  return [
-    agentToRecord(set.business, 'business'),
-    agentToRecord(set.customizerOpus, 'customizer-opus'),
-    agentToRecord(set.customizerSonnet, 'customizer-sonnet'),
-  ];
-}
-
-function agentToRecord(
-  agent: Agent,
-  purpose: 'business' | 'customizer-opus' | 'customizer-sonnet',
-): AgentRecord {
-  const spec = BUILTIN_AGENT_SPECS[purpose];
-  const meta = (agent.metadata ?? {}) as Record<string, string>;
-  return {
-    id: agent.id,
-    name: spec.name,
-    model: spec.modelKind,
-    modelLabel: spec.modelLabel,
-    description: spec.description,
-    purpose,
-    iconKind: (meta.iconKind as AgentRecord['iconKind']) ?? spec.iconKind,
-    iconColor: (meta.iconColor as AgentRecord['iconColor']) ?? spec.iconColor,
-    visibility: (meta.visibility as 'public' | 'private') ?? 'public',
-    isDefault: meta.isDefault === '1' || spec.isDefault,
-    ...(spec.variantGroup ? { variantGroup: spec.variantGroup } : {}),
-    source: 'builtin',
-    quickActions: spec.quickActions,
-    // built-in は ACL を持たない (= 常に全員に見える)
-    allowedUsers: [],
-    allowedGroups: [],
-    allowedOrganizations: [],
-  };
-}
-
-/**
- * 初期 Agent ID を決定する。
- *   1. localStorage に最後の選択あり、かつそれが records に含まれていれば、それを返す
- *   2. records 内で visibility=public + isDefault=true の Agent
- *   3. records 内で最初の visibility=public な Agent
- *   4. fallback: records[0]
- */
-function pickInitialAgentId(
-  records: AgentRecord[],
-  ctx: { kintoneDomain: string; kintoneUserCode: string },
-): string {
-  if (records.length === 0) return '';
+function readStoredAgentId(ctx: { kintoneDomain: string; kintoneUserCode: string }): string | null {
   try {
-    const stored = window.localStorage.getItem(
+    return window.localStorage.getItem(
       currentAgentStorageKey(ctx.kintoneDomain, ctx.kintoneUserCode),
     );
-    if (stored && records.some((r) => r.id === stored)) return stored;
   } catch {
-    // localStorage 不可な環境 (Vitest 含む) では無視
+    return null;
   }
-  const def = records.find((r) => r.visibility === 'public' && r.isDefault);
-  if (def) return def.id;
-  const pub = records.find((r) => r.visibility === 'public');
-  if (pub) return pub.id;
-  return records[0]!.id;
 }
 
 /**
