@@ -17,9 +17,9 @@
 //   4. 結果として { name → skill_id } マッピングを返却
 
 import { isString, jsonResponse, sanitizeError } from './_http';
+import { anthropicHeaders } from './anthropic';
 
 const ANTHROPIC_BASE = 'https://api.anthropic.com';
-const ANTHROPIC_VERSION = '2023-06-01';
 const SKILLS_BETA = 'skills-2025-10-02';
 
 /**
@@ -84,14 +84,6 @@ interface AnthropicSkillVersionResponse {
   skill_id: string;
 }
 
-function anthropicHeaders(apiKey: string): Record<string, string> {
-  return {
-    'X-Api-Key': apiKey,
-    'anthropic-version': ANTHROPIC_VERSION,
-    'anthropic-beta': SKILLS_BETA,
-  };
-}
-
 /** Anthropic の custom skill 全件をページネーション展開して取得 */
 async function listAllCustomSkills(apiKey: string): Promise<AnthropicSkillEntry[]> {
   const out: AnthropicSkillEntry[] = [];
@@ -102,7 +94,7 @@ async function listAllCustomSkills(apiKey: string): Promise<AnthropicSkillEntry[
     url.searchParams.set('source', 'custom');
     url.searchParams.set('limit', '100');
     if (page) url.searchParams.set('page', page);
-    const res = await fetch(url.toString(), { headers: anthropicHeaders(apiKey) });
+    const res = await fetch(url.toString(), { headers: anthropicHeaders(apiKey, SKILLS_BETA) });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(`Anthropic list skills failed (${res.status}): ${text}`);
@@ -147,7 +139,7 @@ async function createSkill(
   }
   const res = await fetch(`${ANTHROPIC_BASE}/v1/skills`, {
     method: 'POST',
-    headers: anthropicHeaders(apiKey),
+    headers: anthropicHeaders(apiKey, SKILLS_BETA),
     body: form,
   });
   if (!res.ok) {
@@ -171,7 +163,7 @@ async function createSkillVersion(
     `${ANTHROPIC_BASE}/v1/skills/${encodeURIComponent(skillId)}/versions`,
     {
       method: 'POST',
-      headers: anthropicHeaders(apiKey),
+      headers: anthropicHeaders(apiKey, SKILLS_BETA),
       body: form,
     },
   );

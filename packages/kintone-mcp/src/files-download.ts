@@ -7,9 +7,9 @@
 // kintone proxy の string 返しでも安全に渡せる。
 
 import { isString, jsonResponse, sanitizeText } from './_http';
+import { anthropicHeaders } from './anthropic';
 
 const ANTHROPIC_BASE = 'https://api.anthropic.com';
-const ANTHROPIC_VERSION = '2023-06-01';
 const ANTHROPIC_BETA = 'managed-agents-2026-04-01';
 
 interface DownloadResponseBody {
@@ -39,11 +39,7 @@ export async function handleFilesDownload(request: Request, fileId: string): Pro
   // ② Anthropic Files API へ転送
   const upstream = await fetch(`${ANTHROPIC_BASE}/v1/files/${encodeURIComponent(fileId)}/content`, {
     method: 'GET',
-    headers: {
-      'X-Api-Key': anthropicApiKey,
-      'anthropic-version': ANTHROPIC_VERSION,
-      'anthropic-beta': ANTHROPIC_BETA,
-    },
+    headers: anthropicHeaders(anthropicApiKey, ANTHROPIC_BETA),
   });
 
   if (!upstream.ok) {

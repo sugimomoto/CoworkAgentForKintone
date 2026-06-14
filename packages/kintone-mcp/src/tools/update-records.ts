@@ -1,6 +1,6 @@
 import { kintoneRequest } from '../kintone';
 
-import { createTool } from './factory';
+import { createTool, toolResult } from './factory';
 import { appIdSchema, updateKeySchema } from './utils/schemas';
 import { assertIdOrUpdateKey, assertMaxBatch } from './utils/validators';
 
@@ -50,9 +50,6 @@ export const updateRecords = createTool<Args>(
     const result = (await kintoneRequest(creds, 'PUT', '/k/v1/records.json', {
       body: { app: args.app, records: args.records },
     })) as { records: Array<{ id: string; revision: string }> };
-    return {
-      structuredContent: result,
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
+    return toolResult(result);
   },
 );

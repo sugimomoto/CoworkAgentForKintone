@@ -2,7 +2,7 @@
 
 import { kintoneRequest } from '../kintone';
 
-import { createTool } from './factory';
+import { createTool, toolResult } from './factory';
 import { appIdSchema } from './utils/schemas';
 
 interface Args {
@@ -54,9 +54,6 @@ export const getRecordComments = createTool<Args>(
       params,
     })) as { comments: unknown[]; older: boolean; newer: boolean };
 
-    return {
-      structuredContent: result,
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
+    return toolResult(result);
   },
 );
