@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildCron, cronHuman, dstRisk, nextRuns, scheduleSummary, type ScheduleValue } from './schedule';
+import {
+  buildCron,
+  cronHuman,
+  dstRisk,
+  MINUTE_OPTIONS,
+  nextRuns,
+  scheduleFromCron,
+  scheduleSummary,
+  type ScheduleValue,
+} from './schedule';
 
 describe('buildCron', () => {
   const base: ScheduleValue = {
@@ -59,6 +68,31 @@ describe('nextRuns', () => {
     runs.forEach((r) => {
       expect(r.getDate() === 15 || r.getDay() === 1).toBe(true);
     });
+  });
+});
+
+describe('scheduleFromCron は buildCron と round-trip する', () => {
+  // 編集モーダルの初期化で cron → ScheduleValue → cron が壊れないこと
+  it.each([
+    '0 9 * * *', // daily
+    '30 14 * * 3', // weekly
+    '0 10 15 * *', // monthly
+    '25 9 * * *', // minute=25 (歯抜けで化けないこと)
+    '55 23 * * 6', // minute=55 weekly
+    '*/5 * * * *', // custom
+  ])('%s', (cron) => {
+    expect(buildCron(scheduleFromCron(cron, 'Asia/Tokyo'))).toBe(cron);
+  });
+
+  it('minute=25/55 が weekly/monthly でも保持される', () => {
+    expect(scheduleFromCron('25 9 * * *', 'Asia/Tokyo').minute).toBe(25);
+    expect(scheduleFromCron('55 8 1 * *', 'Asia/Tokyo').minute).toBe(55);
+  });
+});
+
+describe('MINUTE_OPTIONS は 5 分刻みの全 12 値 (歯抜けなし)', () => {
+  it('0〜55 が揃う', () => {
+    expect(MINUTE_OPTIONS).toEqual([0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]);
   });
 });
 

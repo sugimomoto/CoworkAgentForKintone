@@ -90,4 +90,24 @@ describe('DeploymentsListPane', () => {
     );
     expect(screen.getByText(/一時停止中/)).toBeInTheDocument();
   });
+
+  it('loadError 時はエラーバナーを出し空状態を出さない', () => {
+    render(
+      <DeploymentsListPane
+        {...baseProps({ deployments: [], loadError: 'API エラー' })}
+      />,
+    );
+    expect(screen.getByTestId('deployments-load-error')).toBeInTheDocument();
+    expect(screen.queryByTestId('deployments-empty')).toBeNull();
+  });
+
+  it('run 失敗時はエラートーストを出す (握りつぶさない)', async () => {
+    const onRun = vi.fn().mockRejectedValue(new Error('boom'));
+    const user = userEvent.setup();
+    render(<DeploymentsListPane {...baseProps({ onRun })} />);
+    await user.click(screen.getByTestId('deployment-run-depl_1'));
+    const toast = await screen.findByTestId('deployment-run-toast');
+    expect(toast).toHaveAttribute('data-toast-kind', 'error');
+    expect(toast).toHaveTextContent('boom');
+  });
 });

@@ -163,16 +163,22 @@ export function draftToUpdateParams(
 }
 
 // ── 権限フィルタ ─────────────────────────────────────────────
+// 注意: これは UI 上の表示整理であって認可 (authorization) ではない。listDeployments は
+// 全 deployment を返すため、非 admin でも DevTools 経由で他人の deployment id は見えうる。
+// 厳密な enforcement はサーバ側 (Worker) の別 Issue。破壊的操作 (archive/run/pause) を
+// 伴うので、将来サーバ側 owner チェックを足すことが望ましい。
 export type Role = 'admin' | 'user';
 
-/** admin: 全件 (scope='mine' なら自分のみ) / user: 自分が作成したものだけ。 */
+/** admin: 全件 (scope='mine' なら自分のみ) / user: 自分が作成したものだけ。
+ *  currentUser が空 (kintone 未取得) のときは user ロールでは何も見せない (owner='' の旧データ誤マッチ防止)。 */
 export function visibleDeployments(
   all: DeploymentView[],
   role: Role,
   currentUser: string,
   scope: 'all' | 'mine' = 'all',
 ): DeploymentView[] {
-  if (role === 'user') return all.filter((d) => d.owner === currentUser);
-  if (scope === 'mine') return all.filter((d) => d.owner === currentUser);
+  const mine = (d: DeploymentView): boolean => currentUser !== '' && d.owner === currentUser;
+  if (role === 'user') return all.filter(mine);
+  if (scope === 'mine') return all.filter(mine);
   return all;
 }

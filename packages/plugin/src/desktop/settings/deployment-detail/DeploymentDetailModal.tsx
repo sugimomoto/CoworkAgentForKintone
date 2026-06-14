@@ -4,8 +4,7 @@
 import { useMemo, useState } from 'react';
 
 import { buildCron, fmtRun, nextRuns } from '../../../core/deployments/schedule';
-import { AgentIcon } from '../../components/AgentIcon';
-import { ModelBadge } from '../../components/ModelBadge';
+import { AgentMini } from '../../components/AgentMini';
 
 import { buildDeploymentDraft } from './buildDraft';
 import { SchedulePicker } from './SchedulePicker';
@@ -163,7 +162,7 @@ export function DeploymentDetailModal({
                 次回 <span className="font-medium text-accent">{fmtRun(nextRun)}</span> に実行
               </span>
             ) : (
-              <span className="text-[#dc2626]">スケジュールを確認してください</span>
+              <span className="text-danger">スケジュールを確認してください</span>
             )}
           </div>
           <button
@@ -189,16 +188,6 @@ export function DeploymentDetailModal({
         </div>
       </div>
     </div>
-  );
-}
-
-function AgentMini({ agent }: { agent: AgentRecord }): JSX.Element {
-  return (
-    <span className="flex min-w-0 items-center gap-[6px]">
-      <AgentIcon kind={agent.iconKind} color={agent.iconColor} size={20} />
-      <span className="truncate text-[11.5px] font-semibold text-text">{agent.name}</span>
-      <ModelBadge model={agent.model} size="sm" />
-    </span>
   );
 }
 

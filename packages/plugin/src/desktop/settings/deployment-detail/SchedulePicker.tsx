@@ -8,11 +8,22 @@ import {
   cronHuman,
   dstRisk,
   fmtRun,
+  HOUR_OPTIONS,
+  MINUTE_OPTIONS,
   nextRuns,
   relDay,
   TIMEZONES,
   type ScheduleValue,
 } from '../../../core/deployments/schedule';
+
+/** ブラウザのタイムゾーン (プレビューが基準にしている tz)。 */
+function browserTz(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return 'Asia/Tokyo';
+  }
+}
 
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
 const PRESETS: { id: ScheduleValue['presetType']; label: string }[] = [
@@ -36,9 +47,8 @@ export function SchedulePicker({ value: s, onChange, now = new Date() }: Props):
   const runs = nextRuns(cron, now, 3);
   const cronValid = runs.length > 0;
   const risk = dstRisk(s);
-
-  const hours = Array.from({ length: 24 }, (_, i) => i);
-  const mins = [0, 5, 10, 15, 20, 30, 45];
+  // プレビューはブラウザ時刻基準の近似。tz が違うと実発火とズレるため注記を出す。
+  const tzMismatch = s.tz !== browserTz();
 
   return (
     <div className="overflow-hidden rounded-[10px] border border-border bg-card-hi">
@@ -77,7 +87,7 @@ export function SchedulePicker({ value: s, onChange, now = new Date() }: Props):
                       on
                         ? 'border-accent bg-accent-soft font-bold text-accent'
                         : 'border-border bg-card font-medium'
-                    } ${!on && i === 0 ? 'text-[#dc2626]' : ''} ${!on && i === 6 ? 'text-accent' : ''} ${
+                    } ${!on && i === 0 ? 'text-danger' : ''} ${!on && i === 6 ? 'text-accent' : ''} ${
                       !on && i > 0 && i < 6 ? 'text-muted' : ''
                     }`}
                   >
@@ -118,7 +128,7 @@ export function SchedulePicker({ value: s, onChange, now = new Date() }: Props):
                 onChange={(e) => set({ customCron: e.target.value })}
                 data-testid="schedule-custom-cron"
                 className={`w-full rounded-[7px] border bg-card px-2.5 py-[7px] font-mono text-[13px] tracking-wide text-text outline-none ${
-                  cronValid ? 'border-border' : 'border-[#dc2626]'
+                  cronValid ? 'border-border' : 'border-danger'
                 }`}
               />
               <div className="mt-1 flex gap-3 pl-0.5 font-mono text-[9.5px] text-subtle">
@@ -136,7 +146,7 @@ export function SchedulePicker({ value: s, onChange, now = new Date() }: Props):
           <FieldRow label="時刻">
             <div className="flex items-center gap-1.5">
               <NumSelect value={s.hour} onChange={(v) => set({ hour: v })}>
-                {hours.map((h) => (
+                {HOUR_OPTIONS.map((h) => (
                   <option key={h} value={h}>
                     {String(h).padStart(2, '0')}時
                   </option>
@@ -144,7 +154,7 @@ export function SchedulePicker({ value: s, onChange, now = new Date() }: Props):
               </NumSelect>
               <span className="text-subtle">:</span>
               <NumSelect value={s.minute} onChange={(v) => set({ minute: v })}>
-                {mins.map((m) => (
+                {MINUTE_OPTIONS.map((m) => (
                   <option key={m} value={m}>
                     {String(m).padStart(2, '0')}分
                   </option>
@@ -179,17 +189,22 @@ export function SchedulePicker({ value: s, onChange, now = new Date() }: Props):
           <span
             data-testid="schedule-cron-out"
             className={`rounded border border-border bg-card-hi px-2 py-0.5 font-mono text-[12.5px] font-semibold tracking-wide ${
-              cronValid ? 'text-text' : 'text-[#dc2626]'
+              cronValid ? 'text-text' : 'text-danger'
             }`}
           >
             {cron || '— — — — —'}
           </span>
           {human && <span className="text-[11px] font-medium text-accent">= {human}</span>}
-          {!cronValid && <span className="text-[10.5px] text-[#dc2626]">式を確認してください</span>}
+          {!cronValid && <span className="text-[10.5px] text-danger">式を確認してください</span>}
         </div>
 
         <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-subtle">
           次回の実行予定（直近3回）
+          {tzMismatch && (
+            <span className="ml-1 font-normal normal-case text-warn">
+              ※ ブラウザ時刻基準の概算。実際は {s.tz} で発火（保存後は「次回」に正確な時刻が出ます）
+            </span>
+          )}
         </div>
         <div className="flex flex-col gap-1">
           {cronValid ? (

@@ -13,12 +13,16 @@ export type PresetType = 'daily' | 'weekly' | 'monthly' | 'custom';
 export interface ScheduleValue {
   presetType: PresetType;
   hour: number; // 0–23
-  minute: number; // 0,5,10,15,20,30,45
+  minute: number; // 0–55 (5 分刻み, MINUTE_OPTIONS)
   weekday: number; // 0(日)–6(土)  ※ weekly のとき
   monthday: number; // 1–28  ※ monthly のとき (29–31 は月により飛ぶため 28 まで)
   customCron: string; // custom のとき
   tz: string; // IANA
 }
+
+/** 時刻セレクタの分の選択肢 (5 分刻みの全 12 値)。歯抜けがあると編集時に既存値が化ける。 */
+export const MINUTE_OPTIONS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+export const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 
 export interface CronParts {
   mi: string;
@@ -110,6 +114,7 @@ export function relDay(d: Date, from: Date): string {
   const b = new Date(from);
   b.setHours(0, 0, 0, 0);
   const diff = Math.round((+a - +b) / 86_400_000);
+  if (diff < 0) return '';
   if (diff === 0) return '今日';
   if (diff === 1) return '明日';
   if (diff === 2) return '明後日';

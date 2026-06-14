@@ -5,15 +5,16 @@ import { useState } from 'react';
 
 import { fmtRun, relDay, scheduleSummary } from '../../core/deployments/schedule';
 import { RUN_ERRORS } from '../../core/deployments/view';
-import { AgentIcon } from '../components/AgentIcon';
+import { AgentMini } from '../components/AgentMini';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { ModelBadge } from '../components/ModelBadge';
 
 import type { AgentRecord } from '../../core/bootstrap/agentTypes';
 import type { DeploymentView } from '../../core/deployments/view';
 
 export interface DeploymentsListPaneProps {
   deployments: readonly DeploymentView[];
+  loading?: boolean;
+  loadError?: string | null;
   agents: readonly AgentRecord[];
   isAdmin: boolean;
   currentUser: string;
@@ -29,16 +30,37 @@ export interface DeploymentsListPaneProps {
   onOpenHistory: (d: DeploymentView) => void;
 }
 
+interface Toast {
+  kind: 'ok' | 'error';
+  msg: string;
+}
+
 export function DeploymentsListPane(props: DeploymentsListPaneProps): JSX.Element {
   const { deployments, isAdmin, scope, onScopeChange, scopeCounts, onCreate } = props;
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<DeploymentView | null>(null);
   const [archiving, setArchiving] = useState(false);
 
-  const handleRun = async (d: DeploymentView): Promise<void> => {
-    await props.onRun(d);
-    setToast(d.name);
+  const flash = (t: Toast): void => {
+    setToast(t);
     setTimeout(() => setToast(null), 6000);
+  };
+
+  const handleRun = async (d: DeploymentView): Promise<void> => {
+    try {
+      await props.onRun(d);
+      flash({ kind: 'ok', msg: d.name });
+    } catch (e) {
+      flash({ kind: 'error', msg: e instanceof Error ? e.message : '実行に失敗しました' });
+    }
+  };
+
+  const handleToggle = async (d: DeploymentView): Promise<void> => {
+    try {
+      await props.onToggleStatus(d);
+    } catch (e) {
+      flash({ kind: 'error', msg: e instanceof Error ? e.message : '状態の切り替えに失敗しました' });
+    }
   };
 
   const handleArchiveConfirm = async (): Promise<void> => {
@@ -94,7 +116,18 @@ export function DeploymentsListPane(props: DeploymentsListPaneProps): JSX.Elemen
           </div>
         )}
 
-        {deployments.length === 0 ? (
+        {props.loadError ? (
+          <div
+            data-testid="deployments-load-error"
+            className="rounded-[10px] border border-[#f0c98a] bg-warn-soft px-[14px] py-[12px] text-[12px] text-warn"
+          >
+            読み込みに失敗しました：{props.loadError}
+          </div>
+        ) : props.loading && deployments.length === 0 ? (
+          <div className="px-[2px] py-[20px] text-[12px] text-muted" data-testid="deployments-loading">
+            読み込み中…
+          </div>
+        ) : deployments.length === 0 ? (
           <EmptyState onCreate={onCreate} />
         ) : (
           <div className="flex flex-col gap-[8px]">
@@ -106,7 +139,7 @@ export function DeploymentsListPane(props: DeploymentsListPaneProps): JSX.Elemen
                 isAdmin={isAdmin}
                 onEdit={() => props.onEdit(d)}
                 onRun={() => handleRun(d)}
-                onToggleStatus={() => props.onToggleStatus(d)}
+                onToggleStatus={() => handleToggle(d)}
                 onArchive={() => setConfirmArchive(d)}
                 onOpenHistory={() => props.onOpenHistory(d)}
               />
@@ -137,18 +170,33 @@ export function DeploymentsListPane(props: DeploymentsListPaneProps): JSX.Elemen
         />
       )}
 
-      {/* 手動実行トースト */}
+      {/* 手動実行トースト (成功 / 失敗) */}
       {toast && (
         <div
           data-testid="deployment-run-toast"
+          data-toast-kind={toast.kind}
           className="absolute inset-x-[26px] bottom-[18px] flex items-center gap-[10px] rounded-[10px] bg-text px-[14px] py-[12px] text-white shadow-[0_12px_30px_rgba(0,0,0,0.22)]"
         >
-          <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-white/15 text-[#6ee7b7]">
-            <CheckIcon />
+          <span
+            className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-white/15"
+            style={{ color: toast.kind === 'ok' ? '#6ee7b7' : '#fca5a5' }}
+          >
+            {toast.kind === 'ok' ? <CheckIcon /> : <span className="text-[14px]">!</span>}
           </span>
           <div className="flex-1 text-[12.5px]">
-            <div className="font-semibold">テスト実行を開始しました</div>
-            <div className="text-white/75">「{toast}」を今すぐ実行中。結果は実行履歴で確認できます。</div>
+            {toast.kind === 'ok' ? (
+              <>
+                <div className="font-semibold">テスト実行を開始しました</div>
+                <div className="text-white/75">
+                  「{toast.msg}」を今すぐ実行中。結果は実行履歴で確認できます。
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="font-semibold">実行できませんでした</div>
+                <div className="text-white/75">{toast.msg}</div>
+              </>
+            )}
           </div>
           <button
             type="button"
@@ -206,10 +254,8 @@ function DeploymentRow({
           </div>
 
           {agent && (
-            <div className="mt-[3px] flex items-center gap-[5px]">
-              <AgentIcon kind={agent.iconKind} color={agent.iconColor} size={20} />
-              <span className="truncate text-[11.5px] font-semibold text-text">{agent.name}</span>
-              <ModelBadge model={agent.model} size="sm" />
+            <div className="mt-[3px]">
+              <AgentMini agent={agent} />
             </div>
           )}
 
@@ -327,14 +373,14 @@ function LastRunBadge({ d }: { d: DeploymentView }): JSX.Element {
   if (!d.last) return <span className="text-subtle">未実行</span>;
   if (d.last.ok) {
     return (
-      <span className="font-semibold text-[#047857]">
+      <span className="font-semibold text-success">
         ✓ 成功 <span className="ml-[4px] font-mono font-normal text-subtle">{fmtRun(new Date(d.last.at))}</span>
       </span>
     );
   }
   const label = d.last.err ? RUN_ERRORS[d.last.err].label : '失敗';
   return (
-    <span className="rounded-[3px] bg-[#fee2e2] px-[7px] py-px font-semibold text-[#dc2626]">
+    <span className="rounded-[3px] bg-danger-soft px-[7px] py-px font-semibold text-danger">
       失敗 · {label}
     </span>
   );

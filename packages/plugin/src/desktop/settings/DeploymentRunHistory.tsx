@@ -67,7 +67,7 @@ export function DeploymentRunHistory({
               className={`rounded-[6px] px-[10px] py-[4px] text-[11px] ${
                 filter === f
                   ? f === 'failed'
-                    ? 'bg-[#fee2e2] font-semibold text-[#dc2626]'
+                    ? 'bg-danger-soft font-semibold text-danger'
                     : 'bg-accent-soft font-semibold text-accent'
                   : 'text-muted'
               }`}
@@ -110,14 +110,15 @@ function RunRow({
       className="flex items-center gap-[12px] rounded-[10px] border border-card-border bg-card px-[14px] py-[10px]"
     >
       <span
-        className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-[11px]"
-        style={{ background: ok ? '#d1fae5' : '#fee2e2', color: ok ? '#047857' : '#dc2626' }}
+        className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-[11px] ${
+          ok ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
+        }`}
       >
         {ok ? '✓' : '✕'}
       </span>
       <div className="min-w-0 flex-1">
         <div className="font-mono text-[11.5px] text-text">{fmtRun(new Date(run.created_at))}</div>
-        <div className={`text-[10.5px] ${ok ? 'text-muted' : 'text-[#dc2626]'}`}>
+        <div className={`text-[10.5px] ${ok ? 'text-muted' : 'text-danger'}`}>
           {ok
             ? `成功 · ${run.trigger_context.type === 'manual' ? '手動実行' : 'スケジュール'}`
             : `失敗 · ${errKey ? RUN_ERRORS[errKey].label : 'エラー'}${run.error?.message ? ` — ${run.error.message}` : ''}`}
@@ -143,7 +144,7 @@ function RunRow({
 function Stat({ label, value, fail }: { label: string; value: number; fail?: boolean }): JSX.Element {
   return (
     <div className="flex flex-col">
-      <span className={`text-[18px] font-bold ${fail ? 'text-[#dc2626]' : 'text-text'}`}>{value}</span>
+      <span className={`text-[18px] font-bold ${fail ? 'text-danger' : 'text-text'}`}>{value}</span>
       <span className="text-[10px] text-subtle">{label}</span>
     </div>
   );

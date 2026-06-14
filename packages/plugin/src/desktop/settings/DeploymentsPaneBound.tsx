@@ -2,7 +2,7 @@
 // 状態 (一覧 / モーダル / 履歴 / スコープ) は本コンポーネントの local state に閉じる
 // (既存 skills と同じ流儀。store スライスは作らない)。
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { resolveBootstrapEnvironment } from '../../core/bootstrap/resolveEnvironment';
 import { deploymentToView, draftToCreateParams, draftToUpdateParams, visibleDeployments } from '../../core/deployments/view';
@@ -47,6 +47,8 @@ export function DeploymentsPaneBound({ onOpenSession }: DeploymentsPaneBoundProp
   const currentUser = currentUserCode();
 
   const [all, setAll] = useState<DeploymentView[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [scope, setScope] = useState<'all' | 'mine'>('all');
   const [modal, setModal] = useState<DeploymentModalMode | null>(null);
   const [history, setHistory] = useState<DeploymentView | null>(null);
@@ -54,33 +56,61 @@ export function DeploymentsPaneBound({ onOpenSession }: DeploymentsPaneBoundProp
   const [runsLoading, setRunsLoading] = useState(false);
   const [runFilter, setRunFilter] = useState<'all' | 'failed'>('all');
 
+  // 世代トークン: 後発の reload / mutation が先発の in-flight reload を stale 化し、
+  // 古い応答による上書き (archive 済み行の復活など) を防ぐ。
+  const reloadToken = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   const reload = useCallback(async () => {
-    const res = await listDeployments({ limit: 100 });
-    const views = await Promise.all(
-      res.data
-        .filter((d) => d.status !== 'archived')
-        .map(async (d) => {
-          let lastRun: DeploymentRun | undefined;
-          try {
-            const rr = await listDeploymentRuns({ deployment_id: d.id, limit: 1 });
-            lastRun = rr.data[0];
-          } catch {
-            lastRun = undefined;
-          }
-          return deploymentToView(d, lastRun ?? null);
-        }),
-    );
-    setAll(views);
+    const token = ++reloadToken.current;
+    setLoading(true);
+    try {
+      const res = await listDeployments({ limit: 100 });
+      const views = await Promise.all(
+        res.data
+          .filter((d) => d.status !== 'archived')
+          .map(async (d) => {
+            let lastRun: DeploymentRun | undefined;
+            try {
+              const rr = await listDeploymentRuns({ deployment_id: d.id, limit: 1 });
+              lastRun = rr.data[0];
+            } catch {
+              lastRun = undefined;
+            }
+            return deploymentToView(d, lastRun ?? null);
+          }),
+      );
+      if (!mounted.current || token !== reloadToken.current) return; // stale
+      setAll(views);
+      setLoadError(null);
+    } catch (e) {
+      if (!mounted.current || token !== reloadToken.current) return;
+      setLoadError(e instanceof Error ? e.message : '定期実行の読み込みに失敗しました');
+    } finally {
+      if (mounted.current && token === reloadToken.current) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    void reload().catch((e) => console.warn('[cowork-agent] listDeployments failed:', e));
+    void reload();
   }, [reload]);
 
   const handleSave = useCallback(
     async (draft: DeploymentDraft, mode: DeploymentModalMode) => {
       if (mode.kind === 'edit') {
-        await updateDeployment(mode.deployment.id, draftToUpdateParams(draft, { vaultId }));
+        // vault は「自分の deployment を編集するとき」だけ更新 (admin が他人の vault を
+        // 自分のものに差し替える事故を防ぐ)。
+        const own = mode.deployment.owner === currentUser;
+        await updateDeployment(
+          mode.deployment.id,
+          draftToUpdateParams(draft, own ? { vaultId } : undefined),
+        );
       } else {
         if (!vaultId) {
           throw new Error(
@@ -111,13 +141,12 @@ export function DeploymentsPaneBound({ onOpenSession }: DeploymentsPaneBoundProp
     [reload],
   );
 
-  const handleArchive = useCallback(
-    async (d: DeploymentView) => {
-      await archiveDeployment(d.id);
-      setAll((prev) => prev.filter((x) => x.id !== d.id));
-    },
-    [],
-  );
+  const handleArchive = useCallback(async (d: DeploymentView) => {
+    await archiveDeployment(d.id);
+    // 進行中の reload を stale 化してから楽観削除 (古い応答での復活を防ぐ)
+    reloadToken.current++;
+    setAll((prev) => prev.filter((x) => x.id !== d.id));
+  }, []);
 
   const openHistory = useCallback(async (d: DeploymentView) => {
     setHistory(d);
@@ -154,6 +183,8 @@ export function DeploymentsPaneBound({ onOpenSession }: DeploymentsPaneBoundProp
     <>
       <DeploymentsListPane
         deployments={visible}
+        loading={loading}
+        loadError={loadError}
         agents={agents}
         isAdmin={isAdmin}
         currentUser={currentUser}
