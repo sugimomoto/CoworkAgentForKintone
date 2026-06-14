@@ -11,7 +11,7 @@
 import { SKILL_BUNDLES } from '../../generated/skills-bundle';
 import { apiRequest } from '../managed-agents/client';
 
-import type { CustomSkillInput } from '../../desktop/settings/SkillAddModal';
+import type { CustomSkillInput } from './types';
 import type { SkillBundle } from '../../generated/skills-bundle';
 
 /** Skills API 用 beta (apiHeaders で MANAGED_AGENTS_BETA を上書き) */

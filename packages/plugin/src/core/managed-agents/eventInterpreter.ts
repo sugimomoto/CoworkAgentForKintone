@@ -14,10 +14,10 @@ import { HIDDEN_BLOCK_MARKER } from '../files/messageContent';
 
 import type { AgentEditDraft } from './agentDetailApi';
 import type { SessionEvent } from './types';
-import type { ChatMessage, ToolMessage } from '../../desktop/components/MessageList';
 import type { ArtifactKind, CreateArtifactInput } from '../artifacts/types';
 import type { AgentColor, AgentGlyph } from '../bootstrap/agentTypes';
 import type { KintoneToolName } from '../bootstrap/builtInAgents';
+import type { ChatMessage, ToolMessage } from '../chat/types';
 
 export type InterpretedEffect =
   | { kind: 'add'; message: ChatMessage }
