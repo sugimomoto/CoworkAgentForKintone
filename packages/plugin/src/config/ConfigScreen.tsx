@@ -8,19 +8,15 @@
 
 import { useMemo, useState } from 'react';
 
-import {
-  CloudflareApiError,
-  deployWorker,
-  fetchDeployedWorkerVersion,
-} from '../core/cloudflare/cfDeploy';
 import { CLOUDFLARE_WORKER_SCRIPT_NAME } from '../core/constants';
 import { setProxyConfigAsync } from '../core/kintone/setProxyConfigAsync';
 // skillsSyncClient は ConfigScreen からは呼ばない (Customizer wedge V1 #41 で Chat Panel
 // SkillsPane に移管)。skillsSyncClient 自体は packages/plugin/src/core/skills/ に残置し、
 // Chat Panel から消費される。
 import { joinUrl, sleep, toErrorMessage } from '../core/utils';
-// SKILL_BUNDLES / SKILLS_VERSION も Chat Panel SkillsPane 側で参照される (#41)
-import { WORKER_BUNDLE_JS, WORKER_BUNDLE_VERSION } from '../generated/worker-bundle';
+
+import { buildProxySteps } from './buildProxySteps';
+import { useCloudflareDeployment } from './hooks/useCloudflareDeployment';
 
 export interface ConfigScreenProps {
   pluginId: string;
@@ -38,8 +34,6 @@ const WORKER_URL_RE = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+(\/.*)?$/i;
 
 /** kintone DB ロック競合を避けるための setProxyConfig 間の遅延 (500ms 以上が安全) */
 const PROXY_STEP_DELAY_MS = 700;
-const VERSION_POLL_RETRIES = 5;
-const VERSION_POLL_INTERVAL_MS = 1000;
 
 function getCybozuOAuthAdminUrl(): string {
   if (typeof window === 'undefined') return '';
@@ -70,9 +64,12 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
   const [cfApiToken, setCfApiToken] = useState<string>('');
   const [showCfToken, setShowCfToken] = useState(false);
   const [cfAccountId, setCfAccountId] = useState<string>('');
-  const [cfDeploying, setCfDeploying] = useState(false);
-  const [cfDeployMessage, setCfDeployMessage] = useState<string | null>(null);
-  const [cfDeployError, setCfDeployError] = useState<string | null>(null);
+  const {
+    deploying: cfDeploying,
+    message: cfDeployMessage,
+    error: cfDeployError,
+    deploy: deployCf,
+  } = useCloudflareDeployment(setWorkerUrl);
 
   // Issue #30 Phase1 で Plugin Config 上に置いていた「Skills 同期」UI は
   // Customizer wedge V1 (Issue #41) で Chat Panel Settings (🧠 スキル) へ移管した。
@@ -115,58 +112,6 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
     });
   }
 
-  async function handleCloudflareDeploy(): Promise<void> {
-    if (!canDeployCf) return;
-    setCfDeploying(true);
-    setCfDeployMessage('Worker をデプロイ中… (subdomain 取得 → script アップロード → workers.dev 有効化)');
-    setCfDeployError(null);
-
-    try {
-      const result = await deployWorker({
-        apiToken: cfTokenTrimmed,
-        accountId: cfAccountIdTrimmed,
-        scriptName: CLOUDFLARE_WORKER_SCRIPT_NAME,
-        workerJsContent: WORKER_BUNDLE_JS,
-      });
-
-      setWorkerUrl(result.workerUrl);
-      setCfDeployMessage(`デプロイ成功: ${result.workerUrl}\nWorker /version を照合中…`);
-
-      // Cloudflare のエッジ反映に若干ラグがあるので retry。
-      let info = null;
-      for (let i = 0; i < VERSION_POLL_RETRIES; i++) {
-        info = await fetchDeployedWorkerVersion(result.workerUrl);
-        if (info && info.version === WORKER_BUNDLE_VERSION) break;
-        await sleep(VERSION_POLL_INTERVAL_MS);
-      }
-
-      if (!info) {
-        setCfDeployError(
-          `デプロイは成功しましたが /version エンドポイントが応答しません。\nWorker URL: ${result.workerUrl}\n手動で ${result.workerUrl}/version を開いて確認してください。`,
-        );
-        setCfDeployMessage(null);
-      } else if (info.version !== WORKER_BUNDLE_VERSION) {
-        setCfDeployError(
-          `デプロイ後のバージョン照合に失敗:\n  期待: ${WORKER_BUNDLE_VERSION}\n  実測: ${info.version}\nブラウザキャッシュ or プロキシキャッシュの可能性。${result.workerUrl}/version を開いて確認してください。`,
-        );
-        setCfDeployMessage(null);
-      } else {
-        setCfDeployMessage(
-          `✓ デプロイ成功\n  URL: ${result.workerUrl}\n  Version: ${info.version}\n  Built At: ${info.builtAt}`,
-        );
-      }
-    } catch (err) {
-      const message =
-        err instanceof CloudflareApiError
-          ? `Cloudflare API エラー (${err.status}): ${err.message}\n${err.responseBody.slice(0, 300)}`
-          : toErrorMessage(err);
-      setCfDeployError(message);
-      setCfDeployMessage(null);
-    } finally {
-      setCfDeploying(false);
-    }
-  }
-
   async function handleSave(): Promise<void> {
     if (!canSave || typeof kintone === 'undefined' || !kintone) return;
     setSaving(true);
@@ -182,59 +127,14 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
 
       // setProxyConfig 経路を直列に登録する。並行だと kintone 内部 DB の
       // ロック競合 (update.json 400) が起きるため必ず逐次 + 待ち時間。
-      // 再保存時 (isSaved=true) は空欄 secret に依存する step を skip する。
-      const hasOAuth = clientIdTrimmed.length > 0 && clientSecretTrimmed.length > 0;
-      const hasApiKey = apiKeyTrimmed.length > 0;
-      const proxySteps: Array<{
-        url: string;
-        method: 'GET' | 'POST';
-        headers: Record<string, string>;
-      }> = [];
-
-      // 1. /oauth2/token (token 交換 + Anthropic 自動 refresh) — kintone 自身のドメイン
-      if (hasOAuth) {
-        proxySteps.push({
-          url: tokenEndpoint,
-          method: 'POST',
-          headers: {
-            Authorization: `Basic ${btoa(`${clientIdTrimmed}:${clientSecretTrimmed}`)}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-        });
-      }
-
-      // 2. Worker root URL (POST) — 配下の全パスに共通の固定ヘッダ
-      //    各 Worker ハンドラは必要なヘッダだけ読み、不要なものは無視する設計:
-      //    - /credentials/upsert: X-Anthropic-Api-Key + X-Kintone-OAuth-Client-{Id,Secret}
-      //    - /skills/sync: X-Anthropic-Api-Key + Content-Type: application/json
-      //    - /anthropic/*: X-Anthropic-Api-Key (anthropic-version / anthropic-beta は JS 側 apiHeaders で付与)
-      if (hasApiKey) {
-        const postHeaders: Record<string, string> = {
-          'X-Anthropic-Api-Key': apiKeyTrimmed,
-          'Content-Type': 'application/json',
-        };
-        if (hasOAuth) {
-          postHeaders['X-Kintone-OAuth-Client-Id'] = clientIdTrimmed;
-          postHeaders['X-Kintone-OAuth-Client-Secret'] = clientSecretTrimmed;
-        }
-        proxySteps.push({
-          url: workerRootUrl,
-          method: 'POST',
-          headers: postHeaders,
-        });
-      }
-
-      // 3. Worker root URL (GET) — 配下の全 GET エンドポイント
-      //    - /files/<id>/content: X-Anthropic-Api-Key (binary DL の base64 中継)
-      //    - /anthropic/*: X-Anthropic-Api-Key
-      //    - /version / /healthz: 認証不要だが固定ヘッダがあっても害なし
-      if (hasApiKey) {
-        proxySteps.push({
-          url: workerRootUrl,
-          method: 'GET',
-          headers: { 'X-Anthropic-Api-Key': apiKeyTrimmed },
-        });
-      }
+      // 再保存時 (isSaved=true) は空欄 secret に依存する step を skip する (buildProxySteps が判定)。
+      const proxySteps = buildProxySteps({
+        workerRootUrl,
+        tokenEndpoint,
+        clientId: clientIdTrimmed,
+        clientSecret: clientSecretTrimmed,
+        apiKey: apiKeyTrimmed,
+      });
       for (const step of proxySteps) {
         await setProxyConfigAsync(step.url, step.method, step.headers, {});
         await sleep(PROXY_STEP_DELAY_MS);
@@ -343,7 +243,7 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
 
         <button
           type="button"
-          onClick={() => void handleCloudflareDeploy()}
+          onClick={() => void deployCf(cfTokenTrimmed, cfAccountIdTrimmed)}
           disabled={!canDeployCf}
           data-testid="cf-deploy-button"
           className="mt-[12px] rounded-[8px] bg-accent px-[14px] py-[8px] text-[12px] font-semibold text-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] disabled:opacity-50"
