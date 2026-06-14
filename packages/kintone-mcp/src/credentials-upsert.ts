@@ -9,6 +9,7 @@
 // 唯一の存在意義 (kintone proxy の data 引数がフラット限定でネスト不可なため)。
 
 import { isString, isValidResourceId, jsonResponse, sanitizeText } from './_http';
+import { anthropicHeaders } from './anthropic';
 
 interface UpsertRequestBody {
   vaultId: string;
@@ -28,7 +29,6 @@ interface UpsertResponseBody {
 }
 
 const ANTHROPIC_BASE = 'https://api.anthropic.com';
-const ANTHROPIC_VERSION = '2023-06-01';
 const ANTHROPIC_BETA = 'managed-agents-2026-04-01';
 
 export async function handleCredentialsUpsert(request: Request): Promise<Response> {
@@ -140,9 +140,7 @@ export async function handleCredentialsUpsert(request: Request): Promise<Respons
   const upstreamRes = await fetch(anthropicUrl, {
     method: 'POST',
     headers: {
-      'X-Api-Key': anthropicApiKey,
-      'anthropic-version': ANTHROPIC_VERSION,
-      'anthropic-beta': ANTHROPIC_BETA,
+      ...anthropicHeaders(anthropicApiKey, ANTHROPIC_BETA),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(anthropicBody),

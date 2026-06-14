@@ -1,6 +1,6 @@
 import { kintoneRequest } from '../kintone';
 
-import { createTool } from './factory';
+import { createTool, toolResult } from './factory';
 import { appIdSchema } from './utils/schemas';
 
 interface Mention {
@@ -53,9 +53,6 @@ export const addRecordComment = createTool<Args>(
     const result = (await kintoneRequest(creds, 'POST', '/k/v1/record/comment.json', {
       body: { app: args.app, record: args.record, comment: args.comment },
     })) as { id: string };
-    return {
-      structuredContent: result,
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
+    return toolResult(result);
   },
 );

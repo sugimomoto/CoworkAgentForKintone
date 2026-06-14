@@ -11,6 +11,17 @@ export function createTool<TArgs = Record<string, unknown>>(
 }
 
 /**
+ * Tool の成功結果を統一形式 (structuredContent + JSON テキスト) に整形する。
+ * 全ツール共通のボイラープレートを 1 箇所に集約する。
+ */
+export function toolResult(data: unknown): CallToolResult {
+  return {
+    structuredContent: data,
+    content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
+  };
+}
+
+/**
  * options を bind して args だけで呼出可能なコールバックを返す。
  * MCP server の registerTool に渡す形式。
  */

@@ -1,6 +1,6 @@
 import { kintoneRequest } from '../kintone';
 
-import { createTool } from './factory';
+import { createTool, toolResult } from './factory';
 import {
   appIdSchema,
   recordValueMapSchema,
@@ -46,9 +46,6 @@ export const updateRecord = createTool<Args>(
     const result = (await kintoneRequest(creds, 'PUT', '/k/v1/record.json', { body })) as {
       revision: string;
     };
-    return {
-      structuredContent: result,
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
+    return toolResult(result);
   },
 );

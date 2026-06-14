@@ -3,7 +3,7 @@
 
 import { kintoneRequest } from '../kintone';
 
-import { createTool } from './factory';
+import { createTool, toolResult } from './factory';
 
 interface Args {
   app: string;
@@ -35,9 +35,6 @@ export const getFormFields = createTool<Args>(
     if (args.lang !== undefined) params['lang'] = args.lang;
     const path = args.preview ? '/k/v1/preview/app/form/fields.json' : '/k/v1/app/form/fields.json';
     const result = await kintoneRequest(creds, 'GET', path, { params });
-    return {
-      structuredContent: result,
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
+    return toolResult(result);
   },
 );

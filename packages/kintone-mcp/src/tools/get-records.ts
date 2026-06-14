@@ -3,7 +3,7 @@
 
 import { kintoneRequest } from '../kintone';
 
-import { createTool } from './factory';
+import { createTool, toolResult } from './factory';
 import { type BuildQueryInput, buildQueryFromFilters } from './utils/build-query';
 
 interface Args extends BuildQueryInput {
@@ -170,9 +170,6 @@ export const getRecords = createTool<Args>(
       totalCount: result.totalCount ?? null,
     };
 
-    return {
-      structuredContent: out,
-      content: [{ type: 'text', text: JSON.stringify(out, null, 2) }],
-    };
+    return toolResult(out);
   },
 );

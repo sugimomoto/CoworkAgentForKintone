@@ -5,7 +5,7 @@
 
 import { kintoneRequest } from '../kintone';
 
-import { createTool } from './factory';
+import { createTool, toolResult } from './factory';
 
 const MAX_BULK = 20;
 
@@ -73,9 +73,6 @@ export const bulkRequest = createTool<Args>(
       body: { requests: args.requests },
     })) as { results: unknown[] };
 
-    return {
-      structuredContent: result,
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
+    return toolResult(result);
   },
 );

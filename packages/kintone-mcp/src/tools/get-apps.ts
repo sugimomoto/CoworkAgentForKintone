@@ -2,7 +2,7 @@
 
 import { kintoneRequest } from '../kintone';
 
-import { createTool } from './factory';
+import { createTool, toolResult } from './factory';
 
 interface Args {
   name?: string;
@@ -54,9 +54,6 @@ export const getApps = createTool<Args>(
       apps: unknown[];
     };
 
-    return {
-      structuredContent: { apps: result.apps },
-      content: [{ type: 'text', text: JSON.stringify({ apps: result.apps }, null, 2) }],
-    };
+    return toolResult({ apps: result.apps });
   },
 );

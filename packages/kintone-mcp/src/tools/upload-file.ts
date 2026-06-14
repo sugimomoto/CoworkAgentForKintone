@@ -5,7 +5,7 @@
 
 import { kintoneUploadFile } from '../kintone';
 
-import { createTool } from './factory';
+import { createTool, toolResult } from './factory';
 import { base64ToBytes } from './utils/base64';
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -53,9 +53,6 @@ export const uploadFile = createTool<Args>(
 
     const result = await kintoneUploadFile(creds, args.filename, bytes, args.contentType);
 
-    return {
-      structuredContent: result,
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
+    return toolResult(result);
   },
 );
