@@ -57,8 +57,9 @@ export interface AgentEditDraft {
   enabledTools: readonly KintoneToolName[];
   /**
    * クイックアクション (PresetAgentLanding で並ぶワンクリック実行ボタン)。
-   * Custom Agent のみ admin が編集可能。Built-in は spec カタログ側で固定 (本フィールドは UI 上 disabled)。
-   * 保存時に metadata.quickActions に JSON 配列文字列として永続化。
+   * built-in / custom とも admin が編集可能。保存時に metadata.quickActions へ JSON 配列文字列で永続化し、
+   * 読込 (agentRecord.readBuiltInEditableFields) も metadata を優先する (#75)。
+   * 空配列なら key 自体を削除 → built-in は spec カタログ値にフォールバックする。
    */
   quickActions: readonly string[];
   /**

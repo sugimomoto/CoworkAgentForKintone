@@ -14,7 +14,7 @@ import { getCurrentSessionContext } from '../kintone/user';
 import { fetchCurrentUserGroups, fetchCurrentUserOrganizations } from '../kintone/users';
 import { resolveBundledSkillIds } from '../skills/resolveBundledSkillIds';
 
-import { agentToRecord as customAgentToRecord } from './agentRecord';
+import { agentToRecord as customAgentToRecord, readBuiltInEditableFields } from './agentRecord';
 import { BUILTIN_AGENT_SPECS } from './builtInAgents';
 import { readNotifyRecordFields } from './notifyRegistration';
 import { resolveDefaultAgent } from './resolveAgent';
@@ -201,11 +201,8 @@ function agentToRecord(
     isDefault: meta.isDefault === '1' || spec.isDefault,
     ...(spec.variantGroup ? { variantGroup: spec.variantGroup } : {}),
     source: 'builtin',
-    quickActions: spec.quickActions,
-    // built-in は ACL を持たない (= 常に全員に見える)
-    allowedUsers: [],
-    allowedGroups: [],
-    allowedOrganizations: [],
+    // #75: quickActions / ACL は built-in でも metadata に保存されるので metadata を優先する。
+    ...readBuiltInEditableFields(meta, spec.quickActions),
     ...readNotifyRecordFields(meta),
   };
 }

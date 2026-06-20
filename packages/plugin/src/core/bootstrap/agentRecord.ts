@@ -57,11 +57,9 @@ export function agentToRecord(agent: Agent): AgentRecord {
       isDefault: meta.isDefault === '1' || (meta.isDefault == null && spec.isDefault),
       ...(spec.variantGroup ? { variantGroup: spec.variantGroup } : {}),
       source: 'builtin',
-      quickActions: spec.quickActions,
-      // built-in は ACL を持たない (= 常に全員に見える)
-      allowedUsers: [],
-      allowedGroups: [],
-      allowedOrganizations: [],
+      // #75: quickActions / ACL は built-in でも metadata に保存されるので、読込側も
+      // metadata を優先する (未設定時のみ spec / 空配列にフォールバック)。
+      ...readBuiltInEditableFields(meta, spec.quickActions),
       ...readNotifyRecordFields(meta),
     };
   }
@@ -88,6 +86,32 @@ export function agentToRecord(agent: Agent): AgentRecord {
     allowedGroups: parseJsonStringArray(meta[META_KEY_ALLOWED_GROUPS]),
     allowedOrganizations: parseJsonStringArray(meta[META_KEY_ALLOWED_ORGANIZATIONS]),
     ...readNotifyRecordFields(meta),
+  };
+}
+
+/**
+ * built-in Agent の編集可能フィールド (quickActions / 公開先 ACL) を metadata から復元する (#75)。
+ *
+ * 書き込みは built-in / custom 共通で metadata に入る (mergeMetadataPatch) のに、従来 built-in の
+ * 読込は spec 固定 / ACL 空配列で metadata を無視していたため「保存しても反映されない」状態だった。
+ * metadata を優先し、未設定のときだけ spec.quickActions / 空配列にフォールバックする。
+ *
+ * 注: 空配列の保存は write 側 (setOrDeleteJsonArrayKey) で key 削除されるため、built-in の
+ * quickActions を「意図的に空」にはできず spec 値に戻る (ACL は空=全員公開なので問題ない)。
+ *
+ * bootstrap 経路 (initializeSession の built-in 変換) と保存後リフレッシュ経路 (本ファイル) の
+ * 両方から呼び、読込ロジックの二重化 (= 本バグの再発) を防ぐ。
+ */
+export function readBuiltInEditableFields(
+  meta: Record<string, string>,
+  specQuickActions: readonly string[],
+): Pick<AgentRecord, 'quickActions' | 'allowedUsers' | 'allowedGroups' | 'allowedOrganizations'> {
+  const rawQuick = meta[META_KEY_QUICK_ACTIONS];
+  return {
+    quickActions: rawQuick !== undefined ? parseJsonStringArray(rawQuick) : specQuickActions,
+    allowedUsers: parseJsonStringArray(meta[META_KEY_ALLOWED_USERS]),
+    allowedGroups: parseJsonStringArray(meta[META_KEY_ALLOWED_GROUPS]),
+    allowedOrganizations: parseJsonStringArray(meta[META_KEY_ALLOWED_ORGANIZATIONS]),
   };
 }
 
