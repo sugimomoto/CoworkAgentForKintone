@@ -10,7 +10,7 @@
 // (UI が「対応」と言ったものは Worker も送信できる必要がある)。Teams は旧 O365 コネクタに加え
 // Workflows (logic.azure.com) も受け付ける。
 
-export type WebhookPlatform = 'slack' | 'teams';
+export type WebhookPlatform = 'slack' | 'teams' | 'discord';
 
 /** Agent に保存される通知設定。生 URL は保存後クライアントに返さない (伏字運用)。 */
 export interface WebhookConfig {
@@ -19,7 +19,7 @@ export interface WebhookConfig {
   url?: string;
 }
 
-export type DetectKind = 'empty' | 'slack' | 'teams' | 'unsupported' | 'malformed';
+export type DetectKind = 'empty' | 'slack' | 'teams' | 'discord' | 'unsupported' | 'malformed';
 
 export interface DetectResult {
   kind: DetectKind;
@@ -56,19 +56,28 @@ export function detectPlatform(raw: string | null | undefined): DetectResult {
   ) {
     return { kind: 'teams', host };
   }
+  if (
+    host === 'discord.com' ||
+    host === 'discordapp.com' ||
+    host.endsWith('.discord.com') ||
+    host.endsWith('.discordapp.com')
+  ) {
+    return { kind: 'discord', host };
+  }
   return { kind: 'unsupported', host };
 }
 
 export const isSupportedPlatform = (k: DetectKind): k is WebhookPlatform =>
-  k === 'slack' || k === 'teams';
+  k === 'slack' || k === 'teams' || k === 'discord';
 
-/** バッジ表示用メタ。Slack=緑系 / Teams=紫系 (モデルバッジと同トーンの小 pill)。 */
+/** バッジ表示用メタ。Slack=緑系 / Teams=紫系 / Discord=ブルランプル (モデルバッジと同トーンの小 pill)。 */
 export const PLATFORM_META: Record<
   WebhookPlatform,
   { label: string; color: string; soft: string }
 > = {
   slack: { label: 'Slack', color: '#15803d', soft: 'rgba(21,128,61,0.10)' },
   teams: { label: 'Teams', color: '#7c3aed', soft: 'rgba(124,58,237,0.10)' },
+  discord: { label: 'Discord', color: '#5865f2', soft: 'rgba(88,101,242,0.12)' },
 };
 
 /** 保存後の伏字 (パスワード入力と同じ扱い／生 URL は二度と表示しない)。 */

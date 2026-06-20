@@ -31,6 +31,22 @@ export function buildSlackPayload(m: NotifyMessage): unknown {
   return { text: m.title, blocks };
 }
 
+/** Discord Incoming Webhook (embeds)。1 つの embed に title/description/fields/url をまとめる。 */
+export function buildDiscordPayload(m: NotifyMessage): unknown {
+  const embed: Record<string, unknown> = {
+    title: m.title,
+    description: m.text,
+  };
+  if (m.fields && m.fields.length > 0) {
+    embed.fields = m.fields.map((f) => ({ name: f.label, value: f.value, inline: true }));
+  }
+  // Discord embed は link ボタンを持てないため、リンクは description 末尾に Markdown で添える。
+  if (m.link) {
+    embed.description = `${m.text}\n\n[${m.link.label}](${m.link.url})`;
+  }
+  return { embeds: [embed] };
+}
+
 /** Teams Incoming Webhook (Adaptive Card)。現行の Workflows / Incoming Webhook 互換。 */
 export function buildTeamsPayload(m: NotifyMessage): unknown {
   const body: unknown[] = [

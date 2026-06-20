@@ -821,10 +821,12 @@ erDiagram
     }
 ```
 
-### 3.6 通知 (Slack / Teams Webhook) — #13
+### 3.6 通知 (Slack / Teams / Discord Webhook) — #13
 
-Agent が処理結果を Slack / Microsoft Teams の Incoming Webhook に送信する仕組み。
+Agent が処理結果を Slack / Microsoft Teams / Discord の Incoming Webhook に送信する仕組み。
 **Agent ごとに 1 本** の Webhook を admin が登録する（built-in / custom 両対応）。
+platform は URL ホストで自動判定（`hooks.slack.com` / `*.webhook.office.com`・`*.logic.azure.com` / `discord.com`）。
+payload はそれぞれ Slack blocks / Teams Adaptive Card / Discord embeds に整形する。
 
 #### アーキテクチャ要点
 

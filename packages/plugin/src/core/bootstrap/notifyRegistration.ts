@@ -106,12 +106,12 @@ export async function unregisterNotifyWebhook(args: {
  * URL は metadata に無いので決して漏れない。
  */
 export function readNotifyRecordFields(meta: Record<string, string>): {
-  notifyPlatform?: 'slack' | 'teams';
+  notifyPlatform?: 'slack' | 'teams' | 'discord';
   notifyVaultId?: string;
 } {
-  const out: { notifyPlatform?: 'slack' | 'teams'; notifyVaultId?: string } = {};
+  const out: { notifyPlatform?: 'slack' | 'teams' | 'discord'; notifyVaultId?: string } = {};
   const p = meta[NOTIFY_AGENT_METADATA_KEYS.platform];
-  if (p === 'slack' || p === 'teams') out.notifyPlatform = p;
+  if (p === 'slack' || p === 'teams' || p === 'discord') out.notifyPlatform = p;
   const v = meta[NOTIFY_AGENT_METADATA_KEYS.vaultId];
   if (v) out.notifyVaultId = v;
   return out;

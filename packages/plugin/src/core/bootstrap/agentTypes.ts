@@ -120,10 +120,10 @@ export interface AgentRecord {
   /** 公開先 ACL — kintone 組織コード */
   allowedOrganizations: readonly string[];
   /**
-   * 通知 Webhook が登録済なら 'slack' | 'teams' (#13)。未登録は undefined。
+   * 通知 Webhook が登録済なら 'slack' | 'teams' | 'discord' (#13)。未登録は undefined。
    * UI のインジケータ表示と「登録済かどうか」の判定に使う (URL は決して保持しない)。
    */
-  notifyPlatform?: 'slack' | 'teams';
+  notifyPlatform?: 'slack' | 'teams' | 'discord';
   /** 通知 Vault ID (#13)。Session/Deployment 作成時に vault_ids へ加える。 */
   notifyVaultId?: string;
 }

@@ -207,7 +207,7 @@ export async function archiveAgentById(agentId: string): Promise<void> {
 }
 
 export interface WebhookInput {
-  platform: 'slack' | 'teams';
+  platform: 'slack' | 'teams' | 'discord';
   /** 新規/上書き保存時のみ。伏字 (変更なし) のときは undefined。 */
   url?: string;
 }

@@ -94,7 +94,7 @@ export function NotifySection({ value, onChange, onValidityChange, onTest, hideH
       <BellIcon className="text-[var(--cw-accent)]" />
       通知
       <span className="font-normal normal-case tracking-normal text-[10px] text-[var(--cw-subtle)]">
-        処理結果を Slack / Teams に送信
+        処理結果を Slack / Teams / Discord に送信
       </span>
       <span className="ml-auto inline-flex items-center gap-1 rounded-[3px] border border-[var(--cw-border)] bg-[var(--cw-card-hi)] px-1.5 py-px text-[9px] font-semibold tracking-normal text-[var(--cw-muted)]">
         <LockIcon className="h-2.5 w-2.5" /> 宛先1本 / Agent
@@ -230,7 +230,7 @@ export function NotifySection({ value, onChange, onValidityChange, onTest, hideH
   let tone: 'muted' | 'subtle' | 'warn' | 'accent';
   if (det.kind === 'empty') {
     hint =
-      'Slack または Teams の Incoming Webhook URL を貼り付けると、このエージェントが結果を通知できます。';
+      'Slack / Teams / Discord の Incoming Webhook URL を貼り付けると、このエージェントが結果を通知できます。';
     tone = 'muted';
   } else if (det.kind === 'slack') {
     hint = 'Slack の Incoming Webhook を検出しました。';
@@ -238,8 +238,11 @@ export function NotifySection({ value, onChange, onValidityChange, onTest, hideH
   } else if (det.kind === 'teams') {
     hint = 'Microsoft Teams の Incoming Webhook を検出しました。';
     tone = 'accent';
+  } else if (det.kind === 'discord') {
+    hint = 'Discord の Webhook を検出しました。';
+    tone = 'accent';
   } else if (det.kind === 'unsupported') {
-    hint = '対応していない Webhook です (Slack / Teams のみ対応)。';
+    hint = '対応していない Webhook です (Slack / Teams / Discord のみ対応)。';
     tone = 'warn';
   } else {
     hint = 'URL の形式を確認してください。';
@@ -323,7 +326,8 @@ export function NotifySection({ value, onChange, onValidityChange, onTest, hideH
 // ── プラットフォーム バッジ (モデルバッジと同トーンの小 pill) ──
 export function PlatformBadge({ platform, lg }: { platform: WebhookPlatform; lg?: boolean }) {
   const m = PLATFORM_META[platform];
-  const Glyph = platform === 'slack' ? SlackGlyph : TeamsGlyph;
+  const Glyph =
+    platform === 'slack' ? SlackGlyph : platform === 'discord' ? DiscordGlyph : TeamsGlyph;
   return (
     <span
       className={`inline-flex items-center whitespace-nowrap rounded-[3px] border font-mono font-bold leading-tight ${lg ? 'gap-1.5 px-2 py-[2.5px] text-[11px]' : 'gap-1 px-1.5 py-px text-[9.5px]'}`}
@@ -502,6 +506,21 @@ const TeamsGlyph = (p: IcoProps) => (
     sw={1.5}
     d={
       <path d="M2.5 4.5a1.5 1.5 0 011.5-1.5h8a1.5 1.5 0 011.5 1.5v4A1.5 1.5 0 0112 10H7l-3 2.5V10a1.5 1.5 0 01-1.5-1.5z" />
+    }
+  />
+);
+const DiscordGlyph = (p: IcoProps) => (
+  <Ico
+    {...p}
+    width="11"
+    height="11"
+    sw={1.4}
+    d={
+      <>
+        <path d="M5 4.5a9 9 0 016 0M5.5 11.5a9 9 0 005 0" />
+        <path d="M5.5 4.2C3.8 4.6 2.7 6 2.4 8.2c-.2 1.4 0 2.4.3 3 .6.6 1.4 1 2.3 1.2l.6-1M10.5 4.2c1.7.4 2.8 1.8 3.1 4 .2 1.4 0 2.4-.3 3-.6.6-1.4 1-2.3 1.2l-.6-1" />
+        <path d="M6.3 8.6h.01M9.7 8.6h.01" />
+      </>
     }
   />
 );
