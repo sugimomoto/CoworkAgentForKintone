@@ -1,0 +1,13 @@
+{
+  "version": "v0.2.0",
+  "headline": "もっと<span class=\"hl\">自動</span>で、\nもっと“隣”に。",
+  "sub": "<b>通知・定期実行</b>に対応。\n頼んだ作業を、待たずに回せるようになりました。",
+  "repo": "github.com/sugimomoto/CoworkAgentForKintone",
+  "features": [
+    { "icon": "bell", "title": "通知", "new": true, "lead": true,
+      "desc": "レコードの変化を Slack・Teams・Discord へ自動で。",
+      "chips": [ {"label":"Slack","color":"#4a154b"}, {"label":"Teams","color":"#5b5fc7"}, {"label":"Discord","color":"#5865f2"} ] },
+    { "icon": "clock", "title": "定期実行", "desc": "集計やレポート作成を、スケジュールで自動化。" },
+    { "icon": "grid", "title": "プリセットエージェント", "desc": "業務別のエージェントを、ワンクリックで呼び出し。" }
+  ]
+}
