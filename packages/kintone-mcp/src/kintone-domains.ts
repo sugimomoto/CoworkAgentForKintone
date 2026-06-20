@@ -21,3 +21,8 @@ export const KINTONE_ORIGIN_RE = new RegExp(`^https://[a-z0-9.-]+\\.(${SUFFIX_GR
 export function mcpPathPattern(): RegExp {
   return new RegExp(`^/mcp/([a-z0-9.-]+\\.(${SUFFIX_GROUP}))$`, 'i');
 }
+
+/** `/notify/<host>/<notifyKey>` にマッチ。match[1]=host, match[3]=notifyKey (#13)。 */
+export function notifyPathPattern(): RegExp {
+  return new RegExp(`^/notify/([a-z0-9.-]+\\.(${SUFFIX_GROUP}))/([A-Za-z0-9_-]+)$`, 'i');
+}
