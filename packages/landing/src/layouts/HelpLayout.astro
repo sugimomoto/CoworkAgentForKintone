@@ -25,7 +25,7 @@ const canonicalSuffix = canonical.replace(/^\//, '');
 const ogUrl = Astro.site
   ? new URL(`${baseHref}/${canonicalSuffix}`, Astro.site).toString()
   : undefined;
-// og:image は全ページ共通のブランドカード (/images/ogp.png, release-ogp スキルで生成) を絶対 URL で。
+// og:image は全ページ共通のブランドカード (/images/ogp.png, release-kit で生成) を絶対 URL で。
 const ogImageUrl = Astro.site
   ? new URL(`${baseHref}/images/ogp.png`, Astro.site).toString()
   : undefined;

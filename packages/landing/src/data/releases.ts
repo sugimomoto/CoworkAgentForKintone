@@ -2,7 +2,8 @@
 //
 // 運用: 新しいリリースのたびに、先頭に 1 エントリ追加する（version / date / highlights）。
 // GitHub の自動生成ノート（PR 列挙）ではなく、ユーザー向けに要点をキュレーションする。
-// OGP カード（release-ogp スキル）と同じ「目玉 2〜3 個」を highlights に揃えると一貫する。
+// release-kit（packages/landing/release-kit/）の統合スペックから notes.mjs で生成できる。
+// OGP カードと同じ「目玉 2〜3 個」を highlights に揃えると一貫する。
 
 export type ReleaseIcon = 'bell' | 'clock' | 'grid' | 'shield' | 'wrench' | 'doc';
 
