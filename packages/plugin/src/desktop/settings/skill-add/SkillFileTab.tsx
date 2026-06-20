@@ -86,25 +86,26 @@ export function SkillFileTab({
             </ul>
           )}
         </div>
+        {/* #79: name / description は frontmatter が正。編集させず解析結果を表示するだけ。 */}
         <div className="grid grid-cols-1 gap-[8px]">
-          <FormField label="name (識別子)">
-            <input
-              type="text"
-              data-testid="file-edit-name"
-              value={parsed.name}
-              onChange={(e) => setParsed({ ...parsed, name: e.target.value })}
-              className="w-full rounded-[6px] border border-border bg-card px-[10px] py-[6px] font-mono text-[12px] text-text"
-            />
-          </FormField>
-          <FormField label="description (1 行説明)">
-            <input
-              type="text"
-              data-testid="file-edit-description"
-              value={parsed.description}
-              onChange={(e) => setParsed({ ...parsed, description: e.target.value })}
-              className="w-full rounded-[6px] border border-border bg-card px-[10px] py-[6px] text-[12px] text-text"
-            />
-          </FormField>
+          <div
+            data-testid="file-parsed"
+            className="rounded-[6px] border border-border bg-card-hi px-[10px] py-[8px] text-[11px]"
+          >
+            <div className="mb-[2px] text-[9.5px] font-bold uppercase tracking-[0.5px] text-subtle">
+              frontmatter から解析
+            </div>
+            <div>
+              <span className="text-muted">name:</span>{' '}
+              <span className="font-mono text-text" data-testid="file-parsed-name">
+                {parsed.name}
+              </span>
+            </div>
+            <div>
+              <span className="text-muted">description:</span>{' '}
+              <span className="text-text">{parsed.description || '(未設定)'}</span>
+            </div>
+          </div>
           <FormField label="SKILL.md (プレビュー、読み取り専用)">
             <textarea
               readOnly
