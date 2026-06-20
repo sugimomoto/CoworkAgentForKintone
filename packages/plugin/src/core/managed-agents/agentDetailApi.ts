@@ -14,6 +14,7 @@ import {
   generateNotifyKey,
   notifyKeyForBuiltIn,
   registerNotifyWebhook,
+  resolveNotifyKey,
   unregisterNotifyWebhook,
 } from '../bootstrap/notifyRegistration';
 import {
@@ -123,13 +124,31 @@ function setOrDeleteJsonArrayKey(
  * 動作:
  *   1. retrieveAgent(id) で最新 metadata を取得 (find filter 列の維持に必要)
  *   2. mergeMetadataPatch で UI 補助情報を上書き
- *   3. updateAgent(id, { name, description, system, tools, skills, metadata })
+ *   3. mcp_servers を tools と整合するよう再構築 (notify toolset は常設なので notify server も必須)
+ *   4. updateAgent(id, { name, description, system, tools, skills, mcp_servers, metadata })
+ *
+ * #13 で send_notification toolset を全 Agent に常設したため、tools だけ更新して mcp_servers を
+ * 据え置くと「mcp_toolset references [notify] but no matching entry in mcp_servers」(HTTP 400) になる。
+ * notify server を含む mcp_servers を毎回明示的に送って整合を保証する。
  */
 export async function applyAgentEdit(
   agentId: string,
   draft: AgentEditDraft,
 ): Promise<Agent> {
   const existing = await retrieveAgent(agentId);
+  const meta = (existing.metadata ?? {}) as Record<string, string>;
+  const metadata = mergeMetadataPatch(meta, draft);
+
+  // notify toolset と整合する mcp_servers を組み立てる。
+  // workerUrl / kintoneDomain は plugin 製 Agent の metadata に必ず入っている (find filter 列)。
+  let mcpServers: unknown[] | undefined;
+  if (meta.workerUrl && meta.kintoneDomain) {
+    const { notifyKey, generated } = resolveNotifyKey(meta);
+    // custom で新規採番した notifyKey は永続化 (次回以降 / Webhook 登録で同じパスを使う)
+    if (generated) metadata[NOTIFY_AGENT_METADATA_KEYS.notifyKey] = notifyKey;
+    mcpServers = buildMcpServers(meta.workerUrl, meta.kintoneDomain, notifyKey);
+  }
+
   return updateAgent(agentId, {
     version: existing.version,
     name: draft.name,
@@ -137,7 +156,8 @@ export async function applyAgentEdit(
     system: draft.systemPrompt,
     tools: buildAgentTools(draft.enabledTools),
     skills: buildAgentSkills(draft),
-    metadata: mergeMetadataPatch((existing.metadata ?? null) as Record<string, string> | null, draft),
+    ...(mcpServers ? { mcp_servers: mcpServers } : {}),
+    metadata,
   });
 }
 
