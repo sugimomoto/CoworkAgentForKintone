@@ -1,6 +1,8 @@
 ---
 import Icon from '../Icon.astro';
 import Wordmark from '../Wordmark.astro';
+
+const baseHref = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
 <nav class="nav" id="nav">
@@ -12,6 +14,7 @@ import Wordmark from '../Wordmark.astro';
       <a href="#wedge">カスタマイズ</a>
       <a href="#setup">導入</a>
       <a href="#faq">FAQ</a>
+      <a href={`${baseHref}/releases/`}>更新情報</a>
       <a
         href="https://github.com/sugimomoto/CoworkAgentForKintone"
         class="nav-gh"
