@@ -1,11 +1,11 @@
 // send_notification ツールの実体。注入された Webhook URL (Bearer) と引数から
-// Slack/Teams に POST する。#13。
+// Slack / Teams / Discord に POST する。#13。
 //
 // セキュリティ: Webhook URL は秘匿。toolResult・ログに **URL を一切含めない**。
 
 import { sanitizeError } from '../_http';
 
-import { detectPlatform } from './detectPlatform';
+import { detectPlatform, type NotifyPlatform } from './detectPlatform';
 import {
   buildDiscordPayload,
   buildSlackPayload,
@@ -14,6 +14,13 @@ import {
 } from './format';
 
 import type { CallToolResult } from '../tools/types/tool';
+
+/** platform ごとの表示名と payload ビルダ。対応追加はここに 1 行足すだけ。 */
+const PLATFORMS: Record<NotifyPlatform, { label: string; build: (m: NotifyMessage) => unknown }> = {
+  slack: { label: 'Slack', build: buildSlackPayload },
+  teams: { label: 'Teams', build: buildTeamsPayload },
+  discord: { label: 'Discord', build: buildDiscordPayload },
+};
 
 function ok(text: string): CallToolResult {
   return { content: [{ type: 'text', text }], structuredContent: { ok: true } };
@@ -40,13 +47,8 @@ export async function runSendNotification(
   if (!args || typeof args.title !== 'string' || typeof args.text !== 'string') {
     return fail('title と text は必須です。');
   }
-  const payload =
-    platform === 'slack'
-      ? buildSlackPayload(args)
-      : platform === 'discord'
-        ? buildDiscordPayload(args)
-        : buildTeamsPayload(args);
-  const label = platform === 'slack' ? 'Slack' : platform === 'discord' ? 'Discord' : 'Teams';
+  const { label, build } = PLATFORMS[platform];
+  const payload = build(args);
   try {
     const res = await fetch(webhookUrl, {
       method: 'POST',

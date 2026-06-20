@@ -146,8 +146,21 @@ export const CREATE_ARTIFACT_TOOL = {
 /** 通知 MCP server の name (mcp_servers と mcp_toolset で参照される識別子, #13) */
 export const NOTIFY_MCP_SERVER_NAME = 'notify';
 
-/** send_notification ツール名 (Worker 側 SEND_NOTIFICATION_TOOL と同期, #13) */
-export const NOTIFY_TOOL_NAME = 'send_notification';
+/**
+ * 通知 MCP toolset (`send_notification`)。built-in / custom を問わず全 Agent に常設する (#13)。
+ * Webhook 未登録の Agent では Worker が「未設定」を返すだけなので無害。
+ * notify server には send_notification しか無いため、configs は付けず default_config で全公開する。
+ */
+export function buildNotifyToolset(): Record<string, unknown> {
+  return {
+    type: 'mcp_toolset',
+    mcp_server_name: NOTIFY_MCP_SERVER_NAME,
+    default_config: {
+      enabled: true,
+      permission_policy: { type: 'always_allow' },
+    },
+  };
+}
 
 /**
  * 通知 MCP サーバーの URL を組み立てる (`<workerUrl>/notify/<kintoneDomain>/<notifyKey>`)。
