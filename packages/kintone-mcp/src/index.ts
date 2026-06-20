@@ -16,6 +16,7 @@ import { handleAnthropicPassthrough } from './anthropic-passthrough';
 import { handleCredentialsUpsert } from './credentials-upsert';
 import { handleFilesDownload } from './files-download';
 import { handleMcp } from './mcp';
+import { handleNotify } from './notify';
 import { handleOAuthCallback } from './oauth-callback';
 import { handleSkillsSync } from './skills-sync';
 import { BUILD_TIME, BUILD_VERSION } from './version';
@@ -26,6 +27,10 @@ export type Env = Record<string, never>;
 export default {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith('/notify/') && request.method === 'POST') {
+      return handleNotify(request);
+    }
 
     if (url.pathname.startsWith('/mcp/') && request.method === 'POST') {
       return handleMcp(request);
