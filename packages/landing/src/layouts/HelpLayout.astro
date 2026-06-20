@@ -25,6 +25,10 @@ const canonicalSuffix = canonical.replace(/^\//, '');
 const ogUrl = Astro.site
   ? new URL(`${baseHref}/${canonicalSuffix}`, Astro.site).toString()
   : undefined;
+// og:image は全ページ共通のブランドカード (/images/ogp.png, release-ogp スキルで生成) を絶対 URL で。
+const ogImageUrl = Astro.site
+  ? new URL(`${baseHref}/images/ogp.png`, Astro.site).toString()
+  : undefined;
 // path back to LP root: with base `/CoworkAgentForKintone/`, the LP is at base + '/'
 const homeHref = `${baseHref}/`;
 ---
@@ -40,9 +44,15 @@ const homeHref = `${baseHref}/`;
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     {ogUrl && <meta property="og:url" content={ogUrl} />}
+    {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
+    {ogImageUrl && <meta property="og:image:width" content="1200" />}
+    {ogImageUrl && <meta property="og:image:height" content="630" />}
+    {ogImageUrl && <meta property="og:image:type" content="image/png" />}
+    {ogImageUrl && <meta property="og:image:alt" content={title} />}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    {ogImageUrl && <meta name="twitter:image" content={ogImageUrl} />}
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

@@ -7,12 +7,15 @@ interface Props {
   description?: string;
   /** path of the current page, relative to site root, e.g. '/' or '/help/admin/' */
   canonical?: string;
+  /** OGP 画像のパス (site root 起点)。既定はリリース告知カード /images/ogp.png (release-ogp スキルで生成)。 */
+  ogImage?: string;
 }
 
 const {
   title = 'Cowork Agent for kintone — kintone の隣に、AI コワーカーを。',
   description = 'kintone のレコード一覧に常駐する AI コワーカー。自然言語で検索・集計・更新、カスタマイズ JS 生成まで。OSS / MIT License の kintone プラグイン。',
   canonical,
+  ogImage = '/images/ogp.png',
 } = Astro.props;
 
 // Compose canonical URL as site + base + relative path.
@@ -21,6 +24,10 @@ const baseHref = import.meta.env.BASE_URL.replace(/\/$/, '');
 const canonicalSuffix = (canonical ?? '/').replace(/^\//, '');
 const ogUrl = Astro.site
   ? new URL(`${baseHref}/${canonicalSuffix}`, Astro.site).toString()
+  : undefined;
+// og:image は SNS が絶対 URL を要求するため site + base で絶対化する。
+const ogImageUrl = Astro.site
+  ? new URL(`${baseHref}${ogImage}`, Astro.site).toString()
   : undefined;
 ---
 
@@ -36,10 +43,16 @@ const ogUrl = Astro.site
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     {ogUrl && <meta property="og:url" content={ogUrl} />}
+    {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
+    {ogImageUrl && <meta property="og:image:width" content="1200" />}
+    {ogImageUrl && <meta property="og:image:height" content="630" />}
+    {ogImageUrl && <meta property="og:image:type" content="image/png" />}
+    {ogImageUrl && <meta property="og:image:alt" content={title} />}
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    {ogImageUrl && <meta name="twitter:image" content={ogImageUrl} />}
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
