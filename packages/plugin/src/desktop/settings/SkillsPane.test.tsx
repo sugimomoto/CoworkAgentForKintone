@@ -1,6 +1,6 @@
 // SkillsPane + SkillAddModal の統合テスト
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -67,19 +67,33 @@ describe('SkillsPane', () => {
     expect(screen.getByTestId('skill-add-modal')).toBeInTheDocument();
   });
 
-  it('SkillAddModal の text タブで name + body 入力 → onAddCustomSkill 発火', async () => {
+  it('SkillAddModal の text タブで SKILL.md 本文の frontmatter から name を解析して onAddCustomSkill 発火 (#79)', async () => {
+    const onAdd = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    const skillMd = '---\nname: my-skill\ndescription: 顧客集計\n---\n本文';
+    render(<SkillsPane bundledSkills={BUNDLED} onAddCustomSkill={onAdd} />);
+    await user.click(screen.getByTestId('skills-add-btn'));
+    await user.click(screen.getByTestId('tab-text'));
+    // #79: name 個別入力は廃止。本文 frontmatter から name/description を解析する
+    expect(screen.queryByTestId('text-name')).toBeNull();
+    expect(screen.queryByTestId('text-description')).toBeNull();
+    fireEvent.change(screen.getByTestId('text-body'), { target: { value: skillMd } });
+    expect(screen.getByTestId('text-parsed-name')).toHaveTextContent('my-skill');
+    await user.click(screen.getByTestId('skill-add-submit'));
+    await waitFor(() => expect(onAdd).toHaveBeenCalledOnce());
+    expect(onAdd).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'my-skill', description: '顧客集計', skillMd }),
+    );
+  });
+
+  it('frontmatter に name が無いと送信不可 (#79)', async () => {
     const onAdd = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
     render(<SkillsPane bundledSkills={BUNDLED} onAddCustomSkill={onAdd} />);
     await user.click(screen.getByTestId('skills-add-btn'));
     await user.click(screen.getByTestId('tab-text'));
-    await user.type(screen.getByTestId('text-name'), 'my-skill');
-    await user.type(screen.getByTestId('text-body'), 'body content');
-    await user.click(screen.getByTestId('skill-add-submit'));
-    await waitFor(() => expect(onAdd).toHaveBeenCalledOnce());
-    expect(onAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'my-skill', skillMd: 'body content' }),
-    );
+    fireEvent.change(screen.getByTestId('text-body'), { target: { value: '# 本文だけ' } });
+    expect(screen.getByTestId('skill-add-submit')).toBeDisabled();
   });
 });
 

@@ -2,15 +2,16 @@
 //
 // 2 タブ:
 //   - 📤 ファイル: SKILL.md / .md / .zip / .skill ドロップゾーン (max 8 MB) + frontmatter 自動抽出
-//   - 📝 直接入力: name / description / SKILL.md textarea
+//   - 📝 直接入力: SKILL.md textarea のみ (name / description は frontmatter が正、#79)
 //
 // ファイル解析は skill-add/parseSkillFile、各タブ UI は skill-add/SkillFileTab /
 // SkillTextTab に分割 (Phase 3 PR-D)。
 //
 // 仕様: requirements.md §15.4 / design.md §4.6
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
+import { parseFrontmatter } from './skill-add/parseSkillFile';
 import { SkillFileTab } from './skill-add/SkillFileTab';
 import { SkillTextTab } from './skill-add/SkillTextTab';
 
@@ -43,24 +44,30 @@ export function SkillAddModal({ onClose, onSubmit, initialSkill }: SkillAddModal
   const isEdit = initialSkill !== undefined;
   const [mode, setMode] = useState<SkillAddMode>(isEdit ? 'text' : 'file');
   const [parsed, setParsed] = useState<CustomSkillInput | null>(initialSkill ?? null);
-  const [textName, setTextName] = useState(initialSkill?.name ?? '');
-  const [textDescription, setTextDescription] = useState(initialSkill?.description ?? '');
   const [textBody, setTextBody] = useState(initialSkill?.skillMd ?? '');
   const [fileError, setFileError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // #79: name / description は SKILL.md 本文 frontmatter から解析する (唯一の正)。
+  const fm = useMemo(() => parseFrontmatter(textBody), [textBody]);
+  const fmName = (fm.name ?? '').trim();
+  // 編集モードは display_title 一致でバージョン更新するため、元のスキル名を固定で使う。
+  const lockedName = isEdit ? (initialSkill?.name ?? '') : undefined;
+  const effectiveName = isEdit ? (lockedName ?? '') : fmName;
+  const nameMismatch = isEdit && fm.name !== undefined && fmName !== lockedName;
+
   const canSubmit =
     !submitting &&
     (mode === 'file'
       ? parsed !== null && parsed.name.length > 0
-      : textName.trim().length > 0 && textBody.trim().length > 0);
+      : textBody.trim().length > 0 && (isEdit || fmName.length > 0));
 
   const buildInput = (): CustomSkillInput | null => {
     if (mode === 'file') return parsed;
     return {
-      name: textName.trim(),
-      description: textDescription.trim(),
+      name: effectiveName,
+      description: (fm.description ?? '').trim(),
       skillMd: textBody,
     };
   };
@@ -137,13 +144,13 @@ export function SkillAddModal({ onClose, onSubmit, initialSkill }: SkillAddModal
             />
           ) : (
             <SkillTextTab
-              name={textName}
-              setName={setTextName}
-              description={textDescription}
-              setDescription={setTextDescription}
               body={textBody}
               setBody={setTextBody}
-              nameReadOnly={isEdit}
+              {...(fm.name !== undefined ? { parsedName: fm.name } : {})}
+              {...(fm.description !== undefined ? { parsedDescription: fm.description } : {})}
+              isEdit={isEdit}
+              {...(lockedName !== undefined ? { lockedName } : {})}
+              nameMismatch={nameMismatch}
             />
           )}
         </div>
@@ -156,7 +163,7 @@ export function SkillAddModal({ onClose, onSubmit, initialSkill }: SkillAddModal
             ) : !canSubmit && mode === 'file' && parsed === null ? (
               'ファイルを選択してください'
             ) : !canSubmit && mode === 'text' ? (
-              isEdit ? '本文を入力してください' : 'name / 本文を入力してください'
+              isEdit ? 'SKILL.md 本文を入力してください' : 'SKILL.md 本文 (frontmatter に name) を入力してください'
             ) : (
               <span>
                 {isEdit

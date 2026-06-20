@@ -25,6 +25,8 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  id-token: write # claude-code-action の OIDC トークン交換に必須
+  actions: read # Claude が CI 結果を読むため
 
 jobs:
   sync-docs:
