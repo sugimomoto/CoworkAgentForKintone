@@ -34,7 +34,7 @@ import {
 } from './resources';
 
 import type { Agent } from './types';
-import type { AgentColor, AgentGlyph } from '../bootstrap/agentTypes';
+import type { AgentColor, AgentGlyph, NotifyPlatform } from '../bootstrap/agentTypes';
 import type { KintoneToolName } from '../bootstrap/builtInAgents';
 
 /**
@@ -207,7 +207,7 @@ export async function archiveAgentById(agentId: string): Promise<void> {
 }
 
 export interface WebhookInput {
-  platform: 'slack' | 'teams' | 'discord';
+  platform: NotifyPlatform;
   /** 新規/上書き保存時のみ。伏字 (変更なし) のときは undefined。 */
   url?: string;
 }

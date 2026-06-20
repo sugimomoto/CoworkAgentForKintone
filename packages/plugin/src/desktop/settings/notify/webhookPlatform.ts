@@ -10,7 +10,10 @@
 // (UI が「対応」と言ったものは Worker も送信できる必要がある)。Teams は旧 O365 コネクタに加え
 // Workflows (logic.azure.com) も受け付ける。
 
-export type WebhookPlatform = 'slack' | 'teams' | 'discord';
+import type { NotifyPlatform } from '../../../core/bootstrap/agentTypes';
+
+/** 通知先プラットフォーム種別。core の正準型 {@link NotifyPlatform} と同一。 */
+export type WebhookPlatform = NotifyPlatform;
 
 /** Agent に保存される通知設定。生 URL は保存後クライアントに返さない (伏字運用)。 */
 export interface WebhookConfig {

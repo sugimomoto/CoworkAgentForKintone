@@ -80,6 +80,9 @@ export type AgentVariantGroup = 'customizer';
  * メタデータ (purpose / iconKind / iconColor / variantGroup / isDefault / visibility) は
  * Anthropic Agent.metadata に保存し、Plugin は再 list 時にここから読み出す。
  */
+/** 通知先 Webhook のプラットフォーム種別 (#13)。判定・送信・UI で共有する正準型。 */
+export type NotifyPlatform = 'slack' | 'teams' | 'discord';
+
 export interface AgentRecord {
   /** Anthropic Agent ID (例: 'agent_01HX...') */
   id: string;
@@ -120,10 +123,10 @@ export interface AgentRecord {
   /** 公開先 ACL — kintone 組織コード */
   allowedOrganizations: readonly string[];
   /**
-   * 通知 Webhook が登録済なら 'slack' | 'teams' | 'discord' (#13)。未登録は undefined。
+   * 通知 Webhook が登録済なら platform 種別 (#13)。未登録は undefined。
    * UI のインジケータ表示と「登録済かどうか」の判定に使う (URL は決して保持しない)。
    */
-  notifyPlatform?: 'slack' | 'teams' | 'discord';
+  notifyPlatform?: NotifyPlatform;
   /** 通知 Vault ID (#13)。Session/Deployment 作成時に vault_ids へ加える。 */
   notifyVaultId?: string;
 }

@@ -23,9 +23,9 @@ import {
 import {
   CREATE_ARTIFACT_TOOL,
   KINTONE_MCP_SERVER_NAME,
-  NOTIFY_MCP_SERVER_NAME,
   PROPOSE_AGENT_TOOL,
   buildMcpServers,
+  buildNotifyToolset,
 } from './agentToolDefs';
 import { notifyKeyForBuiltIn } from './notifyRegistration';
 import {
@@ -228,19 +228,9 @@ function buildBuiltInAgentTools(
     },
     // 通知 (#13): send_notification を常設。Webhook 未登録の Agent では Worker が
     // 「未設定」を返すだけなので無害。登録は Vault credential + metadata 側で行う。
-    NOTIFY_TOOLSET,
+    buildNotifyToolset(),
   ];
 }
-
-/** 通知 MCP toolset (send_notification)。全 Agent に常設する (#13)。 */
-const NOTIFY_TOOLSET: Record<string, unknown> = {
-  type: 'mcp_toolset',
-  mcp_server_name: NOTIFY_MCP_SERVER_NAME,
-  default_config: {
-    enabled: true,
-    permission_policy: { type: 'always_allow' },
-  },
-};
 
 /**
  * 既存 Built-in Agent の tool 構成を現行 spec に追従させる (#86 ツールドリフト修復)。

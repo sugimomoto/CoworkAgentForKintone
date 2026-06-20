@@ -17,6 +17,8 @@ import { upsertStaticBearerCredential } from '../oauth/credentialsUpsertClient';
 import { buildNotifyMcpUrl } from './agentToolDefs';
 import { resolveNotifyVault } from './resolveNotifyVault';
 
+import type { NotifyPlatform } from './agentTypes';
+
 /** Agent metadata に保存する通知関連キー。URL は決して入れない。 */
 export const NOTIFY_AGENT_METADATA_KEYS = {
   platform: 'notifyPlatform',
@@ -106,10 +108,10 @@ export async function unregisterNotifyWebhook(args: {
  * URL は metadata に無いので決して漏れない。
  */
 export function readNotifyRecordFields(meta: Record<string, string>): {
-  notifyPlatform?: 'slack' | 'teams' | 'discord';
+  notifyPlatform?: NotifyPlatform;
   notifyVaultId?: string;
 } {
-  const out: { notifyPlatform?: 'slack' | 'teams' | 'discord'; notifyVaultId?: string } = {};
+  const out: { notifyPlatform?: NotifyPlatform; notifyVaultId?: string } = {};
   const p = meta[NOTIFY_AGENT_METADATA_KEYS.platform];
   if (p === 'slack' || p === 'teams' || p === 'discord') out.notifyPlatform = p;
   const v = meta[NOTIFY_AGENT_METADATA_KEYS.vaultId];

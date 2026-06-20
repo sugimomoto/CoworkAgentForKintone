@@ -7,7 +7,7 @@
 import {
   CREATE_ARTIFACT_TOOL,
   KINTONE_MCP_SERVER_NAME,
-  NOTIFY_MCP_SERVER_NAME,
+  buildNotifyToolset,
 } from '../bootstrap/agentToolDefs';
 import {
   DESTRUCTIVE_TOOL_NAMES,
@@ -62,14 +62,7 @@ export function buildAgentTools(
       })),
     },
     // 通知 (#13): send_notification を常設。Webhook 未登録なら Worker が「未設定」を返す。
-    {
-      type: 'mcp_toolset',
-      mcp_server_name: NOTIFY_MCP_SERVER_NAME,
-      default_config: {
-        enabled: true,
-        permission_policy: { type: 'always_allow' },
-      },
-    },
+    buildNotifyToolset(),
   ];
 }
 
