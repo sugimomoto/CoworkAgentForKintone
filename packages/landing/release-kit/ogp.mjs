@@ -1,33 +1,18 @@
 #!/usr/bin/env node
-// render.mjs — リリース告知 OGP カードを PNG 生成する
+// ogp.mjs — リリース告知 OGP カードを PNG 生成する (release-kit)
 //
 // 使い方:
-//   node packages/landing/ogp/render.mjs <spec.json> [--out <basePath>] [--no-2x]
+//   node packages/landing/release-kit/ogp.mjs <spec.json> [--out <basePath>] [--no-2x]
 //
-//   <spec.json>  : 下記スキーマの JSON (version / headline / sub / repo / features[])
+//   <spec.json>  : 統合スペック (README.md / examples 参照)。OGP は version / ogp.headline /
+//                  ogp.sub / repo / features[] を使う（features は ogpTitle/ogpDesc を優先）。
+//                  旧 OGP 専用スペック (トップレベル headline/sub) とも後方互換。
 //   --out        : 出力ベースパス (拡張子なし)。既定 packages/landing/public/images/ogp
 //                  → <base>.png (1200x630) と <base>@2x.png (2400x1260) を書き出す
 //   --no-2x      : 1x のみ生成
 //
-// spec スキーマ:
-//   {
-//     "version":  "v0.2.0",                       // amber バッジ
-//     "headline": "もっと<span class=\"hl\">自動</span>で、\nもっと“隣”に。",
-//     "sub":      "<b>通知・定期実行</b>に対応。\n頼んだ作業を、待たずに回せる。",
-//     "repo":     "github.com/sugimomoto/CoworkAgentForKintone",
-//     "features": [   // 2〜3 個。先頭が lead (teal 強調 + amber spark)
-//       { "icon":"bell", "title":"通知", "new":true, "lead":true,
-//         "desc":"レコードの変化を Slack・Teams・Discord へ自動で。",
-//         "chips":[ {"label":"Slack","color":"#4a154b"},
-//                   {"label":"Teams","color":"#5b5fc7"},
-//                   {"label":"Discord","color":"#5865f2"} ] },
-//       { "icon":"clock", "title":"定期実行", "desc":"集計やレポート作成をスケジュールで自動化。" },
-//       { "icon":"grid",  "title":"プリセットエージェント", "desc":"業務別エージェントをワンクリックで。" }
-//     ]
-//   }
-//
-// icon: "bell" | "clock" | "grid" のいずれか、または生 SVG 文字列 ("<svg ...>...</svg>", 26px/currentColor)。
-// headline / sub は生 HTML 可。`\n` は <br> に変換。highlight=<span class="hl">…</span>、sub の強調=<b>…</b>。
+// icon: "bell" | "clock" | "grid" | "shield" | "wrench" | "doc"、または生 SVG 文字列 (26px/currentColor)。
+// ogp.headline / ogp.sub は生 HTML 可。`\n` は <br> に変換。highlight=<span class="hl">…</span>、sub の強調=<b>…</b>。
 //
 // デザイン正本: ./reference/handoff.md と ./reference/ogp-update-1200x630.png。CSS は本ファイル内に固定で持つ。
 // Playwright は packages/plugin の devDependency (@playwright/test) を createRequire で解決して使う。
@@ -38,7 +23,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(__dirname, '../../..'); // .claude/skills/release-ogp → repo root
+const repoRoot = resolve(__dirname, '../../..'); // packages/landing/release-kit → repo root
 const require = createRequire(resolve(repoRoot, 'packages/plugin/package.json'));
 
 // ── args ──
@@ -54,8 +39,13 @@ const outBase =
 const skip2x = args.includes('--no-2x');
 
 const spec = JSON.parse(readFileSync(resolve(specPath), 'utf-8'));
-if (!spec.version || !spec.headline || !Array.isArray(spec.features) || spec.features.length < 2) {
-  console.error('[ogp] spec に version / headline / features(2〜3) が必要です');
+// 統合スペック対応: ogp.* を優先し、無ければトップレベル (旧 OGP 専用スペックと互換)。
+const ogp = spec.ogp ?? {};
+const headline = ogp.headline ?? spec.headline;
+const sub = ogp.sub ?? spec.sub;
+const repo = ogp.repo ?? spec.repo;
+if (!spec.version || !headline || !Array.isArray(spec.features) || spec.features.length < 2) {
+  console.error('[ogp] spec に version / (ogp.)headline / features(2〜3) が必要です');
   process.exit(1);
 }
 
@@ -67,17 +57,29 @@ const esc = (s) =>
     .replace(/>/g, '&gt;');
 const rich = (s) => String(s ?? '').replace(/\n/g, '<br>'); // headline/sub は生 HTML 許可
 
+// bell/clock/grid は CSS 図形、shield/wrench/doc は lucide 風インライン SVG (notes ページと共通)。
+const SVG_ICONS = {
+  shield: '<path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  wrench:
+    '<path d="M14.7 6.3a4 4 0 0 0-5.2 5L4 16.8 7.2 20l5.5-5.5a4 4 0 0 0 5-5.2l-2.6 2.6-2.1-.5-.5-2.1z"/>',
+  doc: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/>',
+};
+
 function iconHtml(icon) {
   if (icon === 'bell')
     return '<span class="i-bell"><span class="b"></span><span class="r"></span><span class="c"></span></span>';
   if (icon === 'clock') return '<span class="i-clock"></span>';
   if (icon === 'grid') return '<span class="i-grid"><b></b><b></b><b></b><b></b></span>';
   if (typeof icon === 'string' && icon.trim().startsWith('<svg')) return icon;
+  if (SVG_ICONS[icon])
+    return `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${SVG_ICONS[icon]}</svg>`;
   return '<span class="i-grid"><b></b><b></b><b></b><b></b></span>'; // fallback
 }
 
 function featHtml(f, i) {
   const lead = f.lead ?? i === 0;
+  const title = f.ogpTitle ?? f.title; // OGP は短い copy を優先
+  const desc = f.ogpDesc ?? f.desc;
   const badge = f.new ? ' <span class="new">NEW</span>' : '';
   const chips =
     f.chips && f.chips.length
@@ -89,8 +91,8 @@ function featHtml(f, i) {
   return `<div class="feat${lead ? ' lead' : ''}">
         <span class="ico">${iconHtml(f.icon)}</span>
         <div class="tx">
-          <div class="tt">${esc(f.title)}${badge}</div>
-          <div class="dd">${esc(f.desc)}</div>
+          <div class="tt">${esc(title)}${badge}</div>
+          <div class="dd">${esc(desc)}</div>
           ${chips}
         </div>
         ${spark}
@@ -233,11 +235,11 @@ const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
           <span class="whats"><span class="dot"></span>What's New</span>
           <span class="ver">${esc(spec.version)}</span>
         </div>
-        <h1 class="headline">${rich(spec.headline)}</h1>
-        ${spec.sub ? `<p class="sub">${rich(spec.sub)}</p>` : ''}
+        <h1 class="headline">${rich(headline)}</h1>
+        ${sub ? `<p class="sub">${rich(sub)}</p>` : ''}
         <div class="foot">
           <span class="lic">OSS / MIT</span>
-          ${spec.repo ? `<span class="repo">${esc(spec.repo)}</span>` : ''}
+          ${repo ? `<span class="repo">${esc(repo)}</span>` : ''}
         </div>
       </div>
       <div class="feats">

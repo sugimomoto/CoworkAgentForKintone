@@ -1,0 +1,56 @@
+{
+  "version": "v0.2.0",
+  "date": "2026-06-20",
+  "tag": "plugin-v0.2.0",
+  "url": "https://sugimomoto.github.io/CoworkAgentForKintone/releases/",
+  "repo": "github.com/sugimomoto/CoworkAgentForKintone",
+
+  "ogp": {
+    "headline": "もっと<span class=\"hl\">自動</span>で、\nもっと“隣”に。",
+    "sub": "<b>通知・定期実行</b>に対応。\n頼んだ作業を、待たずに回せるようになりました。"
+  },
+
+  "notes": {
+    "title": "通知と定期実行で、\"待たない\"運用へ。",
+    "summary": "Slack / Microsoft Teams / Discord への通知と、cron スケジュールによる定期実行に対応しました。あわせて内部の大規模リファクタと複数の不具合修正で土台を強化しています。"
+  },
+
+  "sns": {
+    "tagline": "kintone の隣に、AI コワーカーを。",
+    "hashtags": ["kintone", "AI", "OSS"]
+  },
+
+  "features": [
+    {
+      "icon": "bell",
+      "new": true,
+      "title": "通知（Slack / Teams / Discord）",
+      "desc": "エージェントごとに Incoming Webhook を 1 つ登録すると、集計結果やタスク完了をチャンネルへ自動送信。Webhook URL は Vault に秘匿保存されます。",
+      "ogpTitle": "通知",
+      "ogpDesc": "レコードの変化を Slack・Teams・Discord へ自動で。",
+      "snsText": "Slack / Teams / Discord への通知",
+      "chips": [
+        { "label": "Slack", "color": "#4a154b" },
+        { "label": "Teams", "color": "#5b5fc7" },
+        { "label": "Discord", "color": "#5865f2" }
+      ]
+    },
+    {
+      "icon": "clock",
+      "new": true,
+      "title": "定期実行（スケジュール）",
+      "desc": "対象エージェント・依頼内容・スケジュール（毎日／毎週／毎月）を登録すると、指定時刻に自動起動。実行結果は履歴から会話単位で確認できます。",
+      "ogpTitle": "定期実行",
+      "ogpDesc": "集計やレポート作成を、スケジュールで自動化。",
+      "snsText": "定期実行（スケジュール）"
+    },
+    {
+      "icon": "shield",
+      "title": "安定性・品質の向上",
+      "desc": "大規模リファクタに加え、ビルトインのクイックアクション／公開先の反映や、エージェント編集保存などの不具合を修正しました。",
+      "ogpTitle": "安定性の向上",
+      "ogpDesc": "大規模リファクタと複数の不具合修正で土台を強化。",
+      "snsText": "安定性の向上（リファクタ・不具合修正）"
+    }
+  ]
+}
