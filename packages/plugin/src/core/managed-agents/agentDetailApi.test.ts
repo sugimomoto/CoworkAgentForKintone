@@ -109,7 +109,33 @@ describe('applyAgentEdit (#40)', () => {
     expect(body.tools).toHaveLength(4);
     expect(body.tools[2].type).toBe('mcp_toolset');
     expect(body.tools[3]).toMatchObject({ type: 'mcp_toolset', mcp_server_name: 'notify' });
+    // mcp_servers を notify toolset と整合させて必ず送る (kintone + notify)。
+    // 送らないと「mcp_toolset references [notify] but no matching entry in mcp_servers」で 400。
+    const servers = body.mcp_servers as Array<{ name: string }>;
+    expect(servers.map((s) => s.name).sort()).toEqual(['kintone', 'notify']);
     expect(result.version).toBe(2);
+  });
+
+  it('mcp_servers を送らず notify toolset だけ参照する不整合を起こさない (#13 回帰)', async () => {
+    // notify server を持たない (旧) Agent を編集しても、mcp_servers に notify を含めて送る
+    const legacyAgent = {
+      ...EXISTING_BUSINESS,
+      metadata: { ...EXISTING_BUSINESS.metadata, purpose: 'custom' }, // notifyKey 無し custom
+      mcp_servers: [{ type: 'url', name: 'kintone', url: 'https://w.example.com/mcp/tenant.cybozu.com' }],
+    };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(legacyAgent))
+      .mockResolvedValueOnce(jsonResponse({ ...legacyAgent, version: 2 }));
+
+    await applyAgentEdit('agent_legacy', DRAFT);
+
+    const body = JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string);
+    const servers = body.mcp_servers as Array<{ name: string; url: string }>;
+    expect(servers.map((s) => s.name).sort()).toEqual(['kintone', 'notify']);
+    // custom で notifyKey 未採番 → 新規生成して metadata に永続化し、同じ key を notify URL に使う
+    expect(typeof body.metadata.notifyKey).toBe('string');
+    expect(body.metadata.notifyKey.length).toBeGreaterThan(0);
+    expect(servers.find((s) => s.name === 'notify')!.url).toContain(body.metadata.notifyKey);
   });
 });
 

@@ -53,6 +53,26 @@ export function isValidNotifyKey(key: string): boolean {
   return NOTIFY_KEY_RE.test(key);
 }
 
+/**
+ * Agent metadata から notifyKey を解決する (#13)。
+ *   - metadata.notifyKey があればそれ
+ *   - built-in (purpose != custom) は purpose から導出
+ *   - custom で未採番なら新規生成 → generated=true (呼び出し側で metadata 永続化が必要)
+ * notify mcp_server / toolset は全 Agent 常設なので、編集保存時も常に整合する notifyKey が要る。
+ */
+export function resolveNotifyKey(meta: Record<string, string>): {
+  notifyKey: string;
+  generated: boolean;
+} {
+  const existing = meta[NOTIFY_AGENT_METADATA_KEYS.notifyKey];
+  if (existing) return { notifyKey: existing, generated: false };
+  const purpose = meta.purpose;
+  if (purpose && purpose !== 'custom') {
+    return { notifyKey: notifyKeyForBuiltIn(purpose), generated: false };
+  }
+  return { notifyKey: generateNotifyKey(), generated: true };
+}
+
 export interface RegisterNotifyArgs {
   pluginId: string;
   workerUrl: string;
