@@ -116,7 +116,8 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
       }
 
       try {
-        const sid = await ensureSession();
+        // #52: 初回メッセージを渡し、履歴で識別しやすいタイトルを付ける
+        const sid = await ensureSession(text);
         // 添付があれば content block 配列、なければ string を送信
         if (filesSnapshot.length > 0) {
           const content = buildUserMessageContent(text, filesSnapshot);
@@ -138,7 +139,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
       const text = pendingText;
       setPendingText(null);
       if (text) {
-        const sid = await ensureSession();
+        const sid = await ensureSession(text);
         await postUserMessage(sid, text);
       }
     } catch {
