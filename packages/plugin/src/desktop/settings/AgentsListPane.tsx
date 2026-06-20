@@ -25,6 +25,8 @@ import { useChatStore } from '../../store/chatStore';
 import { AgentIcon } from '../components/AgentIcon';
 import { ModelBadge } from '../components/ModelBadge';
 
+import { NotifyIndicator } from './notify/NotifySection';
+
 import type { AgentRecord } from '../../core/bootstrap/agentTypes';
 
 export interface AgentsListPaneProps {
@@ -159,6 +161,8 @@ function AgentRow({ agent, onToggleVisibility, onEdit }: AgentRowProps): JSX.Ele
               既定
             </span>
           )}
+          {/* 通知先 Webhook 登録済の視覚インジケータ (#13) */}
+          {agent.notifyPlatform && <NotifyIndicator platform={agent.notifyPlatform} mini />}
         </div>
         <div className="text-[11px] leading-[1.4] text-muted">{agent.description}</div>
         {/* メタ行: skill/tool/variant は built-in のみ。公開先サマリは全エージェント (Custom 含む) で表示 */}

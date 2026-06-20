@@ -16,6 +16,7 @@ import { resolveBundledSkillIds } from '../skills/resolveBundledSkillIds';
 
 import { agentToRecord as customAgentToRecord } from './agentRecord';
 import { BUILTIN_AGENT_SPECS } from './builtInAgents';
+import { readNotifyRecordFields } from './notifyRegistration';
 import { resolveDefaultAgent } from './resolveAgent';
 import { listCustomAgents, resolveBuiltInAgents } from './resolveBuiltInAgents';
 import { resolveBootstrapEnvironment } from './resolveEnvironment';
@@ -205,5 +206,6 @@ function agentToRecord(
     allowedUsers: [],
     allowedGroups: [],
     allowedOrganizations: [],
+    ...readNotifyRecordFields(meta),
   };
 }

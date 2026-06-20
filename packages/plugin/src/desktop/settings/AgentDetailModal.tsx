@@ -14,8 +14,10 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { buildDraftFromAgent, buildDraftFromSpec, isBuiltInPurpose } from './agent-detail/buildDraft';
 import { DraftForm } from './agent-detail/DraftForm';
 import { useAgentModalMode } from './agent-detail/useAgentModalMode';
+import { NotifySection } from './notify/NotifySection';
 
 import type { AgentDetailModalMode, AvailableSkill } from './agent-detail/types';
+import type { WebhookConfig } from './notify/webhookPlatform';
 import type { AgentRecord } from '../../core/bootstrap/agentTypes';
 import type { AgentEditDraft } from '../../core/managed-agents/agentDetailApi';
 import type { Agent } from '../../core/managed-agents/types';
@@ -33,8 +35,14 @@ export interface AgentDetailModalProps {
    * - edit モード: 2nd 引数 (sourceAgent) は mode.agent と一致する
    * - create モード: 2nd 引数は dropdown で選択された雛形 AgentRecord (base)
    * - create-from-proposal モード: 2nd 引数は fallbackTemplates から選んだ Designer 等の base
+   * - 3rd 引数 webhook: 通知先 Webhook の working copy (#13)。null=未設定/解除、
+   *   {platform,url}=新規/上書き、{platform}(url 無し)=変更なし。親が登録/解除を行う。
    */
-  onSave: (draft: AgentEditDraft, sourceAgent: AgentRecord) => Promise<void>;
+  onSave: (
+    draft: AgentEditDraft,
+    sourceAgent: AgentRecord,
+    webhook: WebhookConfig | null,
+  ) => Promise<void>;
   /** 削除ハンドラ — custom Agent の編集モードのみ表示 */
   onDelete?: (agent: AgentRecord) => Promise<void>;
   /** 描画用 skill リスト (Anthropic 製 + Plugin 同梱 + custom 同期済) */
@@ -62,6 +70,8 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
   } = useAgentModalMode(props.mode, fallbackTemplates);
 
   const [draft, setDraft] = useState<AgentEditDraft | null>(null);
+  // 通知先 Webhook の working copy (#13)。既存 Agent が登録済なら伏字 ({platform}) で初期化。
+  const [webhook, setWebhook] = useState<WebhookConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -105,6 +115,11 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
     };
   }, [sourceAgent, fetchAgent, availableSkills, localMode]);
 
+  // 通知 working copy の初期化 (#13)。編集中の Agent が登録済なら伏字、それ以外は未設定。
+  useEffect(() => {
+    setWebhook(editAgent?.notifyPlatform ? { platform: editAgent.notifyPlatform } : null);
+  }, [editAgent]);
+
   /** 「雛形から作り直す」: create-from-proposal → 通常の create モードに切替 (draft 破棄) */
   const handleRebuildFromTemplate = useCallback(() => {
     const templates = fallbackTemplates ?? [];
@@ -138,12 +153,12 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await onSave(draft, sourceAgent);
+      await onSave(draft, sourceAgent, webhook);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : '保存に失敗しました');
       setSubmitting(false);
     }
-  }, [draft, sourceAgent, onSave]);
+  }, [draft, sourceAgent, onSave, webhook]);
 
   const canSubmit =
     !submitting &&
@@ -252,12 +267,18 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
             </div>
           )}
           {!loading && !fetchError && draft && (
-            <DraftForm
-              draft={draft}
-              setDraft={setDraft}
-              availableSkills={availableSkills}
-              source={editAgent?.source ?? 'custom'}
-            />
+            <>
+              <DraftForm
+                draft={draft}
+                setDraft={setDraft}
+                availableSkills={availableSkills}
+                source={editAgent?.source ?? 'custom'}
+              />
+              {/* 通知先 Webhook (#13) — 公開先(ACL)の後・フッタ直前。新規作成時は作成後に登録される。 */}
+              <div className="mt-[16px] border-t border-border pt-[14px]">
+                <NotifySection value={webhook} onChange={setWebhook} />
+              </div>
+            </>
           )}
         </div>
 

@@ -11,6 +11,7 @@ import {
   META_KEY_QUICK_ACTIONS,
 } from './agentTypes';
 import { BUILTIN_AGENT_SPECS } from './builtInAgents';
+import { readNotifyRecordFields } from './notifyRegistration';
 
 import type {
   AgentColor,
@@ -61,6 +62,7 @@ export function agentToRecord(agent: Agent): AgentRecord {
       allowedUsers: [],
       allowedGroups: [],
       allowedOrganizations: [],
+      ...readNotifyRecordFields(meta),
     };
   }
 
@@ -85,6 +87,7 @@ export function agentToRecord(agent: Agent): AgentRecord {
     allowedUsers: parseJsonStringArray(meta[META_KEY_ALLOWED_USERS]),
     allowedGroups: parseJsonStringArray(meta[META_KEY_ALLOWED_GROUPS]),
     allowedOrganizations: parseJsonStringArray(meta[META_KEY_ALLOWED_ORGANIZATIONS]),
+    ...readNotifyRecordFields(meta),
   };
 }
 

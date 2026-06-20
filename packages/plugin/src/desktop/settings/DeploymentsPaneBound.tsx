@@ -103,13 +103,15 @@ export function DeploymentsPaneBound({ onOpenSession }: DeploymentsPaneBoundProp
 
   const handleSave = useCallback(
     async (draft: DeploymentDraft, mode: DeploymentModalMode) => {
+      // 通知 (#13): デプロイ対象 Agent に Webhook が登録済なら通知 Vault も vault_ids に含める。
+      const notifyVaultId = agents.find((a) => a.id === draft.agentId)?.notifyVaultId ?? null;
       if (mode.kind === 'edit') {
         // vault は「自分の deployment を編集するとき」だけ更新 (admin が他人の vault を
         // 自分のものに差し替える事故を防ぐ)。
         const own = mode.deployment.owner === currentUser;
         await updateDeployment(
           mode.deployment.id,
-          draftToUpdateParams(draft, own ? { vaultId } : undefined),
+          draftToUpdateParams(draft, own ? { vaultId, notifyVaultId } : undefined),
         );
       } else {
         if (!vaultId) {
@@ -119,13 +121,18 @@ export function DeploymentsPaneBound({ onOpenSession }: DeploymentsPaneBoundProp
         }
         const env = await resolveBootstrapEnvironment();
         await createDeployment(
-          draftToCreateParams(draft, { environmentId: env.id, owner: currentUser, vaultId }),
+          draftToCreateParams(draft, {
+            environmentId: env.id,
+            owner: currentUser,
+            vaultId,
+            notifyVaultId,
+          }),
         );
       }
       setModal(null);
       await reload();
     },
-    [currentUser, vaultId, reload],
+    [agents, currentUser, vaultId, reload],
   );
 
   const handleRun = useCallback(async (d: DeploymentView) => {

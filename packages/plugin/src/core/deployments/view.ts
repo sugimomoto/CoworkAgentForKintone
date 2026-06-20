@@ -119,10 +119,25 @@ export interface DeploymentDraft {
   schedule: ScheduleValue;
 }
 
+/** vaultId + notifyVaultId (#13) を vault_ids 配列に畳む。両方 null なら undefined。 */
+function buildVaultIds(
+  vaultId?: string | null,
+  notifyVaultId?: string | null,
+): string[] | undefined {
+  const ids = [vaultId, notifyVaultId].filter((v): v is string => Boolean(v));
+  return ids.length > 0 ? ids : undefined;
+}
+
 export function draftToCreateParams(
   draft: DeploymentDraft,
-  ctx: { environmentId: string; owner: string; vaultId?: string | null },
+  ctx: {
+    environmentId: string;
+    owner: string;
+    vaultId?: string | null;
+    notifyVaultId?: string | null;
+  },
 ): CreateDeploymentParams {
+  const vaultIds = buildVaultIds(ctx.vaultId, ctx.notifyVaultId);
   return {
     name: draft.name.trim(),
     agent: draft.agentId,
@@ -135,8 +150,9 @@ export function draftToCreateParams(
       expression: buildCron(draft.schedule),
       timezone: draft.schedule.tz,
     },
-    // MCP 認証情報の Vault。scheduled run の MCP server 初期化に必須 (#81)
-    ...(ctx.vaultId ? { vault_ids: [ctx.vaultId] } : {}),
+    // MCP 認証情報の Vault。scheduled run の MCP server 初期化に必須 (#81)。
+    // 通知 Webhook 登録済 Agent なら通知 Vault も加える (#13)。
+    ...(vaultIds ? { vault_ids: vaultIds } : {}),
     metadata: { [META_KEY_OWNER]: ctx.owner },
   };
 }
@@ -145,8 +161,9 @@ export function draftToCreateParams(
  *  vaultId が渡されたら vault_ids も更新 (旧 vault 未設定の deployment を修復できる)。 */
 export function draftToUpdateParams(
   draft: DeploymentDraft,
-  ctx?: { vaultId?: string | null },
+  ctx?: { vaultId?: string | null; notifyVaultId?: string | null },
 ): UpdateDeploymentParams {
+  const vaultIds = buildVaultIds(ctx?.vaultId, ctx?.notifyVaultId);
   return {
     name: draft.name.trim(),
     agent: draft.agentId,
@@ -158,7 +175,7 @@ export function draftToUpdateParams(
       expression: buildCron(draft.schedule),
       timezone: draft.schedule.tz,
     },
-    ...(ctx?.vaultId ? { vault_ids: [ctx.vaultId] } : {}),
+    ...(vaultIds ? { vault_ids: vaultIds } : {}),
   };
 }
 

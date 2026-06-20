@@ -143,17 +143,46 @@ export const CREATE_ARTIFACT_TOOL = {
   },
 } as const;
 
-/** kintone MCP サーバー定義を組み立てる (`<workerUrl>/mcp/<kintoneDomain>`)。 */
+/** 通知 MCP server の name (mcp_servers と mcp_toolset で参照される識別子, #13) */
+export const NOTIFY_MCP_SERVER_NAME = 'notify';
+
+/** send_notification ツール名 (Worker 側 SEND_NOTIFICATION_TOOL と同期, #13) */
+export const NOTIFY_TOOL_NAME = 'send_notification';
+
+/**
+ * 通知 MCP サーバーの URL を組み立てる (`<workerUrl>/notify/<kintoneDomain>/<notifyKey>`)。
+ * static_bearer credential の `mcp_server_url` と **完全一致** させる必要がある
+ * (一致しないと Anthropic が Bearer を注入しない)。
+ */
+export function buildNotifyMcpUrl(
+  workerUrl: string,
+  kintoneDomain: string,
+  notifyKey: string,
+): string {
+  return `${workerUrl.replace(/\/$/, '')}/notify/${kintoneDomain}/${notifyKey}`;
+}
+
+/** kintone MCP サーバー定義を組み立てる (`<workerUrl>/mcp/<kintoneDomain>`)。
+ *  notifyKey 指定時は通知 MCP サーバー (`/notify/<domain>/<key>`) も併せて公開する (#13)。 */
 export function buildMcpServers(
   workerUrl: string,
   kintoneDomain: string,
+  notifyKey?: string,
 ): Array<Record<string, unknown>> {
   const url = `${workerUrl.replace(/\/$/, '')}/mcp/${kintoneDomain}`;
-  return [
+  const servers: Array<Record<string, unknown>> = [
     {
       type: 'url',
       name: KINTONE_MCP_SERVER_NAME,
       url,
     },
   ];
+  if (notifyKey) {
+    servers.push({
+      type: 'url',
+      name: NOTIFY_MCP_SERVER_NAME,
+      url: buildNotifyMcpUrl(workerUrl, kintoneDomain, notifyKey),
+    });
+  }
+  return servers;
 }
