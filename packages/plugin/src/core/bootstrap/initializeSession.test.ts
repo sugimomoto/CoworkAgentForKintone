@@ -81,6 +81,19 @@ describe('initializeSession — workerUrl あり (rich path)', () => {
     expect(r.currentUserAccess).toEqual({ code: 'sato', groups: [], organizations: [] });
   });
 
+  it('built-in の編集済 quickActions (metadata) を bootstrap でも反映する (#75)', async () => {
+    mockBuiltIn.mockResolvedValue({
+      ...BUILTIN_SET,
+      business: makeAgent({
+        id: 'a_biz',
+        metadata: { purpose: 'business', quickActions: JSON.stringify(['編集後A', '編集後B']) },
+      }),
+    });
+    const r = await initializeSession({ pluginId: 'plg_1' });
+    const biz = r.builtInAgents!.find((a) => a.id === 'a_biz')!;
+    expect(biz.quickActions).toEqual(['編集後A', '編集後B']);
+  });
+
   it('preferredAgentId が候補に含まれていればそれを初期選択する', async () => {
     const r = await initializeSession({ pluginId: 'plg_1', preferredAgentId: 'a_sonnet' });
     expect(r.agentId).toBe('a_sonnet');

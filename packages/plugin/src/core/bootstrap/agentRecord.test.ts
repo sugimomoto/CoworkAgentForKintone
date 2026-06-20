@@ -1,7 +1,8 @@
 // agentRecord.ts のテスト
 //
 // agentToRecord による Anthropic Agent → AgentRecord 変換、特に quickActions の
-// 復元 (built-in は spec カタログ / custom は metadata.quickActions JSON) を検証。
+// 復元を検証。built-in / custom とも metadata.quickActions を優先し、built-in は
+// 未設定時のみ spec カタログにフォールバックする (#75)。
 
 import { describe, expect, it } from 'vitest';
 
@@ -26,7 +27,7 @@ function makeAgent(overrides: Partial<Agent> & { metadata?: Record<string, strin
 
 describe('agentToRecord — quickActions の復元', () => {
   describe('built-in agent (metadata.purpose=business/customizer-*)', () => {
-    it('purpose=business の場合、spec.quickActions を継承する', () => {
+    it('metadata.quickActions が未設定なら spec.quickActions にフォールバック (business)', () => {
       const record = agentToRecord(
         makeAgent({ metadata: { purpose: 'business' } }),
       );
@@ -52,17 +53,18 @@ describe('agentToRecord — quickActions の復元', () => {
       );
     });
 
-    it('built-in は metadata.quickActions を無視する (spec が source-of-truth)', () => {
+    it('built-in でも metadata.quickActions があれば優先する (#75)', () => {
       const record = agentToRecord(
         makeAgent({
           metadata: {
             purpose: 'business',
-            quickActions: JSON.stringify(['IGNORED']),
+            quickActions: JSON.stringify(['編集後アクション1', '編集後アクション2']),
           },
         }),
       );
-      expect(record.quickActions).toEqual(BUILTIN_AGENT_SPECS.business.quickActions);
-      expect(record.quickActions).not.toContain('IGNORED');
+      expect(record.quickActions).toEqual(['編集後アクション1', '編集後アクション2']);
+      // spec 値には戻らない
+      expect(record.quickActions).not.toEqual(BUILTIN_AGENT_SPECS.business.quickActions);
     });
   });
 
@@ -133,16 +135,23 @@ describe('agentToRecord — quickActions の復元', () => {
   });
 
   describe('#47 公開先 ACL (allowedUsers / allowedGroups / allowedOrganizations)', () => {
-    it('built-in は常に 3 配列が空', () => {
+    it('built-in も metadata から ACL を復元する (#75: 旧仕様では無視されていた)', () => {
       const record = agentToRecord(
         makeAgent({
           metadata: {
             purpose: 'business',
-            // 仮に metadata に入っていても built-in は無視 (spec が source-of-truth)
-            allowedUsers: JSON.stringify(['IGNORED']),
+            allowedUsers: JSON.stringify(['sato']),
+            allowedGroups: JSON.stringify(['sales-dept']),
           },
         }),
       );
+      expect(record.allowedUsers).toEqual(['sato']);
+      expect(record.allowedGroups).toEqual(['sales-dept']);
+      expect(record.allowedOrganizations).toEqual([]);
+    });
+
+    it('built-in も ACL 未設定なら全員公開 (3 配列が空)', () => {
+      const record = agentToRecord(makeAgent({ metadata: { purpose: 'business' } }));
       expect(record.allowedUsers).toEqual([]);
       expect(record.allowedGroups).toEqual([]);
       expect(record.allowedOrganizations).toEqual([]);
