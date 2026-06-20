@@ -18,9 +18,14 @@ describe('detectPlatform', () => {
   it('スキーム無しでも判定', () => {
     expect(detectPlatform('hooks.slack.com/services/x')).toBe('slack');
   });
+  it('Discord', () => {
+    expect(detectPlatform('https://discord.com/api/webhooks/1/abc')).toBe('discord');
+    expect(detectPlatform('https://discordapp.com/api/webhooks/1/abc')).toBe('discord');
+    expect(detectPlatform('https://ptb.discord.com/api/webhooks/1/abc')).toBe('discord');
+  });
   it('対応外ホストは null', () => {
     expect(detectPlatform('https://example.com/webhook')).toBeNull();
-    expect(detectPlatform('https://discord.com/api/webhooks/x')).toBeNull();
+    expect(detectPlatform('https://example.org/api/webhooks/x')).toBeNull();
   });
   it('空 / 不正は null', () => {
     expect(detectPlatform('')).toBeNull();

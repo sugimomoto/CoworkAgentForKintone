@@ -125,6 +125,10 @@ export function useSession(): UseSessionResult {
     // 無ければ bootstrap 時の ctx.agentId にフォールバック。
     const activeAgentId = state.currentAgentId ?? ctx.agentId;
 
+    // 通知 (#13): アクティブ Agent に Webhook が登録済なら通知 Vault を vault_ids に加える。
+    const activeAgent = state.builtInAgents.find((a) => a.id === activeAgentId);
+    const notifyVaultId = activeAgent?.notifyVaultId;
+
     const p = (async (): Promise<string> => {
       try {
         const session = await createUserSession({
@@ -133,6 +137,7 @@ export function useSession(): UseSessionResult {
           kintoneDomain: ctx.kintoneDomain,
           kintoneUserCode: ctx.kintoneUserCode,
           ...(vaultId ? { vaultId } : {}),
+          ...(notifyVaultId ? { notifyVaultId } : {}),
           ...(firstMessage ? { firstMessage } : {}),
         });
         setSessionId(session.id);

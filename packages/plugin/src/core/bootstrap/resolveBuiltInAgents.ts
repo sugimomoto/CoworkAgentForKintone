@@ -23,9 +23,11 @@ import {
 import {
   CREATE_ARTIFACT_TOOL,
   KINTONE_MCP_SERVER_NAME,
+  NOTIFY_MCP_SERVER_NAME,
   PROPOSE_AGENT_TOOL,
   buildMcpServers,
 } from './agentToolDefs';
+import { notifyKeyForBuiltIn } from './notifyRegistration';
 import {
   BUILTIN_AGENT_SPECS,
   KINTONE_TOOL_NAMES as BUILTIN_KINTONE_TOOL_NAMES,
@@ -129,7 +131,7 @@ async function doResolveBuiltIn(
   // 1. 既存 Agent を探索 → 見つかれば tool ドリフトを reconcile して返す (ID 保持)
   const existing = await findDefaultAgents(filter);
   if (existing.length > 0) {
-    return reconcileBuiltInAgentTools(pickOldest(existing), purpose, spec, toolsVersion);
+    return reconcileBuiltInAgentTools(pickOldest(existing), purpose, spec, toolsVersion, options);
   }
 
   // 2. 無ければ作成
@@ -165,7 +167,11 @@ async function doResolveBuiltIn(
     tools: buildBuiltInAgentTools(purpose, spec),
     skills,
     metadata: fullMetadata,
-    mcp_servers: buildMcpServers(options.workerUrl, options.kintoneDomain),
+    mcp_servers: buildMcpServers(
+      options.workerUrl,
+      options.kintoneDomain,
+      notifyKeyForBuiltIn(purpose),
+    ),
   };
 
   const created = await createAgent(createParams as unknown as Parameters<typeof createAgent>[0]);
@@ -220,8 +226,21 @@ function buildBuiltInAgentTools(
         },
       })),
     },
+    // 通知 (#13): send_notification を常設。Webhook 未登録の Agent では Worker が
+    // 「未設定」を返すだけなので無害。登録は Vault credential + metadata 側で行う。
+    NOTIFY_TOOLSET,
   ];
 }
+
+/** 通知 MCP toolset (send_notification)。全 Agent に常設する (#13)。 */
+const NOTIFY_TOOLSET: Record<string, unknown> = {
+  type: 'mcp_toolset',
+  mcp_server_name: NOTIFY_MCP_SERVER_NAME,
+  default_config: {
+    enabled: true,
+    permission_policy: { type: 'always_allow' },
+  },
+};
 
 /**
  * 既存 Built-in Agent の tool 構成を現行 spec に追従させる (#86 ツールドリフト修復)。
@@ -239,18 +258,27 @@ async function reconcileBuiltInAgentTools(
   purpose: BuiltInPurpose,
   spec: BuiltInAgentSpec,
   toolsVersion: string,
+  options: ResolveBuiltInAgentsOptions,
 ): Promise<Agent> {
   if (agent.metadata['toolsVersion'] === toolsVersion) {
     return agent; // 最新 — 何もしない (通常パス)
   }
 
   const tools = buildBuiltInAgentTools(purpose, spec);
+  // 通知 toolset (#13) は mcp_servers 側に notify サーバーが無いと参照できないため、
+  // tools と一緒に mcp_servers も現行構成へ追従させる (notifyKey=purpose で安定)。
+  const mcpServers = buildMcpServers(
+    options.workerUrl,
+    options.kintoneDomain,
+    notifyKeyForBuiltIn(purpose),
+  );
   let version = agent.version;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       return await updateAgent(agent.id, {
         version,
         tools,
+        mcp_servers: mcpServers,
         metadata: { ...agent.metadata, toolsVersion },
       });
     } catch (err) {
@@ -283,6 +311,7 @@ function computeToolsVersion(purpose: BuiltInPurpose, spec: BuiltInAgentSpec): s
     'create_artifact',
     ...(purpose === 'customizer-opus' ? ['propose_agent'] : []),
     `mcp:${mcpSig}`,
+    'notify', // #13: send_notification 常設 → 既存 Agent を reconcile で追従させる
   ];
   return `ts_${djb2(parts.join('|'))}`;
 }

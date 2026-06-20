@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildSlackPayload, buildTeamsPayload } from '../../src/notify/format';
+import { buildDiscordPayload, buildSlackPayload, buildTeamsPayload } from '../../src/notify/format';
 
 const MSG = {
   title: '顧客別売上集計 完了',
@@ -21,6 +21,23 @@ describe('buildSlackPayload', () => {
   it('fields/link 無しでも header+section', () => {
     const p = buildSlackPayload({ title: 't', text: 'x' }) as { blocks: unknown[] };
     expect(p.blocks).toHaveLength(2);
+  });
+});
+
+describe('buildDiscordPayload', () => {
+  it('embeds に title/description/fields をまとめ、link は description 末尾に添える', () => {
+    const p = buildDiscordPayload(MSG) as {
+      embeds: Array<{ title: string; description: string; fields?: Array<{ name: string }> }>;
+    };
+    expect(p.embeds).toHaveLength(1);
+    expect(p.embeds[0]!.title).toBe(MSG.title);
+    expect(p.embeds[0]!.fields).toHaveLength(1);
+    expect(p.embeds[0]!.description).toContain(MSG.link.label);
+    expect(p.embeds[0]!.description).toContain(MSG.link.url);
+  });
+  it('fields/link 無しでも embed 1 つ', () => {
+    const p = buildDiscordPayload({ title: 't', text: 'x' }) as { embeds: unknown[] };
+    expect(p.embeds).toHaveLength(1);
   });
 });
 

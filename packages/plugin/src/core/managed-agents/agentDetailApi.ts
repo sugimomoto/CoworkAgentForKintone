@@ -8,7 +8,14 @@
 // metadata の構造は resolveAgent.ts のものを踏襲し、Anthropic Workspace 上で
 // find filter (purpose / workerUrl / kintoneDomain 等) が壊れないようにする。
 
-import { KINTONE_MCP_SERVER_NAME } from '../bootstrap/agentToolDefs';
+import { KINTONE_MCP_SERVER_NAME, buildMcpServers } from '../bootstrap/agentToolDefs';
+import {
+  NOTIFY_AGENT_METADATA_KEYS,
+  generateNotifyKey,
+  notifyKeyForBuiltIn,
+  registerNotifyWebhook,
+  unregisterNotifyWebhook,
+} from '../bootstrap/notifyRegistration';
 import {
   META_KEY_ALLOWED_GROUPS,
   META_KEY_ALLOWED_ORGANIZATIONS,
@@ -17,6 +24,7 @@ import {
 } from '../bootstrap/agentTypes';
 import { AGENT_TYPE, METADATA_SOURCE } from '../constants';
 
+import { ApiError } from './client';
 import { buildAgentTools } from './buildAgentTools';
 import {
   archiveAgent as archiveAgentResource,
@@ -160,8 +168,22 @@ export async function createCustomAgentFrom(args: {
     ...(baseMeta.kintoneDomain ? { kintoneDomain: baseMeta.kintoneDomain } : {}),
     ...(baseMeta.promptVersion ? { promptVersion: baseMeta.promptVersion } : {}),
   };
+  // 通知 (#13): Custom Agent は作成時に notifyKey(UUID) を採番し metadata に固定する。
+  // (agent_id 未確定でも /notify/<domain>/<key> を確定できる = chicken-and-egg 回避)
+  const notifyKey = generateNotifyKey();
+
   // Custom は variantGroup なし (built-in 専用) — base からも明示的に拾わない。
-  const metadata = mergeMetadataPatch(carriedBase, args.draft);
+  const metadata = {
+    ...mergeMetadataPatch(carriedBase, args.draft),
+    [NOTIFY_AGENT_METADATA_KEYS.notifyKey]: notifyKey,
+  };
+
+  // workerUrl/kintoneDomain が揃えば notify サーバー込みで mcp_servers を再構築。
+  // 揃わない (旧 base 等) 場合は従来通り kintone のみ。
+  const mcpServers =
+    baseMeta.workerUrl && baseMeta.kintoneDomain
+      ? buildMcpServers(baseMeta.workerUrl, baseMeta.kintoneDomain, notifyKey)
+      : extractMcpServers(base);
 
   return createAgent({
     model: base.model,
@@ -170,7 +192,7 @@ export async function createCustomAgentFrom(args: {
     system: args.draft.systemPrompt,
     tools: buildAgentTools(args.draft.enabledTools),
     skills: buildAgentSkills(args.draft),
-    mcp_servers: extractMcpServers(base),
+    mcp_servers: mcpServers,
     metadata,
   });
 }
@@ -182,6 +204,98 @@ export async function createCustomAgentFrom(args: {
  */
 export async function archiveAgentById(agentId: string): Promise<void> {
   await archiveAgentResource(agentId);
+}
+
+export interface WebhookInput {
+  platform: 'slack' | 'teams' | 'discord';
+  /** 新規/上書き保存時のみ。伏字 (変更なし) のときは undefined。 */
+  url?: string;
+}
+
+/**
+ * AgentDetailModal 保存時に、Agent の Webhook 登録状態を working copy (webhook) に合わせる (#13)。
+ *   - webhook=null かつ登録済 → credential を archive し metadata をクリア
+ *   - webhook.url あり        → static_bearer を upsert し metadata を更新 (新規/上書き)
+ *   - webhook.url 無し (伏字)  → 変更なし (no-op)
+ * 戻り値は metadata 更新後の Agent (UI 再描画用)。kintoneDomain / notifyKey は agent.metadata から読む。
+ * webhookUrl は registerNotifyWebhook に渡すだけで、この関数も metadata にも一切残さない。
+ */
+export async function reconcileAgentWebhook(
+  agent: Agent,
+  webhook: WebhookInput | null,
+  ctx: { pluginId: string; workerUrl: string },
+): Promise<Agent> {
+  const meta = (agent.metadata ?? {}) as Record<string, string>;
+  const credentialId = meta[NOTIFY_AGENT_METADATA_KEYS.credentialId];
+  const vaultId = meta[NOTIFY_AGENT_METADATA_KEYS.vaultId];
+
+  // 解除
+  if (webhook === null) {
+    if (!credentialId || !vaultId) return agent; // もともと未登録
+    await unregisterNotifyWebhook({ vaultId, credentialId });
+    return patchAgentMetadata(agent, {
+      [NOTIFY_AGENT_METADATA_KEYS.platform]: null,
+      [NOTIFY_AGENT_METADATA_KEYS.credentialId]: null,
+      [NOTIFY_AGENT_METADATA_KEYS.vaultId]: null,
+    });
+  }
+
+  // 伏字のまま (変更なし)
+  if (webhook.url === undefined) return agent;
+
+  // 新規/上書き登録。
+  // notifyKey: Custom は metadata.notifyKey (作成時に採番)、Built-in は purpose から導出。
+  const kintoneDomain = meta.kintoneDomain;
+  const purpose = meta.purpose;
+  const notifyKey =
+    meta[NOTIFY_AGENT_METADATA_KEYS.notifyKey] ??
+    (purpose && purpose !== 'custom' ? notifyKeyForBuiltIn(purpose) : undefined);
+  if (!kintoneDomain || !notifyKey) {
+    throw new Error('この Agent は通知に対応していません (kintoneDomain / notifyKey 未設定)');
+  }
+  const result = await registerNotifyWebhook({
+    pluginId: ctx.pluginId,
+    workerUrl: ctx.workerUrl,
+    kintoneDomain,
+    notifyKey,
+    webhookUrl: webhook.url,
+    platform: webhook.platform,
+    ...(vaultId ? { existingVaultId: vaultId } : {}),
+    ...(credentialId ? { existingCredentialId: credentialId } : {}),
+  });
+  return patchAgentMetadata(agent, {
+    [NOTIFY_AGENT_METADATA_KEYS.platform]: result.notifyPlatform,
+    [NOTIFY_AGENT_METADATA_KEYS.credentialId]: result.notifyCredentialId,
+    [NOTIFY_AGENT_METADATA_KEYS.vaultId]: result.notifyVaultId,
+  });
+}
+
+/** metadata の指定キーを set (string) / clear (null) して updateAgent。409 は 1 度だけ retry。 */
+async function patchAgentMetadata(
+  agent: Agent,
+  patch: Record<string, string | null>,
+): Promise<Agent> {
+  const build = (base: Record<string, string>): Record<string, string> => {
+    const next = { ...base };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === null) delete next[k];
+      else next[k] = v;
+    }
+    return next;
+  };
+  let version = agent.version;
+  let baseMeta = (agent.metadata ?? {}) as Record<string, string>;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await updateAgent(agent.id, { version, metadata: build(baseMeta) });
+    } catch (err) {
+      if (!(err instanceof ApiError) || err.status !== 409 || attempt === 1) throw err;
+      const fresh = await retrieveAgent(agent.id);
+      version = fresh.version;
+      baseMeta = (fresh.metadata ?? {}) as Record<string, string>;
+    }
+  }
+  return agent; // 到達しない
 }
 
 /**

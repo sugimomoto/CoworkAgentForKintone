@@ -292,4 +292,79 @@ describe('handleCredentialsUpsert', () => {
       expect(json.body).toContain('[REDACTED]');
     });
   });
+
+  describe('static_bearer (通知 Webhook, #13)', () => {
+    const NOTIFY_URL = 'https://example.com/notify/tenant.cybozu.com/business';
+    const WEBHOOK = 'https://hooks.slack.com/services/T0/B0/SECRETPART';
+
+    it('Create: auth.type=static_bearer + token + mcp_server_url を転送', async () => {
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'vcrd_n', vault_id: 'vlt_n' }), { status: 200 }),
+      );
+      const req = makeRequest({
+        body: { vaultId: 'vlt_n', type: 'static_bearer', token: WEBHOOK, mcpServerUrl: NOTIFY_URL },
+        anthropicApiKey: 'sk-ant-test',
+      });
+      const res = await handleCredentialsUpsert(req);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ credential_id: 'vcrd_n', vault_id: 'vlt_n' });
+
+      const sent = JSON.parse(fetchMock.mock.calls[0]![1].body) as {
+        auth: { type: string; token: string; mcp_server_url: string };
+      };
+      expect(sent.auth.type).toBe('static_bearer');
+      expect(sent.auth.token).toBe(WEBHOOK);
+      expect(sent.auth.mcp_server_url).toBe(NOTIFY_URL);
+      // mcp_oauth 系フィールドは含めない
+      expect(JSON.stringify(sent)).not.toContain('access_token');
+    });
+
+    it('Update: credentialId 有 → token のみ更新 (mcp_server_url 不要)', async () => {
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'vcrd_n', vault_id: 'vlt_n' }), { status: 200 }),
+      );
+      const req = makeRequest({
+        body: { vaultId: 'vlt_n', type: 'static_bearer', token: WEBHOOK, credentialId: 'vcrd_n' },
+        anthropicApiKey: 'sk-ant-test',
+      });
+      const res = await handleCredentialsUpsert(req);
+      expect(res.status).toBe(200);
+      const url = fetchMock.mock.calls[0]![0] as string;
+      expect(url).toContain('/credentials/vcrd_n');
+      const sent = JSON.parse(fetchMock.mock.calls[0]![1].body) as { auth: Record<string, unknown> };
+      expect(sent.auth.type).toBe('static_bearer');
+      expect(sent.auth.mcp_server_url).toBeUndefined();
+    });
+
+    it('token 欠損 → 400', async () => {
+      const req = makeRequest({
+        body: { vaultId: 'vlt_n', type: 'static_bearer', mcpServerUrl: NOTIFY_URL },
+        anthropicApiKey: 'sk-ant-test',
+      });
+      const res = await handleCredentialsUpsert(req);
+      expect(res.status).toBe(400);
+    });
+
+    it('Create で mcpServerUrl 欠損 → 400', async () => {
+      const req = makeRequest({
+        body: { vaultId: 'vlt_n', type: 'static_bearer', token: WEBHOOK },
+        anthropicApiKey: 'sk-ant-test',
+      });
+      const res = await handleCredentialsUpsert(req);
+      expect(res.status).toBe(400);
+    });
+
+    it('static_bearer は accessToken / expiresIn を要求しない', async () => {
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'vcrd_n', vault_id: 'vlt_n' }), { status: 200 }),
+      );
+      // accessToken も expiresIn も無いが通る (mcp_oauth 検証より前で分岐)
+      const req = makeRequest({
+        body: { vaultId: 'vlt_n', type: 'static_bearer', token: WEBHOOK, mcpServerUrl: NOTIFY_URL },
+        anthropicApiKey: 'sk-ant-test',
+      });
+      const res = await handleCredentialsUpsert(req);
+      expect(res.status).toBe(200);
+    });
+  });
 });

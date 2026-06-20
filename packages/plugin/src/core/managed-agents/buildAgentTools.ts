@@ -4,7 +4,11 @@
 // `tools[]` 配列に組み立てる。既存 `resolveAgent.ts:buildAgentTools` (built-in 用) と
 // 構造は同じだが、per-tool の enabled flag を draft の `enabledTools` に従って切替える。
 
-import { CREATE_ARTIFACT_TOOL, KINTONE_MCP_SERVER_NAME } from '../bootstrap/agentToolDefs';
+import {
+  CREATE_ARTIFACT_TOOL,
+  KINTONE_MCP_SERVER_NAME,
+  NOTIFY_MCP_SERVER_NAME,
+} from '../bootstrap/agentToolDefs';
 import {
   DESTRUCTIVE_TOOL_NAMES,
   KINTONE_TOOL_NAMES,
@@ -56,6 +60,15 @@ export function buildAgentTools(
             : ('always_allow' as const),
         },
       })),
+    },
+    // 通知 (#13): send_notification を常設。Webhook 未登録なら Worker が「未設定」を返す。
+    {
+      type: 'mcp_toolset',
+      mcp_server_name: NOTIFY_MCP_SERVER_NAME,
+      default_config: {
+        enabled: true,
+        permission_policy: { type: 'always_allow' },
+      },
     },
   ];
 }

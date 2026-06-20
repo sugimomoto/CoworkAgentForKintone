@@ -14,7 +14,11 @@ import { anthropicHeaders } from './anthropic';
 interface UpsertRequestBody {
   vaultId: string;
   credentialId?: string;
+  /** 認証種別。省略時は従来通り mcp_oauth。'static_bearer' は通知 Webhook 用 (#13)。 */
+  type?: 'mcp_oauth' | 'static_bearer';
   mcpServerUrl?: string;       // Create 時必須、Update では無視
+  /** static_bearer 用: MCP URL 接続時に Authorization: Bearer として注入される値 (= Webhook URL)。 */
+  token?: string;
   accessToken: string;
   expiresIn: number;
   refreshToken?: string;
@@ -60,6 +64,12 @@ export async function handleCredentialsUpsert(request: Request): Promise<Respons
       400,
     );
   }
+
+  // --- static_bearer (通知 Webhook, #13) は mcp_oauth とは別系統で処理 ---
+  if (body.type === 'static_bearer') {
+    return handleStaticBearerUpsert(body, anthropicApiKey);
+  }
+
   if (!isString(body.accessToken)) {
     return jsonResponse({ error: 'validation_failed', message: 'accessToken is required' }, 400);
   }
@@ -137,6 +147,54 @@ export async function handleCredentialsUpsert(request: Request): Promise<Respons
       });
 
   // ④ Anthropic 転送
+  return forwardCredential(anthropicUrl, anthropicApiKey, anthropicBody);
+}
+
+/**
+ * static_bearer 認証情報の作成・更新 (#13 通知)。
+ * token (= Webhook URL) を Anthropic Vault に格納し、対応する MCP URL 接続時に
+ * Authorization: Bearer として注入させる。token はログ・レスポンスに一切出さない。
+ */
+async function handleStaticBearerUpsert(
+  body: UpsertRequestBody,
+  anthropicApiKey: string,
+): Promise<Response> {
+  if (!isString(body.token)) {
+    return jsonResponse({ error: 'validation_failed', message: 'token is required' }, 400);
+  }
+  const isUpdate = isString(body.credentialId);
+  if (!isUpdate && !isString(body.mcpServerUrl)) {
+    return jsonResponse(
+      { error: 'validation_failed', message: 'mcpServerUrl is required for Create' },
+      400,
+    );
+  }
+
+  const vaultPath = encodeURIComponent(body.vaultId);
+  const anthropicUrl = isUpdate
+    ? `${ANTHROPIC_BASE}/v1/vaults/${vaultPath}/credentials/${encodeURIComponent(body.credentialId!)}`
+    : `${ANTHROPIC_BASE}/v1/vaults/${vaultPath}/credentials`;
+
+  const anthropicBody = isUpdate
+    ? { auth: { type: 'static_bearer', token: body.token } }
+    : {
+        auth: {
+          type: 'static_bearer',
+          token: body.token,
+          mcp_server_url: body.mcpServerUrl!,
+        },
+        display_name: 'notify',
+      };
+
+  return forwardCredential(anthropicUrl, anthropicApiKey, anthropicBody);
+}
+
+/** Anthropic credentials API へ転送し、{credential_id, vault_id} を返す。失敗時はサニタイズ。 */
+async function forwardCredential(
+  anthropicUrl: string,
+  anthropicApiKey: string,
+  anthropicBody: unknown,
+): Promise<Response> {
   const upstreamRes = await fetch(anthropicUrl, {
     method: 'POST',
     headers: {

@@ -15,8 +15,10 @@ export interface SessionContext {
   environmentId: string;
   kintoneDomain: string;
   kintoneUserCode: string;
-  /** ユーザー Vault ID。指定された場合 vault_ids: [vaultId] で Session が作られる。 */
+  /** ユーザー Vault ID。指定された場合 vault_ids に含めて Session が作られる。 */
   vaultId?: string;
+  /** 通知 Vault ID (#13)。Agent に Webhook が登録済なら vault_ids に追加する。 */
+  notifyVaultId?: string;
   /**
    * 初回ユーザーメッセージ本文。指定されると履歴で識別しやすいよう、これを元に
    * Session タイトルを生成する (#52 プランA)。空 / 未指定なら従来の「新規会話 - 日時」。
@@ -57,10 +59,11 @@ export function makeTitleFromMessage(text: string, now: Date = new Date()): stri
 
 /** 新しい会話用の Session を作成する。常に新規作成、再利用はしない。 */
 export async function createUserSession(ctx: SessionContext): Promise<Session> {
+  const vaultIds = [ctx.vaultId, ctx.notifyVaultId].filter((v): v is string => Boolean(v));
   return await createSession({
     agent: ctx.agentId,
     environment_id: ctx.environmentId,
-    ...(ctx.vaultId ? { vault_ids: [ctx.vaultId] } : {}),
+    ...(vaultIds.length > 0 ? { vault_ids: vaultIds } : {}),
     // 初回メッセージがあればそれを元にタイトル生成、無ければ「新規会話 - 日時」
     title: makeTitleFromMessage(ctx.firstMessage ?? ''),
     metadata: {

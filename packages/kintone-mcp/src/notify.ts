@@ -17,7 +17,7 @@ const SEND_NOTIFICATION_TOOL = {
   name: 'send_notification',
   title: '通知を送信',
   description:
-    'このエージェントに登録された Slack / Microsoft Teams の Webhook に通知を送る。' +
+    'このエージェントに登録された Slack / Microsoft Teams / Discord の Webhook に通知を送る。' +
     '集計結果やタスク完了などをチームへ共有したいときに使う。通知先が未設定なら送信されない。',
   inputSchema: {
     title: { type: 'string', description: '通知の見出し (例: 顧客別売上集計 完了)' },

@@ -79,3 +79,60 @@ export async function upsertKintoneCredential(
   }
   return { credential_id: parsed.credential_id, vault_id: parsed.vault_id };
 }
+
+export interface UpsertStaticBearerCredentialArgs {
+  pluginId: string;
+  workerUrl: string;
+  vaultId: string;
+  /** Update 時のみ。省略時は Create。 */
+  credentialId?: string;
+  /** Create 時必須: static_bearer を注入する対象の MCP URL (= /notify/<domain>/<key>)。 */
+  mcpServerUrl?: string;
+  /** 注入する Bearer 値 (= Webhook URL)。ログ・JS 側に保持しない。 */
+  token: string;
+}
+
+/**
+ * 通知 Webhook 用の static_bearer 認証情報を Vault に upsert する (#13)。
+ * token (= Webhook URL) は Worker を素通りして Anthropic Vault に格納され、
+ * 以後 JS から読み出すことはできない。
+ */
+export async function upsertStaticBearerCredential(
+  args: UpsertStaticBearerCredentialArgs,
+): Promise<UpsertResult> {
+  if (typeof kintone === 'undefined' || !kintone?.plugin?.app?.proxy) {
+    throw new Error('kintone JavaScript API is not available');
+  }
+
+  const url = `${args.workerUrl.replace(/\/$/, '')}/credentials/upsert`;
+  const body: Record<string, unknown> = {
+    vaultId: args.vaultId,
+    type: 'static_bearer',
+    token: args.token,
+  };
+  if (args.credentialId) body['credentialId'] = args.credentialId;
+  if (args.mcpServerUrl) body['mcpServerUrl'] = args.mcpServerUrl;
+
+  const [respBody, status] = await kintone.plugin.app.proxy(
+    args.pluginId,
+    url,
+    'POST',
+    {},
+    JSON.stringify(body),
+  );
+
+  if (status < 200 || status >= 300) {
+    throw new CredentialUpsertError(status, respBody);
+  }
+
+  let parsed: { credential_id?: string; vault_id?: string };
+  try {
+    parsed = JSON.parse(respBody);
+  } catch {
+    throw new Error(`credentials/upsert returned invalid JSON: ${respBody}`);
+  }
+  if (!parsed.credential_id || !parsed.vault_id) {
+    throw new Error('credentials/upsert response missing credential_id or vault_id');
+  }
+  return { credential_id: parsed.credential_id, vault_id: parsed.vault_id };
+}

@@ -19,6 +19,7 @@ import {
   applyAgentEdit,
   archiveAgentById,
   createCustomAgentFrom,
+  reconcileAgentWebhook,
 } from '../../core/managed-agents/agentDetailApi';
 import { setAgentVisibility } from '../../core/managed-agents/agentVisibility';
 import { retrieveAgent } from '../../core/managed-agents/resources';
@@ -35,6 +36,7 @@ import { useChatStore } from '../../store/chatStore';
 import { AgentDetailModal, type AvailableSkill } from './AgentDetailModal';
 import { SettingsView } from './SettingsView';
 
+import type { WebhookConfig } from './notify/webhookPlatform';
 import type { CustomSkillInput } from './SkillAddModal';
 import type { BundledSkillEntry } from './SkillsPane';
 import type { AgentRecord } from '../../core/bootstrap/agentTypes';
@@ -211,18 +213,26 @@ export function SettingsViewBound({
   }, [builtInAgents]);
 
   const handleSaveAgent = useCallback(
-    async (draft: AgentEditDraft, sourceAgent: AgentRecord) => {
+    async (draft: AgentEditDraft, sourceAgent: AgentRecord, webhook: WebhookConfig | null) => {
       if (!modalState) return;
-      if (modalState.kind === 'edit') {
-        const updated = await applyAgentEdit(sourceAgent.id, draft);
-        upsertAgent(agentToRecord(updated));
-      } else {
-        const created = await createCustomAgentFrom({ baseAgentId: sourceAgent.id, draft });
-        upsertAgent(agentToRecord(created));
+      const saved =
+        modalState.kind === 'edit'
+          ? await applyAgentEdit(sourceAgent.id, draft)
+          : await createCustomAgentFrom({ baseAgentId: sourceAgent.id, draft });
+
+      // 通知 Webhook (#13): 保存後の Agent に対して登録/解除を反映 (metadata 更新を含む)。
+      // workerUrl が無い環境 (未接続) では通知登録はスキップ (webhook 変更が無ければ実質 no-op)。
+      let finalAgent = saved;
+      if (pluginId && cfg.workerUrl) {
+        finalAgent = await reconcileAgentWebhook(saved, webhook, {
+          pluginId,
+          workerUrl: cfg.workerUrl,
+        });
       }
+      upsertAgent(agentToRecord(finalAgent));
       setModalState(null);
     },
-    [modalState, upsertAgent],
+    [modalState, upsertAgent, pluginId, cfg.workerUrl],
   );
 
   const handleDeleteAgent = useCallback(

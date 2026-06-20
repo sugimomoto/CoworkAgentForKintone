@@ -9,11 +9,12 @@ import { buildAgentTools, extractEnabledTools } from './buildAgentTools';
 describe('buildAgentTools (#40)', () => {
   it('全 tools enabled で組み立てる', () => {
     const tools = buildAgentTools(KINTONE_TOOL_NAMES);
-    // agent_toolset / create_artifact / mcp_toolset の 3 要素
-    expect(tools).toHaveLength(3);
+    // agent_toolset / create_artifact / mcp_toolset(kintone) / mcp_toolset(notify) の 4 要素 (#13)
+    expect(tools).toHaveLength(4);
     expect(tools[0]).toMatchObject({ type: 'agent_toolset_20260401' });
     expect(tools[1]).toMatchObject({ type: 'custom', name: 'create_artifact' });
     expect(tools[2]).toMatchObject({ type: 'mcp_toolset', mcp_server_name: 'kintone' });
+    expect(tools[3]).toMatchObject({ type: 'mcp_toolset', mcp_server_name: 'notify' });
   });
 
   it('mcp_toolset.configs は KINTONE_TOOL_NAMES 全件 (順序維持)', () => {

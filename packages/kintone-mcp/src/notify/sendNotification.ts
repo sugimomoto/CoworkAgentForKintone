@@ -6,7 +6,12 @@
 import { sanitizeError } from '../_http';
 
 import { detectPlatform } from './detectPlatform';
-import { buildSlackPayload, buildTeamsPayload, type NotifyMessage } from './format';
+import {
+  buildDiscordPayload,
+  buildSlackPayload,
+  buildTeamsPayload,
+  type NotifyMessage,
+} from './format';
 
 import type { CallToolResult } from '../tools/types/tool';
 
@@ -24,19 +29,24 @@ export async function runSendNotification(
 ): Promise<CallToolResult> {
   if (!webhookUrl) {
     return fail(
-      '通知先が未設定です。管理者がこのエージェントに Slack / Teams の Webhook を登録すると通知できます。',
+      '通知先が未設定です。管理者がこのエージェントに Slack / Teams / Discord の Webhook を登録すると通知できます。',
     );
   }
   const platform = detectPlatform(webhookUrl);
   if (!platform) {
     // URL 自体はメッセージに出さない
-    return fail('登録された Webhook が Slack / Teams として認識できませんでした。');
+    return fail('登録された Webhook が Slack / Teams / Discord として認識できませんでした。');
   }
   if (!args || typeof args.title !== 'string' || typeof args.text !== 'string') {
     return fail('title と text は必須です。');
   }
-  const payload = platform === 'slack' ? buildSlackPayload(args) : buildTeamsPayload(args);
-  const label = platform === 'slack' ? 'Slack' : 'Teams';
+  const payload =
+    platform === 'slack'
+      ? buildSlackPayload(args)
+      : platform === 'discord'
+        ? buildDiscordPayload(args)
+        : buildTeamsPayload(args);
+  const label = platform === 'slack' ? 'Slack' : platform === 'discord' ? 'Discord' : 'Teams';
   try {
     const res = await fetch(webhookUrl, {
       method: 'POST',

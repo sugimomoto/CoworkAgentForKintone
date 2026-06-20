@@ -105,9 +105,10 @@ describe('applyAgentEdit (#40)', () => {
       { type: 'anthropic', skill_id: 'docx' },
       { type: 'custom', skill_id: 'sk_custom_1' },
     ]);
-    // tools: agent_toolset + create_artifact + mcp_toolset
-    expect(body.tools).toHaveLength(3);
+    // tools: agent_toolset + create_artifact + mcp_toolset(kintone) + mcp_toolset(notify, #13)
+    expect(body.tools).toHaveLength(4);
     expect(body.tools[2].type).toBe('mcp_toolset');
+    expect(body.tools[3]).toMatchObject({ type: 'mcp_toolset', mcp_server_name: 'notify' });
     expect(result.version).toBe(2);
   });
 });
@@ -141,8 +142,15 @@ describe('createCustomAgentFrom (#40)', () => {
     expect(body.metadata.source).toBe('cowork-agent-for-kintone');
     expect(body.metadata.workerUrl).toBe('https://w.example.com');
     expect(body.metadata.kintoneDomain).toBe('tenant.cybozu.com');
-    expect(body.mcp_servers).toHaveLength(1);
-    expect((body.mcp_servers as Array<{ url: string }>)[0]!.url).toContain('/mcp/tenant.cybozu.com');
+    // 通知 (#13): notifyKey が採番され、mcp_servers は kintone + notify の 2 本
+    expect(typeof body.metadata.notifyKey).toBe('string');
+    expect(body.metadata.notifyKey.length).toBeGreaterThan(0);
+    const servers = body.mcp_servers as Array<{ name: string; url: string }>;
+    expect(servers).toHaveLength(2);
+    expect(servers.find((s) => s.name === 'kintone')!.url).toContain('/mcp/tenant.cybozu.com');
+    const notifyUrl = servers.find((s) => s.name === 'notify')!.url;
+    expect(notifyUrl).toContain('/notify/tenant.cybozu.com/');
+    expect(notifyUrl).toContain(body.metadata.notifyKey);
     expect(result.id).toBe('agent_new_custom');
   });
 });

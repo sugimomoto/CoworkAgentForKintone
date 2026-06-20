@@ -37,6 +37,8 @@ vi.mock('../../core/managed-agents/agentDetailApi', () => ({
   applyAgentEdit: vi.fn(),
   createCustomAgentFrom: vi.fn(),
   archiveAgentById: vi.fn().mockResolvedValue(undefined),
+  // #13: webhook 変更なし時は保存後 Agent をそのまま返す (登録 API は叩かない)
+  reconcileAgentWebhook: vi.fn((agent: unknown) => Promise.resolve(agent)),
 }));
 vi.mock('../../core/managed-agents/resources', () => ({
   retrieveAgent: vi.fn(),

@@ -821,6 +821,61 @@ erDiagram
     }
 ```
 
+### 3.6 通知 (Slack / Teams / Discord Webhook) — #13
+
+Agent が処理結果を Slack / Microsoft Teams / Discord の Incoming Webhook に送信する仕組み。
+**Agent ごとに 1 本** の Webhook を admin が登録する（built-in / custom 両対応）。
+platform は URL ホストで自動判定（`hooks.slack.com` / `*.webhook.office.com`・`*.logic.azure.com` / `discord.com`）。
+payload はそれぞれ Slack blocks / Teams Adaptive Card / Discord embeds に整形する。
+
+#### アーキテクチャ要点
+
+- **送信ツール**: `send_notification`（引数 `title` / `text` / `fields[]?` / `link?`）。全 Agent の toolset に**常設**する。
+  Webhook 未登録の Agent では Worker が「未設定」を返すだけで無害（= 常設してよい）。
+- **通知 MCP エンドポイント**: Worker の `/notify/<kintoneDomain>/<notifyKey>`（type: `url` の MCP server）。
+  ステートレス — Worker は何の secret も保持しない。
+- **Webhook URL の格納 = Vault `static_bearer`**: 通知先 URL を Anthropic Vault の `static_bearer` credential
+  （`{ auth: { type: 'static_bearer', token, mcp_server_url } }`）として保存する。Anthropic が
+  `mcp_server_url`（= `/notify/<domain>/<notifyKey>`）へ接続する際、`token`(= Webhook URL) を
+  `Authorization: Bearer` として注入する。Worker はこの Bearer を取り出して Slack/Teams へ POST する。
+  **検証済み（2026-06-20 スパイク）**。
+- **通知 Vault**: テナント（kintoneDomain）単位で 1 個（metadata `purpose=notify`）。ユーザー Vault とは分離。
+- **notifyKey 規約**: built-in=`purpose`（決定的）/ custom=作成時に採番した UUID（`metadata.notifyKey`）。
+  Agent 作成時点で agent_id が未確定でも `/notify/<domain>/<notifyKey>` を確定できる（chicken-and-egg 回避）。
+- **vault_ids 配線**: Webhook 登録済 Agent の Session / Deployment 作成時に
+  `vault_ids: [userVault, notifyVault]` を渡す（`Agent.metadata.notifyVaultId` を真実源として復元）。
+
+#### セキュリティ不変条件
+
+- Webhook URL は **JavaScript から読み出せない**（Vault 格納のみ。保存後は UI で伏字、生 URL を再表示しない）。AC-4
+- URL / token は **ログ・tool 結果に一切出さない**（Worker は status のみ報告、`sanitizeError` 適用）。AC-6
+- Worker はステートレスのまま（URL も Anthropic API key も静的保持しない）。
+
+#### シーケンス（登録 → 送信）
+
+```mermaid
+sequenceDiagram
+    participant Admin
+    participant Modal as AgentDetailModal
+    participant Plugin as reconcileAgentWebhook
+    participant Worker as Worker /credentials/upsert
+    participant Vault as Anthropic Vault
+    participant Anthropic
+    participant Notify as Worker /notify/<domain>/<key>
+    participant Slack as Slack/Teams
+
+    Admin->>Modal: Webhook URL を入力（platform 自動判定）
+    Modal->>Plugin: 保存 (webhook working copy)
+    Plugin->>Worker: static_bearer upsert (token=URL, mcp_server_url=/notify/..)
+    Worker->>Vault: credential 作成/更新
+    Plugin->>Plugin: Agent.metadata に platform/credentialId/vaultId を記録
+    Note over Admin,Slack: 以降、依頼や定期実行で Agent が通知する
+    Anthropic->>Notify: send_notification 呼出 (Bearer=URL を Vault から注入)
+    Notify->>Slack: detect→format→POST
+    Slack-->>Notify: 2xx
+    Notify-->>Anthropic: 成功 (URL は結果に含めない)
+```
+
 ---
 
 ## 4. ユースケース
