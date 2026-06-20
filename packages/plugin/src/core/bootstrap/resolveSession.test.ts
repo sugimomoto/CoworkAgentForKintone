@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { jsonResponse, makeSession } from '../../test/fixtures';
 
-import { createUserSession, listUserSessions } from './resolveSession';
+import {
+  createUserSession,
+  listUserSessions,
+  makeTitleFromMessage,
+  MAX_SESSION_TITLE_LEN,
+} from './resolveSession';
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -45,6 +50,36 @@ describe('createUserSession', () => {
       agentId: 'agent_default',
     });
     expect(body.title).toMatch(/^新規会話 - \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  });
+
+  it('#52: firstMessage があれば先頭を元にタイトルを付ける', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(makeSession({ id: 'sess_t' }), 201));
+    await createUserSession({ ...CTX, firstMessage: '案件管理アプリの今月の受注を集計して' });
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.title).toBe('案件管理アプリの今月の受注を集計して');
+  });
+});
+
+describe('makeTitleFromMessage (#52)', () => {
+  it('短いメッセージはそのまま', () => {
+    expect(makeTitleFromMessage('棚卸しを集計して')).toBe('棚卸しを集計して');
+  });
+
+  it('30 文字超は末尾 … で省略', () => {
+    const long = 'あ'.repeat(50);
+    const title = makeTitleFromMessage(long);
+    expect(title).toBe('あ'.repeat(MAX_SESSION_TITLE_LEN) + '…');
+    expect([...title].length).toBe(MAX_SESSION_TITLE_LEN + 1);
+  });
+
+  it('改行・連続空白は 1 スペースに畳む', () => {
+    expect(makeTitleFromMessage('  営業先の\n\n  議事録を   要約 ')).toBe('営業先の 議事録を 要約');
+  });
+
+  it('空 / 空白のみは「新規会話 - 日時」にフォールバック', () => {
+    expect(makeTitleFromMessage('   \n  ')).toMatch(/^新規会話 - \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+    expect(makeTitleFromMessage('')).toMatch(/^新規会話 - /);
   });
 });
 

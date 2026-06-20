@@ -18,7 +18,7 @@ import { useChatStore } from '../../store/chatStore';
 
 export interface UseSessionResult {
   /** 既存 sessionId があれば返す。無ければ新規作成して store に保存し、その id を返す。 */
-  ensureSession: () => Promise<string>;
+  ensureSession: (firstMessage?: string) => Promise<string>;
   /** 履歴から特定 Session を復元する。messages をクリアして sessionId を切替える。 */
   selectSession: (sessionId: string) => void;
   /** 新規会話を開始する (messages クリア + sessionId を null に戻す)。 */
@@ -104,7 +104,7 @@ export function useSession(): UseSessionResult {
     };
   }, [setStatus, setAgentId, setBuiltInAgents, setCurrentAgentId, setCurrentUserAccess, setIsAdminResolved]);
 
-  const ensureSession = useCallback(async (): Promise<string> => {
+  const ensureSession = useCallback(async (firstMessage?: string): Promise<string> => {
     const state = useChatStore.getState();
     const existing = state.sessionId;
     if (existing) return existing;
@@ -133,6 +133,7 @@ export function useSession(): UseSessionResult {
           kintoneDomain: ctx.kintoneDomain,
           kintoneUserCode: ctx.kintoneUserCode,
           ...(vaultId ? { vaultId } : {}),
+          ...(firstMessage ? { firstMessage } : {}),
         });
         setSessionId(session.id);
         return session.id;

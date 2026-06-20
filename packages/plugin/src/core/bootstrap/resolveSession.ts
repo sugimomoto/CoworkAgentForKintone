@@ -17,6 +17,11 @@ export interface SessionContext {
   kintoneUserCode: string;
   /** ユーザー Vault ID。指定された場合 vault_ids: [vaultId] で Session が作られる。 */
   vaultId?: string;
+  /**
+   * 初回ユーザーメッセージ本文。指定されると履歴で識別しやすいよう、これを元に
+   * Session タイトルを生成する (#52 プランA)。空 / 未指定なら従来の「新規会話 - 日時」。
+   */
+  firstMessage?: string;
 }
 
 export type ListUserSessionsContext = Pick<
@@ -34,13 +39,30 @@ function makeInitialTitle(now: Date = new Date()): string {
   return `新規会話 - ${yyyy}-${mm}-${dd} ${hh}:${mi}`;
 }
 
+/** タイトルの最大文字数 (超過分は … で省略)。履歴一覧でパッと識別できる長さ。 */
+export const MAX_SESSION_TITLE_LEN = 30;
+
+/**
+ * 初回ユーザーメッセージから Session タイトルを生成する (#52 プランA)。
+ * 改行・連続空白は 1 スペースに畳み、前後を trim、30 文字超は末尾 … で省略。
+ * 空 (添付のみ等) のときは従来の「新規会話 - 日時」にフォールバックする。
+ */
+export function makeTitleFromMessage(text: string, now: Date = new Date()): string {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (normalized === '') return makeInitialTitle(now);
+  return normalized.length > MAX_SESSION_TITLE_LEN
+    ? `${normalized.slice(0, MAX_SESSION_TITLE_LEN)}…`
+    : normalized;
+}
+
 /** 新しい会話用の Session を作成する。常に新規作成、再利用はしない。 */
 export async function createUserSession(ctx: SessionContext): Promise<Session> {
   return await createSession({
     agent: ctx.agentId,
     environment_id: ctx.environmentId,
     ...(ctx.vaultId ? { vault_ids: [ctx.vaultId] } : {}),
-    title: makeInitialTitle(),
+    // 初回メッセージがあればそれを元にタイトル生成、無ければ「新規会話 - 日時」
+    title: makeTitleFromMessage(ctx.firstMessage ?? ''),
     metadata: {
       source: METADATA_SOURCE,
       kintoneDomain: ctx.kintoneDomain,

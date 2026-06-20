@@ -634,7 +634,7 @@ metadata を **Source of Truth** とし、`name` / `display_name` は **Anthropi
 | Agent (custom, Phase2) | `name` | `Cowork Agent - Custom: <user-provided>` | `Cowork Agent - Custom: 営業支援用` |
 | Environment | `name` | `Cowork Agent - <kintoneUserCode>@<kintoneDomain>` | `Cowork Agent - sato@example.cybozu.com` |
 | Vault | `display_name` | `Cowork Agent - <kintoneUserCode>@<kintoneDomain>` | `Cowork Agent - sato@example.cybozu.com` |
-| Session | `title` | 初期: `新規会話 - <YYYY-MM-DD HH:mm>` / 会話後: Agent が要約して更新 | `新規会話 - 2026-04-23 10:30` |
+| Session | `title` | 初回ユーザーメッセージの先頭 (〜30字、超過は `…` 省略) / 空なら `新規会話 - <YYYY-MM-DD HH:mm>` | `案件管理アプリの今月の受注を集計して` |
 
 ##### 設計方針
 
@@ -645,8 +645,12 @@ metadata を **Source of Truth** とし、`name` / `display_name` は **Anthropi
 
 ##### Session title の運用
 
-- Session 作成直後: `新規会話 - <日時>` で初期化
-- 会話進行後: Agent が会話の主題を短いタイトルに要約し、Session の `title` を更新 (Phase2 で自動化、MVP は初期値のまま)
+- Session は初送信時に lazy 作成され、その**初回ユーザーメッセージの先頭 (〜30字)** を `title` にする (#52 プランA)。
+  履歴一覧で内容を識別しやすくするため。改行・連続空白は 1 スペースに畳み、30 字超は末尾 `…` で省略。
+- 添付のみ等で本文が空のときは従来の `新規会話 - <日時>` にフォールバック。
+- **作成時に確定**し、以降は更新しない (Managed Agents API に session の title 更新エンドポイントは無い)。
+  既存 Session のマイグレーションは行わない。
+- 将来オプション: LLM 要約タイトル (B案) / 手動編集 (C案) を設定で ON にする案 (未実装)。
 
 #### 3.1.4 実行時に動的取得する情報
 
