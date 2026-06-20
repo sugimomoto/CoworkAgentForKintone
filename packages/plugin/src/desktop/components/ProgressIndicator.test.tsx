@@ -9,6 +9,7 @@ function resetStore(): void {
   useChatStore.setState({
     isAgentRunning: false,
     lastEvent: null,
+    agentRunningSince: null,
     messages: [],
     pendingCustomToolUseIds: new Map(),
   });
@@ -71,6 +72,17 @@ describe('ProgressIndicator', () => {
     });
     const { getByTestId } = render(<ProgressIndicator />);
     expect(getByTestId('progress-indicator-elapsed').textContent?.replace(/\s/g, '')).toBe('·0s');
+  });
+
+  it('#78: lastEvent 未受信でも agentRunningSince を起点に経過秒がカウントされる', () => {
+    // 送信直後〜最初の進行イベント到達前 (lastEvent === null) の状態
+    useChatStore.setState({
+      isAgentRunning: true,
+      lastEvent: null,
+      agentRunningSince: Date.now() - 3000, // 3 秒前にターン開始
+    });
+    const { getByTestId } = render(<ProgressIndicator />);
+    expect(getByTestId('progress-indicator-elapsed').textContent?.replace(/\s/g, '')).toBe('·3s');
   });
 
   it('role="status" aria-live="polite" を持つ', () => {

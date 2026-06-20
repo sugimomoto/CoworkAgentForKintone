@@ -19,7 +19,10 @@ import { useElapsedSinceEvent } from '../hooks/useElapsedSinceEvent';
 export function ProgressIndicator(): JSX.Element | null {
   const phase = useAgentPhase();
   const lastEvent = useChatStore((s) => s.lastEvent);
-  const elapsed = useElapsedSinceEvent(lastEvent?.at ?? null);
+  // #78: 最初のイベント到達前 (lastEvent === null) は経過秒が 0s で止まる。
+  // 送信時に確定する agentRunningSince をフォールバックにし、ターン開始から数える。
+  const agentRunningSince = useChatStore((s) => s.agentRunningSince);
+  const elapsed = useElapsedSinceEvent(lastEvent?.at ?? agentRunningSince ?? null);
 
   if (phase !== 'running') return null;
 
