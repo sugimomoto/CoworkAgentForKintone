@@ -131,7 +131,34 @@ describe('resolveBuiltInAgents', () => {
     expect(businessBody.metadata.promptVersion).toBe('v20-business');
     expect(opusBody.metadata.promptVersion).toBe('v23-agent-designer');
     expect(sonnetBody.metadata.promptVersion).toBe('v22-customizer');
-    expect(appDesignerBody.metadata.promptVersion).toBe('v1-app-designer');
+    expect(appDesignerBody.metadata.promptVersion).toBe('v2-app-designer');
+  });
+
+  it('customSkills は customSkillFilter(name) で variant 別に attach される (#117)', async () => {
+    mockAllVariantsCreate({});
+    await resolveBuiltInAgents({
+      ...OPTIONS,
+      customSkills: [
+        { name: 'kintone-app-design', skillId: 'sk_app' },
+        { name: 'kintone-customize-js', skillId: 'sk_js' },
+      ],
+    });
+
+    const bodies = fetchMock.mock.calls
+      .filter((c) => c[1]?.method === 'POST')
+      .map((c) => JSON.parse(c[1].body as string));
+    const skillIdsOf = (purpose: string): string[] =>
+      (bodies.find((b) => b.metadata.purpose === purpose)?.skills ?? [])
+        .filter((s: { type: string }) => s.type === 'custom')
+        .map((s: { skill_id: string }) => s.skill_id);
+
+    // app-designer は app-design skill のみ (JS skill は付かない)
+    expect(skillIdsOf('app-designer')).toEqual(['sk_app']);
+    // customizer-sonnet は app-design 以外 (JS skill) を attach
+    expect(skillIdsOf('customizer-sonnet')).toEqual(['sk_js']);
+    // business / customizer-opus は custom skill なし
+    expect(skillIdsOf('business')).toEqual([]);
+    expect(skillIdsOf('customizer-opus')).toEqual([]);
   });
 
   it('既存 Agent が見つかれば再利用 (POST 呼出 0 回)', async () => {
@@ -184,7 +211,7 @@ describe('resolveBuiltInAgents', () => {
                 source: 'cowork-agent-for-kintone',
                 type: 'default',
                 purpose: 'app-designer',
-                promptVersion: 'v1-app-designer',
+                promptVersion: 'v2-app-designer',
                 workerUrl: OPTIONS.workerUrl,
                 kintoneDomain: OPTIONS.kintoneDomain,
                 toolsVersion: builtInToolsVersion('app-designer'),
@@ -356,7 +383,7 @@ describe('resolveBuiltInAgents', () => {
             source: 'cowork-agent-for-kintone',
             type: 'default',
             purpose: 'app-designer',
-            promptVersion: 'v1-app-designer',
+            promptVersion: 'v2-app-designer',
             workerUrl: OPTIONS.workerUrl,
             kintoneDomain: OPTIONS.kintoneDomain,
             toolsVersion: builtInToolsVersion('app-designer'),
@@ -452,5 +479,66 @@ describe('resolveBuiltInAgents', () => {
   it('builtInToolsVersion は決定的 (同一 purpose で同値・variant 間で別値)', () => {
     expect(builtInToolsVersion('customizer-opus')).toBe(builtInToolsVersion('customizer-opus'));
     expect(builtInToolsVersion('customizer-opus')).not.toBe(builtInToolsVersion('business'));
+  });
+
+  // #117: 同期前に作られた既存 app-designer (skillsVersion 無し) に、同期後の bootstrap で
+  // kintone-app-design skill を後付けする (再作成や promptVersion bump 無しで self-heal)。
+  it('既存 app-designer に skill 未 attach なら reconcile で kintone-app-design を後付けする (#117)', async () => {
+    const updates: Array<{ path: string; body: { skills?: Array<{ type: string; skill_id: string }>; metadata: Record<string, string> } }> = [];
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = new URL(url);
+      if (u.pathname === '/v1/agents' && (!init?.method || init.method === 'GET')) {
+        // 全 variant とも toolsVersion は最新、ただし skillsVersion は未設定 (= 同期前に作成)
+        return Promise.resolve(
+          jsonResponse(existingWithToolsVersion(builtInToolsVersion('customizer-opus'))),
+        );
+      }
+      // updateAgent: POST /v1/agents/{id}
+      if (u.pathname.startsWith('/v1/agents/') && init?.method === 'POST') {
+        const body = JSON.parse(init.body as string);
+        updates.push({ path: u.pathname, body });
+        return Promise.resolve(
+          jsonResponse(makeAgent({ id: u.pathname.split('/').pop()!, metadata: body.metadata })),
+        );
+      }
+      throw new Error(`unexpected fetch: ${url} ${init?.method}`);
+    });
+
+    await resolveBuiltInAgents({
+      ...OPTIONS,
+      customSkills: [{ name: 'kintone-app-design', skillId: 'sk_app' }],
+    });
+
+    // app-designer のみ更新 (business/opus/sonnet は custom skill 対象外 + toolsVersion 一致で no-op)
+    expect(updates).toHaveLength(1);
+    expect(updates[0]!.path).toBe('/v1/agents/appdes_existing');
+    const customSkillIds = (updates[0]!.body.skills ?? [])
+      .filter((s) => s.type === 'custom')
+      .map((s) => s.skill_id);
+    expect(customSkillIds).toEqual(['sk_app']);
+    expect(updates[0]!.body.metadata['skillsVersion']).toBeTruthy();
+  });
+
+  // 同期前 (customSkills 空) の reconcile では skills を送らない (既存 skills を消さない安全側)。
+  it('customSkills 未解決のときは skill reconcile しない (既存 skills を消さない)', async () => {
+    let updateCount = 0;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = new URL(url);
+      if (u.pathname === '/v1/agents' && (!init?.method || init.method === 'GET')) {
+        return Promise.resolve(
+          jsonResponse(existingWithToolsVersion(builtInToolsVersion('customizer-opus'))),
+        );
+      }
+      if (u.pathname.startsWith('/v1/agents/') && init?.method === 'POST') {
+        updateCount++;
+        const body = JSON.parse(init.body as string);
+        return Promise.resolve(jsonResponse(makeAgent({ id: 'x', metadata: body.metadata })));
+      }
+      throw new Error(`unexpected fetch: ${url} ${init?.method}`);
+    });
+
+    // customSkills を渡さない → toolsVersion 一致なので誰も更新されない
+    await resolveBuiltInAgents(OPTIONS);
+    expect(updateCount).toBe(0);
   });
 });
