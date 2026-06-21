@@ -453,10 +453,21 @@ sequenceDiagram
 - **admin 振り分けを設けない理由**: kintone 側でアプリのカスタマイズ・設定変更は app-admin 権限が必須で、
   非管理者が管理系ツールを呼んでも API が 403 を返す。エージェント側で二重に admin gate を設ける必要が
   ないため、全ユーザーに公開しつつ実権限は kintone に委ねる。
-- **kintone アプリ設計のドメイン知識**: system prompt に予約フィールドコード (ステータス / 作業者 等は
-  field code に使えない)、選択肢の `options` 形状 (index は文字列)、更新は全置換 (get → merge → update)、
-  preview に積んで `deploy-app` で反映、フィールド種別ごとの `filterCond` 演算子といった kintone 固有の
-  落とし穴を埋め込み、試行錯誤を減らす。
+- **kintone アプリ設計のドメイン知識は `kintone-app-design` Custom Skill に集約** (#117 後段):
+  当初は system prompt (`APP_DESIGNER_DOMAIN_PROMPT`) に予約コード / options 形状 / 全置換 / filterCond /
+  計算フィールドを直接書いていたが、(a) 毎ターン常駐でトークンを食う (b) 知識ベースが肥大化する ため、
+  詳細は Custom Skills 基盤 (#30) の `kintone-app-design` skill に移し progressive disclosure 化。
+  常駐プロンプトには行動規範と「常に効く即死要因 (全置換 / preview→deploy / 計算フィールドは skill 参照)」
+  だけを薄く残す。skill は app-designer に attach し、Custom Agent のスキルピッカーでも選択可。
+  - **核心は計算フィールド**: REST ドキュメントに記載が無いギャップ。`DATE_FORMAT` は**文字列**を返し、
+    CALC は文字列の表示形式を持たないため `CONVERT!` になる ⇒ 日付加算は `date + days*86400` を
+    `format=DATE` で表示する (DATE_FORMAT を使わない)。日付は内部 UNIX 秒・Etc/GMT 固定。
+  - **attach 機構**: `customSkillFilter(name)` を name ベースに統一 (旧 resolve 経路は skill_id を渡しており
+    UI の name 渡しと二重基準だった)。app-designer は `name === 'kintone-app-design'` のみ、carpenter
+    (customizer-sonnet) は app-design を除く全 custom skill を attach。promptVersion を `v2-app-designer` に
+    bump して既存 Agent を再作成し、薄化プロンプト + skill 付与を反映する。
+  - **運用順序**: 既存スキル基盤と同様、admin が先に「Skills 同期」を実行して skill_id を発番してから
+    プロンプト bump が効く (同期前の bootstrap では skill 無しで作られる既知の挙動)。
 
 ---
 

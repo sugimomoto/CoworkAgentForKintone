@@ -136,6 +136,14 @@ describe('BUILTIN_AGENT_SPECS — 4 variant', () => {
       expect(spec.variantGroup).toBe('customizer');
       expect(spec.isDefault).toBe(false);
     });
+
+    it('customSkillFilter は app-design 以外の custom skill を attach する (#117)', () => {
+      // JS/plugin 開発 skill + admin 追加分は付くが、アプリ構造設計 skill は app-designer 専用なので除外
+      expect(spec.customSkillFilter('kintone-customize-js')).toBe(true);
+      expect(spec.customSkillFilter('kintone-plugin-development')).toBe(true);
+      expect(spec.customSkillFilter('admin-added-skill')).toBe(true);
+      expect(spec.customSkillFilter('kintone-app-design')).toBe(false);
+    });
   });
 
   describe('app-designer エージェント (#117 アプリデザイナー)', () => {
@@ -147,18 +155,21 @@ describe('BUILTIN_AGENT_SPECS — 4 variant', () => {
       expect(spec.modelKind).toBe('opus');
     });
 
-    it('name は アプリデザイナー / promptVersion は v1-app-designer', () => {
+    it('name は アプリデザイナー / promptVersion は v2-app-designer', () => {
       expect(spec.name).toBe('アプリデザイナー');
-      expect(spec.promptVersion).toBe('v1-app-designer');
+      expect(spec.promptVersion).toBe('v2-app-designer');
     });
 
     it('資料読解スキル (pdf / docx / xlsx / pptx) を attach', () => {
       expect(spec.anthropicSkillIds).toEqual(['pdf', 'docx', 'xlsx', 'pptx']);
     });
 
-    it('customSkillFilter は何も attach しない', () => {
+    it('customSkillFilter は kintone-app-design のみ attach する (#117 設計知識スキル)', () => {
+      expect(spec.customSkillFilter('kintone-app-design')).toBe(true);
+      // JS/plugin 系は app-designer には不要
       expect(spec.customSkillFilter('kintone-customize-js')).toBe(false);
       expect(spec.customSkillFilter('kintone-plugin-development')).toBe(false);
+      expect(spec.customSkillFilter('admin-added-skill')).toBe(false);
     });
 
     it('mcpToolFilter は全 kintone ツールを通す (管理系・破壊系含む)', () => {

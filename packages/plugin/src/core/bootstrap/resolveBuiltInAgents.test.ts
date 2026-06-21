@@ -131,7 +131,34 @@ describe('resolveBuiltInAgents', () => {
     expect(businessBody.metadata.promptVersion).toBe('v20-business');
     expect(opusBody.metadata.promptVersion).toBe('v23-agent-designer');
     expect(sonnetBody.metadata.promptVersion).toBe('v22-customizer');
-    expect(appDesignerBody.metadata.promptVersion).toBe('v1-app-designer');
+    expect(appDesignerBody.metadata.promptVersion).toBe('v2-app-designer');
+  });
+
+  it('customSkills は customSkillFilter(name) で variant 別に attach される (#117)', async () => {
+    mockAllVariantsCreate({});
+    await resolveBuiltInAgents({
+      ...OPTIONS,
+      customSkills: [
+        { name: 'kintone-app-design', skillId: 'sk_app' },
+        { name: 'kintone-customize-js', skillId: 'sk_js' },
+      ],
+    });
+
+    const bodies = fetchMock.mock.calls
+      .filter((c) => c[1]?.method === 'POST')
+      .map((c) => JSON.parse(c[1].body as string));
+    const skillIdsOf = (purpose: string): string[] =>
+      (bodies.find((b) => b.metadata.purpose === purpose)?.skills ?? [])
+        .filter((s: { type: string }) => s.type === 'custom')
+        .map((s: { skill_id: string }) => s.skill_id);
+
+    // app-designer は app-design skill のみ (JS skill は付かない)
+    expect(skillIdsOf('app-designer')).toEqual(['sk_app']);
+    // customizer-sonnet は app-design 以外 (JS skill) を attach
+    expect(skillIdsOf('customizer-sonnet')).toEqual(['sk_js']);
+    // business / customizer-opus は custom skill なし
+    expect(skillIdsOf('business')).toEqual([]);
+    expect(skillIdsOf('customizer-opus')).toEqual([]);
   });
 
   it('既存 Agent が見つかれば再利用 (POST 呼出 0 回)', async () => {
@@ -184,7 +211,7 @@ describe('resolveBuiltInAgents', () => {
                 source: 'cowork-agent-for-kintone',
                 type: 'default',
                 purpose: 'app-designer',
-                promptVersion: 'v1-app-designer',
+                promptVersion: 'v2-app-designer',
                 workerUrl: OPTIONS.workerUrl,
                 kintoneDomain: OPTIONS.kintoneDomain,
                 toolsVersion: builtInToolsVersion('app-designer'),
@@ -356,7 +383,7 @@ describe('resolveBuiltInAgents', () => {
             source: 'cowork-agent-for-kintone',
             type: 'default',
             purpose: 'app-designer',
-            promptVersion: 'v1-app-designer',
+            promptVersion: 'v2-app-designer',
             workerUrl: OPTIONS.workerUrl,
             kintoneDomain: OPTIONS.kintoneDomain,
             toolsVersion: builtInToolsVersion('app-designer'),
