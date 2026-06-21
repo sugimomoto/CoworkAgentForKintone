@@ -99,6 +99,7 @@ Claude Managed Agents API を活用した「バックグラウンドで自律的
 | F-18 | **エージェントデザイナー** (built-in 3rd variant — Agent 自体を会話で設計する Agent。`propose_agent` Custom Tool + `agent-draft` アーティファクト kind を介して新しい Custom Agent をドラフト → 承認 → 永続化) | [#48](https://github.com/sugimomoto/CoworkAgentForKintone/issues/48) |
 | F-19 | **定期実行 (Deployments)** (Anthropic Managed Agents の Scheduled Deployments を利用し、エージェントを cron スケジュールで自律起動。業務ユーザーがセルフサービスで「自分の」定期実行を登録・管理、admin は全ユーザー分を管理。Settings はロールで出し分け。実行履歴から各 run の生成セッション会話を確認可能) | [#81](https://github.com/sugimomoto/CoworkAgentForKintone/issues/81) |
 | F-20 | **通知拡張 (Slack / Teams / Discord Webhook)** (Agent ごとに 1 本の Incoming Webhook を admin が登録し、`send_notification` ツールで処理結果を Slack / Microsoft Teams / Discord に送信。Webhook URL は Anthropic Vault に `static_bearer` で秘匿格納し JS から読めない・ログに出さない。platform は URL ホストで自動判定。チャット・定期実行の両方で利用可) | [#13](https://github.com/sugimomoto/CoworkAgentForKintone/issues/13) |
+| F-21 | **プロセス管理 (ワークフロー) 操作** (kintone のプロセス管理を Agent から実行。レコードの**ステータス変更**（単一・最大100件一括）と**作業者変更**を自然言語で。「このレコードを完了に」「未対応案件を全部○○さんに振り直し」等。業務 Agent のみに公開。ステータス変更は取り戻し不可リスクに配慮し承認カード (`always_ask`)、作業者変更は可逆なので即時。OAuth は `k:app_record:write` に含まれ追加連携不要) | [#22](https://github.com/sugimomoto/CoworkAgentForKintone/issues/22) |
 
 詳細仕様:
 - Customizer Wedge: [.steering/20260517-customizer-wedge-design/](../.steering/20260517-customizer-wedge-design/) + [.steering/20260518-customizer-wedge-actualization/](../.steering/20260518-customizer-wedge-actualization/) (Phase 1 完了 2026-05-30)
