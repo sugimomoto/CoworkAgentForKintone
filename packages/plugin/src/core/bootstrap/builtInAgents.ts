@@ -41,12 +41,34 @@ export const KINTONE_TOOL_NAMES = [
   'kintone-update-records',
   'kintone-delete-records',
   'kintone-add-record-comment',
+  // プロセス管理 (ワークフロー, #22) — 業務 Agent のみに公開
+  'kintone-update-record-status',
+  'kintone-update-records-statuses',
+  'kintone-update-record-assignees',
 ] as const;
 
 export type KintoneToolName = (typeof KINTONE_TOOL_NAMES)[number];
 
-/** 破壊的 = `always_ask` で UI 承認を要求するツール */
-export const DESTRUCTIVE_TOOL_NAMES = new Set<KintoneToolName>(['kintone-delete-records']);
+/**
+ * `always_ask`（UI 承認カード）を要求するツール。命名は破壊的だが、実体は「取り戻し不可リスクなど
+ * 確認を挟むべき」集合。delete に加え、プロセス管理のステータス変更（完了 → 取り戻し不可があり得る）も対象 (#22)。
+ * 作業者変更 (assignees) は可逆なので含めない (= always_allow)。
+ */
+export const DESTRUCTIVE_TOOL_NAMES = new Set<KintoneToolName>([
+  'kintone-delete-records',
+  'kintone-update-record-status',
+  'kintone-update-records-statuses',
+]);
+
+/**
+ * プロセス管理（ワークフロー）系ツール (#22)。**業務 Agent のみ** に出すため、
+ * 全ツール公開の variant（カスタマイザー）からは除外する。
+ */
+export const WORKFLOW_TOOL_NAMES = new Set<KintoneToolName>([
+  'kintone-update-record-status',
+  'kintone-update-records-statuses',
+  'kintone-update-record-assignees',
+]);
 
 /**
  * 参照系 (get) のみを集めた集合。エージェントデザイナー (#48) のように
@@ -507,7 +529,8 @@ export const BUILTIN_AGENT_SPECS: Record<
     systemPrompt: CUSTOMIZER_SYSTEM_PROMPT,
     anthropicSkillIds: [],
     customSkillFilter: () => true,
-    mcpToolFilter: () => true,
+    // 管理系 (#24) は未実装で対象外。ワークフロー系 (#22) は業務 Agent 専用なので除外。
+    mcpToolFilter: (name) => !WORKFLOW_TOOL_NAMES.has(name),
     iconKind: 'cust',
     iconColor: 'accent',
     variantGroup: 'customizer',

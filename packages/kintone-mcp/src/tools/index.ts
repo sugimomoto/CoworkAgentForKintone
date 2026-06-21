@@ -13,7 +13,10 @@ import { getRecord } from './get-record';
 import { getRecordComments } from './get-record-comments';
 import { getRecords } from './get-records';
 import { updateRecord } from './update-record';
+import { updateRecordAssignees } from './update-record-assignees';
 import { updateRecords } from './update-records';
+import { updateRecordsStatuses } from './update-records-statuses';
+import { updateRecordStatus } from './update-record-status';
 import { uploadFile } from './upload-file';
 
 import type { Tool } from './types/tool';
@@ -37,6 +40,10 @@ export const tools: Array<Tool<any>> = [
   updateRecords,
   deleteRecords,
   addRecordComment,
+  // Process management (workflow, #22)
+  updateRecordStatus,
+  updateRecordsStatuses,
+  updateRecordAssignees,
   // Bulk
   bulkRequest,
   // File
