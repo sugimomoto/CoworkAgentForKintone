@@ -156,4 +156,21 @@ describe('共通', () => {
     fetchMock.mockResolvedValue(jsonResponse({ message: 'no permission', code: 'CB_NO02' }, 403));
     await expect(getAppAcl.callback({ app: '5' }, { creds: CREDS })).rejects.toThrow(/403/);
   });
+
+  it('CB_VA01 の errors 詳細 (フィールド単位の理由) がエラー文言に含まれる', async () => {
+    // 汎用 message だけでなく、kintone が返す errors (例: 予約語) を LLM に見せる
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        {
+          code: 'CB_VA01',
+          message: '入力内容が正しくありません。',
+          errors: { 'properties[ステータス]': { messages: ['予約語のため使用できません。'] } },
+        },
+        400,
+      ),
+    );
+    await expect(
+      addFormFields.callback({ app: '5', properties: { ステータス: { type: 'DROP_DOWN' } } }, { creds: CREDS }),
+    ).rejects.toThrow(/予約語のため使用できません/);
+  });
 });

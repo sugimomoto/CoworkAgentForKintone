@@ -35,8 +35,13 @@ export const updateViews = createTool<{ app: string; views: Record<string, unkno
   {
     title: 'Update App Views',
     description:
-      'アプリの一覧 (ビュー) 設定を更新する (preview)。`views` はビュー名をキーにしたオブジェクト ' +
-      '(kintone の views.json 仕様)。反映には kintone-deploy-app が必要。Returns { revision }.',
+      'アプリの一覧 (ビュー) 設定を更新する (preview)。`views` はビュー名をキーにしたオブジェクト (kintone views.json 仕様)。' +
+      '**この API はビュー全体を置換する**ため、先に kintone-get-views で現在のビューを取得し、' +
+      '残したいもの (自動作成の「（作業者が自分）」等は削除不可) も含めて全体を送ること。' +
+      'filterCond のクエリ演算子はフィールドタイプで異なる: 選択系 (DROP_DOWN/RADIO_BUTTON/CHECK_BOX/MULTI_SELECT) と ' +
+      'ユーザー/組織/グループ選択・作成者・更新者は `in` / `not in` のみ (`=`/`!=` 不可)。' +
+      '文字列(複数行)/添付は `like`/`not like`。数値・日時は比較演算子可。' +
+      '反映には kintone-deploy-app が必要。Returns { revision }.',
     inputSchema: {
       app: appIdSchema,
       views: { type: 'object', description: 'ビュー定義オブジェクト (name → 設定)' },
@@ -80,8 +85,10 @@ export const updateFormLayout = createTool<{ app: string; layout: unknown[]; rev
   {
     title: 'Update Form Layout',
     description:
-      'アプリのフォームレイアウトを更新する (preview)。`layout` は行 (ROW/GROUP/SUBTABLE) の配列 ' +
-      '(kintone の form/layout.json 仕様)。反映には kintone-deploy-app が必要。Returns { revision }.',
+      'アプリのフォームレイアウトを更新する (preview)。`layout` は行 (ROW/GROUP/SUBTABLE) の配列 (kintone form/layout.json 仕様)。' +
+      '**この API はレイアウト全体を置換する**ため、先に kintone-get-form-layout で現在値を取得し、' +
+      '既存フィールドも含めた完全なレイアウトを送ること (一部だけ送ると他が消える)。' +
+      '反映には kintone-deploy-app が必要。Returns { revision }.',
     inputSchema: {
       app: appIdSchema,
       layout: { type: 'array', description: 'レイアウト行の配列' },
@@ -102,8 +109,15 @@ export const updateFormLayout = createTool<{ app: string; layout: unknown[]; rev
 const fieldsPropertiesSchema = {
   type: 'object',
   description:
-    'フィールドコードをキーにしたフィールド定義 (kintone form/fields.json 仕様)。' +
-    '例: `{ "priority": { "type": "DROP_DOWN", "label": "優先度", "options": {...} } }`',
+    'フィールドコードをキーにしたフィールド定義 (kintone form/fields.json 仕様)。各定義に `type` は必須。' +
+    'フィールドコードに kintone の**予約語は使用不可**: ' +
+    'ステータス / 作業者 / カテゴリー / レコード番号 / 作成者 / 作成日時 / 更新者 / 更新日時 (英語: ' +
+    'Status / Assignee / Categories / Record_number / Creator / Created_datetime / Modifier / Updated_datetime)。' +
+    'プロセス管理のステータスは自動生成されるため、独自フィールドは別コード (例 deal_status) にする。' +
+    '選択系 (DROP_DOWN / RADIO_BUTTON / CHECK_BOX / MULTI_SELECT) は `options` を ' +
+    '`{ "<ラベル>": { "label": "<ラベル>", "index": "<0始まりの文字列>" } }` で指定 (index は**文字列**)。' +
+    '例: `{ "deal_status": { "type": "DROP_DOWN", "label": "ステータス", ' +
+    '"options": { "見込": { "label": "見込", "index": "0" }, "受注": { "label": "受注", "index": "1" } } } }`',
 } as const;
 
 export const addFormFields = createTool<{ app: string; properties: Record<string, unknown>; revision?: string }>(

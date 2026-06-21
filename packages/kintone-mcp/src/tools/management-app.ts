@@ -75,7 +75,8 @@ export const updateProcessManagement = createTool<UpdateProcessArgs>(
     description:
       'アプリのプロセス管理 (ワークフロー) 設定を更新する (preview)。`enable` で有効/無効、' +
       '`states` (ステータス名→定義) と `actions` (遷移配列) でワークフローを定義 (kintone status.json 仕様)。' +
-      '反映には kintone-deploy-app が必要。Returns { revision }.',
+      '**この API は states/actions 全体を置換する**ため、既存設定を変更するときは先に ' +
+      'kintone-get-process-management で取得し、全体を送ること。反映には kintone-deploy-app が必要。Returns { revision }.',
     inputSchema: {
       app: appIdSchema,
       enable: { type: 'boolean', description: 'プロセス管理の有効/無効' },

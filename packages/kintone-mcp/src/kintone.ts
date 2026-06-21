@@ -49,7 +49,14 @@ export class KintoneApiError extends Error {
     const code = parsed?.code;
     const detail = parsed?.message ?? responseText;
     const prefix = code ? `kintone ${status} [${code}]` : `kintone ${status}`;
-    super(`${prefix}: ${detail}`);
+    // kintone は CB_VA01 等の汎用 message と別に、フィールド単位の理由を `errors` に返す
+    // (例: 予約語/型不一致/必須漏れ)。これを文言に含めないと LLM が原因を掴めず試行錯誤するため、
+    // 末尾に付与する (秘匿情報ではない・長すぎないよう上限のみ)。
+    const errorsDetail =
+      parsed?.errors && typeof parsed.errors === 'object' && Object.keys(parsed.errors).length > 0
+        ? ` 詳細(errors): ${JSON.stringify(parsed.errors).slice(0, 800)}`
+        : '';
+    super(`${prefix}: ${detail}${errorsDetail}`);
     this.name = 'KintoneApiError';
     this.status = status;
     this.code = code;
