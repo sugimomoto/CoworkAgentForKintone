@@ -27,5 +27,13 @@
       src/skills/README は既存「追加方法」で充足 (必要なら同期順序の注記)
 - [x] PR
 
+## T6. リファクタリング (一連の作業で生じた重複の清算 — 挙動不変)
+- [x] #1 `agentToRecord` 統合: initializeSession ローカル版を廃し agentRecord.ts の共有版に
+      purposeOverride 引数を足して一本化 (name/isDefault 解決の不一致も解消)
+- [x] #2 system prompt 組み立てを `composeSystemPrompt()` に共通化 (business/customizer/app-designer)
+- [x] #3 resolveBuiltInAgents: skills/skillsVersion を doResolveBuiltIn で 1 回計算し create/reconcile で共有
+- [x] #4/#7 `isBuiltInPurpose` を BUILTIN_AGENT_PURPOSES から導出 / `BuiltInPurpose` 型を共有
+- [x] 全テスト (plugin 1065 / worker 194) / typecheck / lint green
+
 ## 実装順
-T1 → T2 → T3 → T4 → T5
+T1 → T2 → T3 → T4 → T5 → T6

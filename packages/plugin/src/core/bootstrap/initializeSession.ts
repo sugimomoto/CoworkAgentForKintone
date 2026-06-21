@@ -14,9 +14,7 @@ import { getCurrentSessionContext } from '../kintone/user';
 import { fetchCurrentUserGroups, fetchCurrentUserOrganizations } from '../kintone/users';
 import { resolveBundledSkillIds } from '../skills/resolveBundledSkillIds';
 
-import { agentToRecord as customAgentToRecord, readBuiltInEditableFields } from './agentRecord';
-import { BUILTIN_AGENT_SPECS } from './builtInAgents';
-import { readNotifyRecordFields } from './notifyRegistration';
+import { agentToRecord } from './agentRecord';
 import { resolveDefaultAgent } from './resolveAgent';
 import { listCustomAgents, resolveBuiltInAgents } from './resolveBuiltInAgents';
 import { resolveBootstrapEnvironment } from './resolveEnvironment';
@@ -24,7 +22,6 @@ import { resolveBootstrapEnvironment } from './resolveEnvironment';
 import type { AgentRecord } from './agentTypes';
 import type { BuiltInAgentSet } from './resolveBuiltInAgents';
 import type { AccessContext } from '../access/filterAgentsByAccess';
-import type { Agent } from '../managed-agents/types';
 
 export interface InitializeSessionInput {
   /** kintone プラグイン ID。null の場合は Worker 未設定として旧フォールバック経路を通る。 */
@@ -118,7 +115,7 @@ export async function initializeSession(
     };
     const allRecords = [
       ...toAgentRecords(set),
-      ...customAgents.map((a) => customAgentToRecord(a)),
+      ...customAgents.map((a) => agentToRecord(a)),
     ];
     const records = filterAgentsByAccess(allRecords, access, adminResolved);
     const agentId = selectInitialAgentId(records, input.preferredAgentId);
@@ -173,9 +170,9 @@ export function selectInitialAgentId(
 }
 
 /**
- * resolveBuiltInAgents の戻り値 (Agent × 3) を Plugin UI 用 AgentRecord[] に変換する。
- * metadata から iconKind / iconColor / visibility / isDefault を読み、無ければ
- * BUILTIN_AGENT_SPECS のデフォルトで補完する。
+ * resolveBuiltInAgents の戻り値 (Agent × 4 variant) を Plugin UI 用 AgentRecord[] に変換する。
+ * variant が確定しているので purpose を明示で渡し、agentRecord.ts の共有変換 (保存後リフレッシュと
+ * 同一ロジック) で iconKind / visibility / isDefault / quickActions 等を metadata 優先で補完する。
  */
 function toAgentRecords(set: BuiltInAgentSet): AgentRecord[] {
   return [
@@ -184,29 +181,4 @@ function toAgentRecords(set: BuiltInAgentSet): AgentRecord[] {
     agentToRecord(set.customizerSonnet, 'customizer-sonnet'),
     agentToRecord(set.appDesigner, 'app-designer'),
   ];
-}
-
-function agentToRecord(
-  agent: Agent,
-  purpose: 'business' | 'customizer-opus' | 'customizer-sonnet' | 'app-designer',
-): AgentRecord {
-  const spec = BUILTIN_AGENT_SPECS[purpose];
-  const meta = (agent.metadata ?? {}) as Record<string, string>;
-  return {
-    id: agent.id,
-    name: spec.name,
-    model: spec.modelKind,
-    modelLabel: spec.modelLabel,
-    description: spec.description,
-    purpose,
-    iconKind: (meta.iconKind as AgentRecord['iconKind']) ?? spec.iconKind,
-    iconColor: (meta.iconColor as AgentRecord['iconColor']) ?? spec.iconColor,
-    visibility: (meta.visibility as 'public' | 'private') ?? 'public',
-    isDefault: meta.isDefault === '1' || spec.isDefault,
-    ...(spec.variantGroup ? { variantGroup: spec.variantGroup } : {}),
-    source: 'builtin',
-    // #75: quickActions / ACL は built-in でも metadata に保存されるので metadata を優先する。
-    ...readBuiltInEditableFields(meta, spec.quickActions),
-    ...readNotifyRecordFields(meta),
-  };
 }

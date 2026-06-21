@@ -121,8 +121,11 @@ async function doResolveBuiltIn(
   spec: BuiltInAgentSpec,
   options: ResolveBuiltInAgentsOptions,
 ): Promise<Agent> {
-  // tool 構成から導出する版数。tool を変えれば変化し、既存エージェントの reconcile を駆動する。
+  // tool / skill 構成から導出する版数。spec や同期状態が変われば変化し、既存エージェントの
+  // reconcile (tools 追従 / skill 後付け) を駆動する。create / reconcile で同じ値を使う。
   const toolsVersion = computeToolsVersion(purpose, spec);
+  const skills = buildAgentSkills(spec, options);
+  const skillsVersion = computeSkillsVersion(skills);
 
   // metadata は find filter にも create body にも同じ key で渡す (完全一致で再 list 可能)。
   // toolsVersion は filter には含めない (= エージェント identity は据え置き、tools だけ追従させる)。
@@ -138,18 +141,21 @@ async function doResolveBuiltIn(
   // 1. 既存 Agent を探索 → 見つかれば tool/skill ドリフトを reconcile して返す (ID 保持)
   const existing = await findDefaultAgents(filter);
   if (existing.length > 0) {
-    return reconcileBuiltInAgent(pickOldest(existing), purpose, spec, toolsVersion, options);
+    return reconcileBuiltInAgent(pickOldest(existing), purpose, spec, {
+      toolsVersion,
+      skills,
+      skillsVersion,
+      options,
+    });
   }
 
   // 2. 無ければ作成
-  const skills = buildAgentSkills(spec, options);
-
   // metadata には UI 補助情報 (iconKind / iconColor / variantGroup / isDefault / visibility) も含める
   // (find filter には影響しないが、再 list 時に Plugin がここから読む)
   const fullMetadata: Record<string, string> = {
     ...filter,
     toolsVersion,
-    skillsVersion: computeSkillsVersion(skills),
+    skillsVersion,
     iconKind: spec.iconKind,
     iconColor: spec.iconColor,
     isDefault: spec.isDefault ? '1' : '0',
@@ -253,11 +259,14 @@ async function reconcileBuiltInAgent(
   agent: Agent,
   purpose: BuiltInPurpose,
   spec: BuiltInAgentSpec,
-  toolsVersion: string,
-  options: ResolveBuiltInAgentsOptions,
+  desired: {
+    toolsVersion: string;
+    skills: AgentSkill[];
+    skillsVersion: string;
+    options: ResolveBuiltInAgentsOptions;
+  },
 ): Promise<Agent> {
-  const expectedSkills = buildAgentSkills(spec, options);
-  const skillsVersion = computeSkillsVersion(expectedSkills);
+  const { toolsVersion, skills: expectedSkills, skillsVersion, options } = desired;
   // skill 更新は「同期済 custom skill を持つ」spec のときだけ (anthropic 専用 spec は同期レースが無い)。
   const hasCustomSkill = expectedSkills.some((s) => s.type === 'custom');
 
