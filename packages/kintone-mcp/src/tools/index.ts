@@ -12,6 +12,32 @@ import { getFormFields } from './get-form-fields';
 import { getRecord } from './get-record';
 import { getRecordComments } from './get-record-comments';
 import { getRecords } from './get-records';
+import {
+  getAppAcl,
+  getAppPlugins,
+  updateAppAcl,
+  updateAppPlugins,
+} from './management-acl';
+import {
+  createApp,
+  getProcessManagement,
+  updateProcessManagement,
+} from './management-app';
+import {
+  deployApp,
+  getAppDeployStatus,
+  getCustomize,
+  updateCustomize,
+} from './management-customize';
+import {
+  addFormFields,
+  deleteFormFields,
+  getFormLayout,
+  getViews,
+  updateFormFields,
+  updateFormLayout,
+  updateViews,
+} from './management-form';
 import { updateRecord } from './update-record';
 import { updateRecordAssignees } from './update-record-assignees';
 import { updateRecords } from './update-records';
@@ -47,6 +73,25 @@ export const tools: Array<Tool<any>> = [
   // File
   uploadFile,
   downloadFile,
+  // App management (Phase C, #24) — admin 専用 Custom Agent 用
+  getCustomize,
+  updateCustomize,
+  deployApp,
+  getAppDeployStatus,
+  getViews,
+  updateViews,
+  getFormLayout,
+  updateFormLayout,
+  addFormFields,
+  updateFormFields,
+  deleteFormFields,
+  createApp,
+  getProcessManagement,
+  updateProcessManagement,
+  getAppAcl,
+  updateAppAcl,
+  getAppPlugins,
+  updateAppPlugins,
 ];
 
 /** 全ツール名 (Anthropic Agent の mcp_toolset.configs に渡す用) */

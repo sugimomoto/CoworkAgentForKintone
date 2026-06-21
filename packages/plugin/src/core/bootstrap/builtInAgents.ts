@@ -44,16 +44,40 @@ export const KINTONE_TOOL_NAMES = [
   // プロセス管理 (ワークフロー, #22) — 業務 Agent のみに公開
   'kintone-update-records-statuses',
   'kintone-update-record-assignees',
+  // アプリ管理系 (Phase C, #24) — admin 専用 Custom Agent のみ (全 built-in variant から除外)
+  'kintone-get-customize',
+  'kintone-update-customize',
+  'kintone-deploy-app',
+  'kintone-get-app-deploy-status',
+  'kintone-get-views',
+  'kintone-update-views',
+  'kintone-get-form-layout',
+  'kintone-update-form-layout',
+  'kintone-add-form-fields',
+  'kintone-update-form-fields',
+  'kintone-delete-form-fields',
+  'kintone-create-app',
+  'kintone-get-process-management',
+  'kintone-update-process-management',
+  'kintone-get-app-acl',
+  'kintone-update-app-acl',
+  'kintone-get-app-plugins',
+  'kintone-update-app-plugins',
 ] as const;
 
 export type KintoneToolName = (typeof KINTONE_TOOL_NAMES)[number];
 
 /**
  * 破壊的 = `always_ask` で UI 承認を要求するツール。
- * 復元不能な delete のみ。プロセス管理のステータス変更 (#22) は通常のワークフロー操作なので
- * 承認カードは挟まず always_allow（取り戻し可否のガードは system prompt / Skills 側に委ねる）。
+ * - delete-records: 復元不能
+ * - deploy-app / delete-form-fields (#24): 影響大で取り消しにくい (deploy はライブ反映 / fields 削除はデータ消失)
+ * プロセス管理のステータス変更 (#22) は通常のワークフロー操作なので承認カードは挟まない (always_allow)。
  */
-export const DESTRUCTIVE_TOOL_NAMES = new Set<KintoneToolName>(['kintone-delete-records']);
+export const DESTRUCTIVE_TOOL_NAMES = new Set<KintoneToolName>([
+  'kintone-delete-records',
+  'kintone-deploy-app',
+  'kintone-delete-form-fields',
+]);
 
 /**
  * プロセス管理（ワークフロー）系ツール (#22)。**業務 Agent のみ** に出すため、
@@ -76,15 +100,32 @@ export const READONLY_KINTONE_TOOL_NAMES = new Set<KintoneToolName>([
 ]);
 
 /**
- * 業務エージェントが除外する「管理系」ツール集合 (将来 #24 で追加される予定のもの)。
- * 現状の KINTONE_TOOL_NAMES には含まれていないが、追加時にここに登録すると業務側から除外される。
+ * アプリ管理系ツール集合 (Phase C, #24)。**admin 専用** のため、全 built-in variant の `mcpToolFilter` が
+ * これを除外する。admin が Custom Agent 作成時に必要分を選び、公開先 ACL で admin 限定にして使う。
  */
 export const MANAGEMENT_TOOL_NAMES = new Set<string>([
-  'kintone-add-fields',
-  'kintone-update-fields',
-  'kintone-delete-fields',
+  // customize / deploy
+  'kintone-get-customize',
+  'kintone-update-customize',
   'kintone-deploy-app',
-  'kintone-update-customize-js',
+  'kintone-get-app-deploy-status',
+  // form design
+  'kintone-get-views',
+  'kintone-update-views',
+  'kintone-get-form-layout',
+  'kintone-update-form-layout',
+  'kintone-add-form-fields',
+  'kintone-update-form-fields',
+  'kintone-delete-form-fields',
+  // app / process
+  'kintone-create-app',
+  'kintone-get-process-management',
+  'kintone-update-process-management',
+  // acl / plugins
+  'kintone-get-app-acl',
+  'kintone-update-app-acl',
+  'kintone-get-app-plugins',
+  'kintone-update-app-plugins',
 ]);
 
 // ─── system prompt の構成部品 ─────────────────────────────────────────────
@@ -523,8 +564,8 @@ export const BUILTIN_AGENT_SPECS: Record<
     systemPrompt: CUSTOMIZER_SYSTEM_PROMPT,
     anthropicSkillIds: [],
     customSkillFilter: () => true,
-    // 管理系 (#24) は未実装で対象外。ワークフロー系 (#22) は業務 Agent 専用なので除外。
-    mcpToolFilter: (name) => !WORKFLOW_TOOL_NAMES.has(name),
+    // ワークフロー系 (#22) は業務 Agent 専用、管理系 (#24) は admin 専用なので、どちらも除外。
+    mcpToolFilter: (name) => !WORKFLOW_TOOL_NAMES.has(name) && !MANAGEMENT_TOOL_NAMES.has(name),
     iconKind: 'cust',
     iconColor: 'accent',
     variantGroup: 'customizer',
