@@ -73,7 +73,7 @@ describe('handleMcp', () => {
     expect(json.result.capabilities).toBeDefined();
   });
 
-  it('tools/list は read 6 + write 6 + process 2 + bulk 1 + file 2 ツールを返す', async () => {
+  it('tools/list は read 6 + write 6 + process 2 + bulk 1 + file 2 + 管理 18 = 35 ツールを返す', async () => {
     const res = await handleMcp(mcpRequest({ jsonrpc: '2.0', method: 'tools/list', id: 2 }));
     const json = (await res.json()) as { result: { tools: Array<{ name: string }> } };
     const names = json.result.tools.map((t) => t.name);
@@ -101,9 +101,28 @@ describe('handleMcp', () => {
         // File
         'kintone-upload-file',
         'kintone-download-file',
+        // App management (Phase C, #24)
+        'kintone-get-customize',
+        'kintone-update-customize',
+        'kintone-deploy-app',
+        'kintone-get-app-deploy-status',
+        'kintone-get-views',
+        'kintone-update-views',
+        'kintone-get-form-layout',
+        'kintone-update-form-layout',
+        'kintone-add-form-fields',
+        'kintone-update-form-fields',
+        'kintone-delete-form-fields',
+        'kintone-create-app',
+        'kintone-get-process-management',
+        'kintone-update-process-management',
+        'kintone-get-app-acl',
+        'kintone-update-app-acl',
+        'kintone-get-app-plugins',
+        'kintone-update-app-plugins',
       ]),
     );
-    expect(names).toHaveLength(17);
+    expect(names).toHaveLength(35);
   });
 
   it('tools/call kintone-get-apps は URL のドメインに対して Bearer で叩く', async () => {

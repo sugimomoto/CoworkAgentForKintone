@@ -47,3 +47,27 @@ export const assigneesSchema = {
   items: { type: 'string' },
   description: '作業者のログイン名 (code) の配列。空配列を渡すと全作業者を解除する。',
 } as const;
+
+// ── アプリ管理系 (Phase C, #24) ──
+
+export const previewSchema = {
+  type: 'boolean',
+  description:
+    '取得元。true=運用前 (preview, 未デプロイの編集中設定) / false=運用環境 (live, 既定)。' +
+    '更新系ツールは常に preview に書き込み、deploy するまでライブに反映されない。',
+} as const;
+
+export const revisionOptSchema = {
+  type: 'string',
+  description: '楽観ロック用の想定リビジョン (省略可。指定すると不一致で 409)。',
+} as const;
+
+/**
+ * アプリ設定 API のパスを組み立てる。
+ *   appConfigPath('form/fields.json', true)  → '/k/v1/preview/app/form/fields.json'
+ *   appConfigPath('views.json', false)       → '/k/v1/app/views.json'
+ * 更新系は preview 固定、取得系は preview フラグで切替。
+ */
+export function appConfigPath(segment: string, preview: boolean): string {
+  return `/k/v1${preview ? '/preview' : ''}/app/${segment}`;
+}
