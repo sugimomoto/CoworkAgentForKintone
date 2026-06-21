@@ -22,6 +22,8 @@
 > - §0.7 **Agent 詳細編集 + Custom Agent 永続化** (AgentEditDraft / 雛形コピー / archive 削除)
 > - §0.8 **プリセットエージェント + クイックアクション** (AgentRecord.quickActions / Composer 下ボタン UX)
 > - §0.9 **エージェントデザイナー** (built-in 3rd variant + `propose_agent` Custom Tool + `agent-draft` artifact)
+> - §0.10 **定期実行 (Deployments / cron)** (Scheduled Deployments で Agent を cron 自律起動)
+> - §0.11 **アプリデザイナー** (built-in 4th variant — 資料/PDF からアプリ設計・構築、管理系ツール直実行)
 >
 > §0.1〜§0.4 (OAuth + MCP) は変更なし。これら V1 機能はすべて §0.1〜§0.4 の通信経路の上に乗っています。
 
@@ -431,6 +433,30 @@ sequenceDiagram
   各 run の `session_id` から会話を会話ビューで開ける (設定を開いたまま左ペインにロード)。
 - **MVP 外**: 承認フロー / 作成者制限・コストガード / イベント駆動トリガー / files・github・memory・vault
   リソース指定 / session の詳細追跡。
+
+---
+
+### 0.11 アプリデザイナー (built-in 4th variant) — #117
+
+業務内容や既存資料・PDF を読み解き、kintone アプリを設計・構築する built-in Agent。`BUILTIN_AGENT_SPECS`
+の 4 つ目の variant (`purpose='app-designer'`)。これまで admin 専用 (Custom Agent でのみ選択可) だった
+管理系ツール群 (§F-22 / #24 の 18 ツール) を、built-in として直接実行できる最初のエージェント。
+
+**設計上の要点:**
+
+- **モデル / スキル**: Opus (`claude-opus-4-7`)。資料読解のため Anthropic 製スキル `pdf` / `docx` /
+  `xlsx` / `pptx` を attach。設計提案は会話で行い、`propose_app` のような専用ドラフト機構は持たず、
+  kintone MCP ツールを直接実行してアプリを作成・改修する (会話 + ツール直実行)。
+- **ツール公開範囲**: `mcpToolFilter = () => true` で全 kintone ツール (CRUD + ワークフロー + 管理系 +
+  破壊系) を許可。`deploy-app` / `delete-form-fields` / `delete-records` は共通の承認カード
+  (`DESTRUCTIVE_TOOL_NAMES`) を経由する。
+- **admin 振り分けを設けない理由**: kintone 側でアプリのカスタマイズ・設定変更は app-admin 権限が必須で、
+  非管理者が管理系ツールを呼んでも API が 403 を返す。エージェント側で二重に admin gate を設ける必要が
+  ないため、全ユーザーに公開しつつ実権限は kintone に委ねる。
+- **kintone アプリ設計のドメイン知識**: system prompt に予約フィールドコード (ステータス / 作業者 等は
+  field code に使えない)、選択肢の `options` 形状 (index は文字列)、更新は全置換 (get → merge → update)、
+  preview に積んで `deploy-app` で反映、フィールド種別ごとの `filterCond` 演算子といった kintone 固有の
+  落とし穴を埋め込み、試行錯誤を減らす。
 
 ---
 

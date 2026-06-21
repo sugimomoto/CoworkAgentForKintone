@@ -25,7 +25,12 @@ import type { Agent } from '../managed-agents/types';
 type BuiltInPurpose = Exclude<AgentPurpose, 'custom'>;
 
 function isBuiltInPurpose(p: string): p is BuiltInPurpose {
-  return p === 'business' || p === 'customizer-opus' || p === 'customizer-sonnet';
+  return (
+    p === 'business' ||
+    p === 'customizer-opus' ||
+    p === 'customizer-sonnet' ||
+    p === 'app-designer'
+  );
 }
 
 /**

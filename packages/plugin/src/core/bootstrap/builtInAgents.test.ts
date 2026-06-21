@@ -15,9 +15,10 @@ import {
   MANAGEMENT_TOOL_NAMES,
 } from './builtInAgents';
 
-describe('BUILTIN_AGENT_SPECS — 3 variant', () => {
-  it('業務 / Customizer Opus / Customizer Sonnet の 3 entry を持つ', () => {
+describe('BUILTIN_AGENT_SPECS — 4 variant', () => {
+  it('業務 / Customizer Opus / Customizer Sonnet / アプリデザイナー の 4 entry を持つ', () => {
     expect(Object.keys(BUILTIN_AGENT_SPECS).sort()).toEqual([
+      'app-designer',
       'business',
       'customizer-opus',
       'customizer-sonnet',
@@ -26,6 +27,7 @@ describe('BUILTIN_AGENT_SPECS — 3 variant', () => {
       'business',
       'customizer-opus',
       'customizer-sonnet',
+      'app-designer',
     ]);
   });
 
@@ -135,6 +137,45 @@ describe('BUILTIN_AGENT_SPECS — 3 variant', () => {
       expect(spec.isDefault).toBe(false);
     });
   });
+
+  describe('app-designer エージェント (#117 アプリデザイナー)', () => {
+    const spec = BUILTIN_AGENT_SPECS['app-designer'];
+
+    it('model は claude-opus-4-7 / OPUS', () => {
+      expect(spec.model).toBe('claude-opus-4-7');
+      expect(spec.modelLabel).toBe('OPUS');
+      expect(spec.modelKind).toBe('opus');
+    });
+
+    it('name は アプリデザイナー / promptVersion は v1-app-designer', () => {
+      expect(spec.name).toBe('アプリデザイナー');
+      expect(spec.promptVersion).toBe('v1-app-designer');
+    });
+
+    it('資料読解スキル (pdf / docx / xlsx / pptx) を attach', () => {
+      expect(spec.anthropicSkillIds).toEqual(['pdf', 'docx', 'xlsx', 'pptx']);
+    });
+
+    it('customSkillFilter は何も attach しない', () => {
+      expect(spec.customSkillFilter('kintone-customize-js')).toBe(false);
+      expect(spec.customSkillFilter('kintone-plugin-development')).toBe(false);
+    });
+
+    it('mcpToolFilter は全 kintone ツールを通す (管理系・破壊系含む)', () => {
+      expect(spec.mcpToolFilter('kintone-get-apps')).toBe(true);
+      expect(spec.mcpToolFilter('kintone-add-form-fields')).toBe(true);
+      expect(spec.mcpToolFilter('kintone-update-app-acl')).toBe(true);
+      expect(spec.mcpToolFilter('kintone-deploy-app')).toBe(true);
+      expect(spec.mcpToolFilter('kintone-update-records-statuses')).toBe(true);
+    });
+
+    it('UI アイコンは doc / accent / variantGroup なし / isDefault=false', () => {
+      expect(spec.iconKind).toBe('doc');
+      expect(spec.iconColor).toBe('accent');
+      expect(spec.variantGroup).toBeUndefined();
+      expect(spec.isDefault).toBe(false);
+    });
+  });
 });
 
 describe('system prompt 分割', () => {
@@ -165,8 +206,8 @@ describe('system prompt 分割', () => {
   });
 });
 
-describe('quickActions — 3 variant 全てに 4 個以上のクイックアクションがある', () => {
-  it.each(['business', 'customizer-opus', 'customizer-sonnet'] as const)(
+describe('quickActions — 4 variant 全てに 4 個以上のクイックアクションがある', () => {
+  it.each(['business', 'customizer-opus', 'customizer-sonnet', 'app-designer'] as const)(
     '%s には 4〜5 個のクイックアクションが定義されている',
     (purpose) => {
       const spec = BUILTIN_AGENT_SPECS[purpose];
@@ -209,12 +250,14 @@ describe('共有定数', () => {
     expect(DESTRUCTIVE_TOOL_NAMES.size).toBe(3);
   });
 
-  it('ワークフロー系は業務 Agent のみ (customizer-sonnet / designer には出ない)', () => {
+  it('ワークフロー系は業務 / アプリデザイナーに出る (customizer-sonnet / opus には出ない)', () => {
     const wf = 'kintone-update-records-statuses' as const;
     expect(BUILTIN_AGENT_SPECS.business.mcpToolFilter(wf)).toBe(true);
     expect(BUILTIN_AGENT_SPECS['customizer-sonnet'].mcpToolFilter(wf)).toBe(false);
     expect(BUILTIN_AGENT_SPECS['customizer-opus'].mcpToolFilter(wf)).toBe(false);
-    // 作業者変更も同様に業務のみ
+    // #117: アプリデザイナーは全ツール許可 (() => true)
+    expect(BUILTIN_AGENT_SPECS['app-designer'].mcpToolFilter(wf)).toBe(true);
+    // 作業者変更も同様
     const asg = 'kintone-update-record-assignees' as const;
     expect(BUILTIN_AGENT_SPECS.business.mcpToolFilter(asg)).toBe(true);
     expect(BUILTIN_AGENT_SPECS['customizer-sonnet'].mcpToolFilter(asg)).toBe(false);
@@ -230,13 +273,15 @@ describe('共有定数', () => {
     expect(MANAGEMENT_TOOL_NAMES.has('kintone-update-records-statuses')).toBe(false);
   });
 
-  it('管理系 (#24) は全 built-in variant に出ない (admin 専用 / custom Agent でのみ選択)', () => {
+  it('管理系 (#24) は アプリデザイナー以外の built-in variant に出ない (custom Agent でのみ選択)', () => {
     const mgmt = 'kintone-update-app-acl' as const;
-    // built-in 3 variant いずれも除外
+    // 業務 / customizer 系は除外
     expect(BUILTIN_AGENT_SPECS.business.mcpToolFilter(mgmt)).toBe(false);
     expect(BUILTIN_AGENT_SPECS['customizer-sonnet'].mcpToolFilter(mgmt)).toBe(false);
     expect(BUILTIN_AGENT_SPECS['customizer-opus'].mcpToolFilter(mgmt)).toBe(false);
-    // ただし KINTONE_TOOL_NAMES には含まれ、Custom Agent の picker では選べる
+    // #117: アプリデザイナーは管理系を含む全ツールを許可 (kintone 側で app-admin 権限を強制)
+    expect(BUILTIN_AGENT_SPECS['app-designer'].mcpToolFilter(mgmt)).toBe(true);
+    // KINTONE_TOOL_NAMES には含まれ、Custom Agent の picker でも選べる
     expect(KINTONE_TOOL_NAMES).toContain(mgmt);
   });
 });

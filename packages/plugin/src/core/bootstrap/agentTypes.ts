@@ -51,6 +51,7 @@ export type AgentPurpose =
   | 'business'
   | 'customizer-opus'
   | 'customizer-sonnet'
+  | 'app-designer'
   | 'custom';
 
 /**

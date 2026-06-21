@@ -48,6 +48,7 @@ const BUILTIN_SET = {
   business: makeAgent({ id: 'a_biz' }),
   customizerOpus: makeAgent({ id: 'a_opus' }),
   customizerSonnet: makeAgent({ id: 'a_sonnet' }),
+  appDesigner: makeAgent({ id: 'a_appdes' }),
 };
 
 beforeEach(() => {
@@ -74,7 +75,12 @@ describe('initializeSession — workerUrl あり (rich path)', () => {
   it('built-in 3 variant を解決し、isDefault (customizer-opus) を初期選択する', async () => {
     const r = await initializeSession({ pluginId: 'plg_1' });
     expect(r.builtInAgents).not.toBeNull();
-    expect(r.builtInAgents!.map((a) => a.id).sort()).toEqual(['a_biz', 'a_opus', 'a_sonnet']);
+    expect(r.builtInAgents!.map((a) => a.id).sort()).toEqual([
+      'a_appdes',
+      'a_biz',
+      'a_opus',
+      'a_sonnet',
+    ]);
     expect(r.agentId).toBe('a_opus'); // customizer-opus = 出荷時デフォルト
     expect(r.environmentId).toBe('env_1');
     expect(r.isAdmin).toBe(true);

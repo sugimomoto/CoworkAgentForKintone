@@ -505,8 +505,69 @@ export const AGENT_DESIGNER_SYSTEM_PROMPT = [
   '- スケジュール / 自動トリガー設計 (現プロダクトに該当機能なし)',
 ].join('\n');
 
+// ─── アプリデザイナー (#117) ─────────────────────────────────────────────
+
+const APP_DESIGNER_QUICK_ACTIONS: readonly string[] = [
+  'この帳票 (PDF) を kintone アプリにして',
+  '既存アプリに項目を追加して',
+  'ワークフロー (申請 → 承認 → 完了) を設定して',
+  '業務に合わせた一覧ビューを作って',
+  '新しいアプリをゼロから設計して',
+];
+
 /**
- * V1 で auto-ensure される 3 variant の spec カタログ。
+ * アプリデザイナーの system prompt (#117)。
+ * 業務要件・添付資料から kintone アプリを設計し、管理系ツール (#24) で preview に構築 →
+ * レビュー → deploy まで伴走する。会話 + ツール直実行 (propose_app のような専用 UI は持たない)。
+ */
+const APP_DESIGNER_DOMAIN_PROMPT = [
+  '【役割】',
+  'あなたは kintone の「アプリデザイナー」です。業務内容や添付資料 (PDF / Excel / Word / PowerPoint) を読み取り、',
+  'kintone アプリ (フィールド・フォーム・一覧ビュー・プロセス管理・権限) を設計し、実際に構築まで伴走します。',
+  '',
+  '【進め方】',
+  '1. ヒアリングと資料読解で要件を整理する。添付資料があれば skill で読み取り、項目候補を抽出する。',
+  '2. 設計案を会話で提示する (フィールドと型 / レイアウト / 必要なら一覧ビュー・ワークフロー・権限)。',
+  '3. 合意後、管理系ツールで preview に構築する (create-app → add-form-fields → update-form-layout → ...)。',
+  '4. 何を変えたか差分を説明し、ユーザーの「反映して」で kintone-deploy-app を実行する。',
+  '5. kintone-get-app-deploy-status でデプロイ完了 (SUCCESS) を確認して報告する。',
+  '',
+  '【kintone アプリ設計の必須知識】',
+  '- フィールドコードに **予約語は使えない**: ステータス / 作業者 / カテゴリー / レコード番号 / 作成者 / 作成日時 /',
+  '  更新者 / 更新日時。独自フィールドは別コード (例: deal_status) にする。',
+  '- 選択系 (DROP_DOWN / RADIO_BUTTON / CHECK_BOX / MULTI_SELECT) は `options` を',
+  '  `{ "<ラベル>": { "label": "<ラベル>", "index": "<0始まりの文字列>" } }` で。各フィールドに `type` は必須。',
+  '- views / form-layout / fields / process / acl / plugins の **更新系は設定全体を置換する**。',
+  '  既存を変えるときは必ず get-* で現状を取得し、残す分も含めて全体を送る (自動作成ビュー等も保持)。',
+  '- 変更は **preview に積まれ、kintone-deploy-app するまで本番に反映されない**。',
+  '- 一覧の絞り込み (filterCond) の演算子はフィールドタイプ依存: 選択系・ユーザー/組織/グループは `in` / `not in` のみ',
+  '  (`=`/`!=` 不可)、文字列は `like`/`not like` も可。',
+  '',
+  '【安全則】',
+  '- いきなり deploy しない。preview 構築 → 差分説明 → ユーザー承認 → deploy の順を守る。',
+  '- フィールド削除・権限変更・デプロイは影響を説明してから。これらは UI で承認カードが出る。',
+  '- 既存アプリを改変するときは、必ず現状を get してから差分だけ反映する。',
+  '',
+  '【役割の境界】',
+  '- レコードの検索・集計・操作は「業務エージェント」、エージェント自体の設計は「エージェントデザイナー」、',
+  '  JavaScript / プラグイン開発は「カスタマイザーエージェント」の担当。あなたは **アプリの構造そのもの** を作る。',
+].join('\n');
+
+const APP_DESIGNER_INTRO =
+  'あなたは kintone のアプリ設計・構築支援エージェント Cowork Agent (アプリデザイナー) です。';
+
+export const APP_DESIGNER_SYSTEM_PROMPT = [
+  APP_DESIGNER_INTRO,
+  '',
+  KINTONE_TOOLS_PROMPT,
+  '',
+  APP_DESIGNER_DOMAIN_PROMPT,
+  '',
+  COMMON_GUARDRAILS,
+].join('\n');
+
+/**
+ * V1 で auto-ensure される built-in variant の spec カタログ。
  */
 export const BUILTIN_AGENT_SPECS: Record<
   Exclude<AgentPurpose, 'custom'>,
@@ -572,6 +633,24 @@ export const BUILTIN_AGENT_SPECS: Record<
     isDefault: false,
     quickActions: CUSTOMIZER_QUICK_ACTIONS,
   },
+  // アプリ設計・構築支援 (#117)。管理系ツール (#24) を持つ唯一の built-in。
+  // admin gate は設けない (kintone 側でアプリ管理者権限が無いと API が 403 になるため)。
+  'app-designer': {
+    name: 'アプリデザイナー',
+    description: '業務や資料から kintone アプリを設計・構築',
+    model: 'claude-opus-4-7',
+    modelLabel: 'OPUS',
+    modelKind: 'opus',
+    promptVersion: 'v1-app-designer',
+    systemPrompt: APP_DESIGNER_SYSTEM_PROMPT,
+    anthropicSkillIds: ['pdf', 'docx', 'xlsx', 'pptx'],
+    customSkillFilter: () => false,
+    mcpToolFilter: () => true, // 全 kintone ツール (CRUD + ワークフロー + 管理系) を attach
+    iconKind: 'doc',
+    iconColor: 'accent',
+    isDefault: false,
+    quickActions: APP_DESIGNER_QUICK_ACTIONS,
+  },
 };
 
 /** Built-in Agent の purpose 一覧 (UI で順序を保ちたい時の規定順) */
@@ -579,4 +658,5 @@ export const BUILTIN_AGENT_PURPOSES: ReadonlyArray<Exclude<AgentPurpose, 'custom
   'business',
   'customizer-opus',
   'customizer-sonnet',
+  'app-designer',
 ];

@@ -45,6 +45,7 @@ export interface BuiltInAgentSet {
   business: Agent;
   customizerOpus: Agent;
   customizerSonnet: Agent;
+  appDesigner: Agent;
 }
 
 export interface ResolveBuiltInAgentsOptions {
@@ -78,12 +79,13 @@ function findDefaultAgents(filter: Record<string, string>): Promise<Agent[]> {
 export async function resolveBuiltInAgents(
   options: ResolveBuiltInAgentsOptions,
 ): Promise<BuiltInAgentSet> {
-  const [business, customizerOpus, customizerSonnet] = await Promise.all([
+  const [business, customizerOpus, customizerSonnet, appDesigner] = await Promise.all([
     resolveBuiltInOne('business', options),
     resolveBuiltInOne('customizer-opus', options),
     resolveBuiltInOne('customizer-sonnet', options),
+    resolveBuiltInOne('app-designer', options),
   ]);
-  return { business, customizerOpus, customizerSonnet };
+  return { business, customizerOpus, customizerSonnet, appDesigner };
 }
 
 async function resolveBuiltInOne(
