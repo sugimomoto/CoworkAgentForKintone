@@ -11,25 +11,19 @@ requirements.md の確定事項に基づく実装設計。
 
 ---
 
-## 1. Worker — 追加ツール（3）
+## 1. Worker — 追加ツール（2）
 
-既存の `update-record.ts` / `update-records.ts` と同じ構造（`createTool` + `kintoneRequest` + `toolResult`）。
+既存の `update-records.ts` と同じ構造（`createTool` + `kintoneRequest` + `toolResult`）。
+status は一括 1 本に統合（一括 API は 1 件も含む上位互換。単一専用は作らない）。
 
-### 1.1 `kintone-update-record-status`
-- API: `PUT /k/v1/record/status.json`
-- 入力: `app`(必須), `id`(必須), `action`(必須), `assignee?`(単一 code), `revision?`
-- body: `{ app, id, action, assignee?, revision? }`
-- 出力: `{ revision }`
-- バリデーション: `app` / `id` / `action` 必須（`action` は非空文字列）。
-
-### 1.2 `kintone-update-records-statuses`
+### 1.1 `kintone-update-records-statuses`
 - API: `PUT /k/v1/records/status.json`
 - 入力: `app`(必須), `records: [{ id, action, assignee?, revision? }]`（最大 100）
 - body: `{ app, records }`
 - 出力: `{ records: [{ id, revision }] }`
 - バリデーション: `assertMaxBatch`（100）、`assertNonEmpty`、各 entry の `id` / `action` 必須。
 
-### 1.3 `kintone-update-record-assignees`
+### 1.2 `kintone-update-record-assignees`
 - API: `PUT /k/v1/record/assignees.json`
 - 入力: `app`(必須), `id`(必須), `assignees: [code, …]`, `revision?`
 - body: `{ app, id, assignees, revision? }`
@@ -93,8 +87,7 @@ MCP のツール結果としてそのまま LLM に渡る。これにより:
 ## 3. 変更ファイル
 
 ### Worker（kintone-mcp）
-- `src/tools/update-record-status.ts`（新規）
-- `src/tools/update-records-statuses.ts`（新規）
+- `src/tools/update-records-statuses.ts`（新規・status は本ツール 1 本で単一/一括を賄う）
 - `src/tools/update-record-assignees.ts`（新規）
 - `src/tools/utils/schemas.ts`（actionSchema / assigneeCodeSchema / assigneesSchema 追加）
 - `src/tools/index.ts`（tools 配列に 3 つ追加）

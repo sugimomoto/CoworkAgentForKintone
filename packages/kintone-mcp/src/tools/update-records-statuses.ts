@@ -23,9 +23,10 @@ export const updateRecordsStatuses = createTool<Args>(
   {
     title: 'Update Records Statuses',
     description:
-      '複数レコードのステータスを 1 リクエストで一括遷移させる (最大 100)。各 entry は ' +
-      '`{ id, action, assignee?, revision? }`。「未対応案件を全部 完了に」のような一括処理に使う。' +
-      'Returns { records: [{ id, revision }] }.',
+      'プロセス管理 (ワークフロー) でレコードのステータスを遷移させる。最大 100 件まで 1 リクエストで一括処理。' +
+      '**1 件だけのときも `records` に 1 要素で渡す**（単一専用ツールは無い）。各 entry は ' +
+      '`{ id, action, assignee?, revision? }`。「このレコードを完了に」「未対応案件を全部 完了に」どちらも本ツール。' +
+      '`action` はアプリで定義済みのアクション名。Returns { records: [{ id, revision }] }.',
     inputSchema: {
       app: appIdSchema,
       records: {

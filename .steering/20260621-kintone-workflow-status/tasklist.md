@@ -1,16 +1,16 @@
 # タスクリスト: kintone プロセス管理レコード操作 — #22 Phase B-1
 
-確定: 3 ツール（status 単一/一括 + assignees）/ スコープ追加なし / 業務 Agent のみ /
-status 系 = always_ask・assignees = always_allow / エラーは KintoneApiError で surface。
+確定: 2 ツール（status 一括 1 本 + assignees）/ スコープ追加なし / 業務 Agent のみ /
+3 ツールとも always_allow（承認カードは delete のみ）/ エラーは KintoneApiError で surface。
+（status は単一/一括の 2 本案から一括 1 本に統合。一括 API は 1 件も賄える上位互換。）
 
 ## T1. Worker: スキーマ部品
 - [x] `src/tools/utils/schemas.ts` に `actionSchema` / `assigneeCodeSchema` / `assigneesSchema` を追加
 
-## T2. Worker: ツール 3 本
-- [x] `src/tools/update-record-status.ts`（`PUT /k/v1/record/status.json`、`{app,id,action,assignee?,revision?}` → `{revision}`）
-- [x] `src/tools/update-records-statuses.ts`（`PUT /k/v1/records/status.json`、最大 100、`{app,records[]}` → `{records[]}`）
+## T2. Worker: ツール 2 本
+- [x] `src/tools/update-records-statuses.ts`（`PUT /k/v1/records/status.json`、最大 100・1 件可、`{app,records[]}` → `{records[]}`）
 - [x] `src/tools/update-record-assignees.ts`（`PUT /k/v1/record/assignees.json`、`{app,id,assignees[],revision?}` → `{revision}`）
-- [x] `src/tools/index.ts` の `tools` 配列に 3 つ登録（Write グループ付近）
+- [x] `src/tools/index.ts` の `tools` 配列に 2 つ登録（Write グループ付近）
 
 ## T3. Worker: テスト
 - [x] 各ツール: 正常系（path/body/出力）+ バリデーション（必須欠落 / 最大件数）+ KintoneApiError 伝播（400/409）

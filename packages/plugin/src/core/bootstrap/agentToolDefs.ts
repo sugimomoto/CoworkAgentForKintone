@@ -25,7 +25,6 @@ export const KINTONE_TOOL_NAMES = [
   'kintone-delete-records',
   'kintone-add-record-comment',
   // プロセス管理 (ワークフロー, #22)
-  'kintone-update-record-status',
   'kintone-update-records-statuses',
   'kintone-update-record-assignees',
 ] as const;

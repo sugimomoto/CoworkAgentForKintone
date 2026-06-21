@@ -42,7 +42,6 @@ export const KINTONE_TOOL_NAMES = [
   'kintone-delete-records',
   'kintone-add-record-comment',
   // プロセス管理 (ワークフロー, #22) — 業務 Agent のみに公開
-  'kintone-update-record-status',
   'kintone-update-records-statuses',
   'kintone-update-record-assignees',
 ] as const;
@@ -61,7 +60,6 @@ export const DESTRUCTIVE_TOOL_NAMES = new Set<KintoneToolName>(['kintone-delete-
  * 全ツール公開の variant（カスタマイザー）からは除外する。
  */
 export const WORKFLOW_TOOL_NAMES = new Set<KintoneToolName>([
-  'kintone-update-record-status',
   'kintone-update-records-statuses',
   'kintone-update-record-assignees',
 ]);
