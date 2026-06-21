@@ -466,8 +466,13 @@ sequenceDiagram
     UI の name 渡しと二重基準だった)。app-designer は `name === 'kintone-app-design'` のみ、carpenter
     (customizer-sonnet) は app-design を除く全 custom skill を attach。promptVersion を `v2-app-designer` に
     bump して既存 Agent を再作成し、薄化プロンプト + skill 付与を反映する。
-  - **運用順序**: 既存スキル基盤と同様、admin が先に「Skills 同期」を実行して skill_id を発番してから
-    プロンプト bump が効く (同期前の bootstrap では skill 無しで作られる既知の挙動)。
+  - **skill 後付け (self-heal)**: skill は従来「作成時のみ」attach され、reconcile (#86) は tools しか
+    追従していなかったため、同期前に作られたエージェントには skill が永久に付かなかった。これを
+    `reconcileBuiltInAgent` で **skillsVersion ドリフト修復**に拡張。`metadata.skillsVersion` が現行値と
+    不一致で、かつ同期済 custom skill が存在するときだけ `updateAgent` で skills を上書きする
+    (未解決時は skills を送らず既存を消さない安全側)。これにより admin が「Skills 同期」を押せば、
+    **次回 bootstrap で既存 app-designer にも skill が後付けされる** (再作成や promptVersion bump 不要)。
+    同じ仕組みで customizer-sonnet の JS/plugin skill も同期後に追従する (潜在していた同期レースの解消)。
 
 ---
 

@@ -135,29 +135,21 @@ async function doResolveBuiltIn(
     kintoneDomain: options.kintoneDomain,
   };
 
-  // 1. 既存 Agent を探索 → 見つかれば tool ドリフトを reconcile して返す (ID 保持)
+  // 1. 既存 Agent を探索 → 見つかれば tool/skill ドリフトを reconcile して返す (ID 保持)
   const existing = await findDefaultAgents(filter);
   if (existing.length > 0) {
-    return reconcileBuiltInAgentTools(pickOldest(existing), purpose, spec, toolsVersion, options);
+    return reconcileBuiltInAgent(pickOldest(existing), purpose, spec, toolsVersion, options);
   }
 
   // 2. 無ければ作成
-  const skills: Array<{ type: 'anthropic' | 'custom'; skill_id: string }> = [
-    ...spec.anthropicSkillIds.map((id) => ({ type: 'anthropic' as const, skill_id: id })),
-  ];
-  if (options.customSkills && options.customSkills.length > 0) {
-    for (const s of options.customSkills) {
-      if (spec.customSkillFilter(s.name)) {
-        skills.push({ type: 'custom', skill_id: s.skillId });
-      }
-    }
-  }
+  const skills = buildAgentSkills(spec, options);
 
   // metadata には UI 補助情報 (iconKind / iconColor / variantGroup / isDefault / visibility) も含める
   // (find filter には影響しないが、再 list 時に Plugin がここから読む)
   const fullMetadata: Record<string, string> = {
     ...filter,
     toolsVersion,
+    skillsVersion: computeSkillsVersion(skills),
     iconKind: spec.iconKind,
     iconColor: spec.iconColor,
     isDefault: spec.isDefault ? '1' : '0',
@@ -240,24 +232,38 @@ function buildBuiltInAgentTools(
 }
 
 /**
- * 既存 Built-in Agent の tool 構成を現行 spec に追従させる (#86 ツールドリフト修復)。
+ * 既存 Built-in Agent を現行 spec に追従させる (#86 ツールドリフト修復 + #117 skill 後付け)。
  *
- * find-or-create は promptVersion 等の identity で既存を再利用するだけで tools を更新しないため、
- * propose_agent 未配線の中間ビルドで作られたエージェント等で tools が古いまま固定されてしまう。
- * metadata.toolsVersion を現行値と突き合わせ、不一致なら updateAgent で tools を上書きする
+ * find-or-create は promptVersion 等の identity で既存を再利用するだけで tools/skills を更新しないため:
+ * - tools: propose_agent 未配線の中間ビルドで作られたエージェント等で古いまま固定される
+ * - skills: custom skill が「同期前」に作られたエージェントに永久に attach されない
+ *   (例: app-designer が Skills 同期前の bootstrap で作られると kintone-app-design skill が付かない)
+ *
+ * metadata.toolsVersion / skillsVersion を現行値と突き合わせ、不一致なら updateAgent で上書きする
  * (エージェント ID は保持 = 過去セッション参照・variantGroup 切替に影響しない)。
+ *
+ * skills は同期済 (= options.customSkills に skill_id がある) custom skill を含むときだけ更新する。
+ * 未解決 (sync 失敗等で空) のときは skills を **送らない** (= 既存 skills を消さない安全側に倒す)。
+ * tools は決定的なので常に送る。
  *
  * 楽観ロック (Anthropic 仕様で updateAgent は version 必須) のため、409 衝突時は retrieve して再試行。
  * 別タブ/別プロセスが先に最新へ更新済みなら、それを採用して終了する。
  */
-async function reconcileBuiltInAgentTools(
+async function reconcileBuiltInAgent(
   agent: Agent,
   purpose: BuiltInPurpose,
   spec: BuiltInAgentSpec,
   toolsVersion: string,
   options: ResolveBuiltInAgentsOptions,
 ): Promise<Agent> {
-  if (agent.metadata['toolsVersion'] === toolsVersion) {
+  const expectedSkills = buildAgentSkills(spec, options);
+  const skillsVersion = computeSkillsVersion(expectedSkills);
+  // skill 更新は「同期済 custom skill を持つ」spec のときだけ (anthropic 専用 spec は同期レースが無い)。
+  const hasCustomSkill = expectedSkills.some((s) => s.type === 'custom');
+
+  const needToolUpdate = agent.metadata['toolsVersion'] !== toolsVersion;
+  const needSkillUpdate = hasCustomSkill && agent.metadata['skillsVersion'] !== skillsVersion;
+  if (!needToolUpdate && !needSkillUpdate) {
     return agent; // 最新 — 何もしない (通常パス)
   }
 
@@ -269,21 +275,34 @@ async function reconcileBuiltInAgentTools(
     options.kintoneDomain,
     notifyKeyForBuiltIn(purpose),
   );
+  const buildPatch = (version: number): Parameters<typeof updateAgent>[1] => {
+    const metadata: Record<string, string> = { ...agent.metadata, toolsVersion };
+    // tools は決定的なので常に送る (既存挙動)
+    const patch: Parameters<typeof updateAgent>[1] = {
+      version,
+      tools,
+      mcp_servers: mcpServers,
+      metadata,
+    };
+    if (needSkillUpdate) {
+      patch.skills = expectedSkills;
+      metadata['skillsVersion'] = skillsVersion;
+    }
+    return patch;
+  };
+
   let version = agent.version;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      return await updateAgent(agent.id, {
-        version,
-        tools,
-        mcp_servers: mcpServers,
-        metadata: { ...agent.metadata, toolsVersion },
-      });
+      return await updateAgent(agent.id, buildPatch(version));
     } catch (err) {
       const conflict = err instanceof ApiError && err.status === 409;
       if (!conflict || attempt === 2) throw err;
       // 別タブ/別プロセスが先に更新 → 最新を取り直して判定
       const fresh = await retrieveAgent(agent.id);
-      if (fresh.metadata['toolsVersion'] === toolsVersion) return fresh;
+      const toolOk = !needToolUpdate || fresh.metadata['toolsVersion'] === toolsVersion;
+      const skillOk = !needSkillUpdate || fresh.metadata['skillsVersion'] === skillsVersion;
+      if (toolOk && skillOk) return fresh;
       version = fresh.version;
     }
   }
@@ -316,6 +335,41 @@ function computeToolsVersion(purpose: BuiltInPurpose, spec: BuiltInAgentSpec): s
 /** purpose に対応する現行 toolsVersion (テスト / 参照用)。 */
 export function builtInToolsVersion(purpose: BuiltInPurpose): string {
   return computeToolsVersion(purpose, BUILTIN_AGENT_SPECS[purpose]);
+}
+
+type AgentSkill = { type: 'anthropic' | 'custom'; skill_id: string };
+
+/**
+ * spec の anthropicSkillIds + (customSkillFilter を通過した同期済 custom skill) を
+ * attach 用の skills 配列に組み立てる。create / reconcile の両方で使う。
+ */
+function buildAgentSkills(spec: BuiltInAgentSpec, options: ResolveBuiltInAgentsOptions): AgentSkill[] {
+  const skills: AgentSkill[] = spec.anthropicSkillIds.map((id) => ({
+    type: 'anthropic' as const,
+    skill_id: id,
+  }));
+  if (options.customSkills) {
+    for (const s of options.customSkills) {
+      if (spec.customSkillFilter(s.name)) {
+        skills.push({ type: 'custom', skill_id: s.skillId });
+      }
+    }
+  }
+  return skills;
+}
+
+/**
+ * attach 予定 skill 集合から安定した版数を導出する。custom skill が未同期 (= 配列に無い) 状態と
+ * 同期後で値が変わるため、reconcile が「既存エージェントへの skill 後付け」を駆動できる。
+ * find filter には含めない (エージェント identity は据え置き、skills だけ追従)。
+ */
+function computeSkillsVersion(skills: AgentSkill[]): string {
+  const sig = skills
+    .map((s) => `${s.type}:${s.skill_id}`)
+    .slice()
+    .sort()
+    .join(',');
+  return `sk_${djb2(sig)}`;
 }
 
 /** 32bit djb2 → base36。決定的でプロセス間でも安定 (Math.random / Date 不使用)。 */
