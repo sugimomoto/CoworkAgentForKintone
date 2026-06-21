@@ -53,8 +53,11 @@ export interface ResolveBuiltInAgentsOptions {
   workerUrl: string;
   /** kintone ドメイン (例: tenant.cybozu.com)。workerUrl と組で `/mcp/<domain>` を構成 */
   kintoneDomain: string;
-  /** Plugin 同期済 custom skill の id 一覧。各 variant の customSkillFilter で再 filter される */
-  customSkillIds?: ReadonlyArray<string>;
+  /**
+   * Plugin 同期済 custom skill の {name, skillId}。各 variant の customSkillFilter(name) で
+   * 再 filter され、attach する skill を role 別に選ぶ (例: app-design は app-designer のみ)。
+   */
+  customSkills?: ReadonlyArray<{ name: string; skillId: string }>;
 }
 
 /** purpose 単位の in-flight Promise (同一プロセス内のレース対策) */
@@ -93,7 +96,9 @@ async function resolveBuiltInOne(
   options: ResolveBuiltInAgentsOptions,
 ): Promise<Agent> {
   const spec = BUILTIN_AGENT_SPECS[purpose];
-  const skillsKey = options.customSkillIds ? [...options.customSkillIds].sort().join(',') : '';
+  const skillsKey = options.customSkills
+    ? [...options.customSkills.map((s) => s.skillId)].sort().join(',')
+    : '';
   const key = [purpose, options.workerUrl, options.kintoneDomain, spec.promptVersion, skillsKey].join(
     '|',
   );
@@ -140,10 +145,10 @@ async function doResolveBuiltIn(
   const skills: Array<{ type: 'anthropic' | 'custom'; skill_id: string }> = [
     ...spec.anthropicSkillIds.map((id) => ({ type: 'anthropic' as const, skill_id: id })),
   ];
-  if (options.customSkillIds && options.customSkillIds.length > 0) {
-    for (const id of options.customSkillIds) {
-      if (spec.customSkillFilter(id)) {
-        skills.push({ type: 'custom', skill_id: id });
+  if (options.customSkills && options.customSkills.length > 0) {
+    for (const s of options.customSkills) {
+      if (spec.customSkillFilter(s.name)) {
+        skills.push({ type: 'custom', skill_id: s.skillId });
       }
     }
   }

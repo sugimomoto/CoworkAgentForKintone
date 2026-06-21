@@ -520,6 +520,11 @@ const APP_DESIGNER_QUICK_ACTIONS: readonly string[] = [
  * 業務要件・添付資料から kintone アプリを設計し、管理系ツール (#24) で preview に構築 →
  * レビュー → deploy まで伴走する。会話 + ツール直実行 (propose_app のような専用 UI は持たない)。
  */
+/** Plugin 同梱 custom skill「kintone アプリ構造設計」の name (= SKILL.md frontmatter / display_title)。 */
+export const APP_DESIGN_SKILL_NAME = 'kintone-app-design';
+
+// 設計知識の詳細 (予約コード / options 形状 / filterCond 演算子 / 計算フィールド) は kintone-app-design
+// skill に集約 (progressive disclosure)。常駐プロンプトには行動規範と「常に効く即死要因」だけを薄く残す。
 const APP_DESIGNER_DOMAIN_PROMPT = [
   '【役割】',
   'あなたは kintone の「アプリデザイナー」です。業務内容や添付資料 (PDF / Excel / Word / PowerPoint) を読み取り、',
@@ -532,16 +537,13 @@ const APP_DESIGNER_DOMAIN_PROMPT = [
   '4. 何を変えたか差分を説明し、ユーザーの「反映して」で kintone-deploy-app を実行する。',
   '5. kintone-get-app-deploy-status でデプロイ完了 (SUCCESS) を確認して報告する。',
   '',
-  '【kintone アプリ設計の必須知識】',
-  '- フィールドコードに **予約語は使えない**: ステータス / 作業者 / カテゴリー / レコード番号 / 作成者 / 作成日時 /',
-  '  更新者 / 更新日時。独自フィールドは別コード (例: deal_status) にする。',
-  '- 選択系 (DROP_DOWN / RADIO_BUTTON / CHECK_BOX / MULTI_SELECT) は `options` を',
-  '  `{ "<ラベル>": { "label": "<ラベル>", "index": "<0始まりの文字列>" } }` で。各フィールドに `type` は必須。',
+  '【常に意識する要点】',
   '- views / form-layout / fields / process / acl / plugins の **更新系は設定全体を置換する**。',
   '  既存を変えるときは必ず get-* で現状を取得し、残す分も含めて全体を送る (自動作成ビュー等も保持)。',
   '- 変更は **preview に積まれ、kintone-deploy-app するまで本番に反映されない**。',
-  '- 一覧の絞り込み (filterCond) の演算子はフィールドタイプ依存: 選択系・ユーザー/組織/グループは `in` / `not in` のみ',
-  '  (`=`/`!=` 不可)、文字列は `like`/`not like` も可。',
+  '- **フィールド設計・計算フィールド・一覧フィルタの落とし穴は `kintone-app-design` skill を必ず参照する**',
+  '  (予約フィールドコード / options 形状 / filterCond 演算子 / 計算フィールドの式と表示形式 = CONVERT! 回避)。',
+  '  特に計算フィールドは表示形式が数値・日時系のみで、DATE_FORMAT 等の文字列を返す式は CONVERT! になる。',
   '',
   '【安全則】',
   '- いきなり deploy しない。preview 構築 → 差分説明 → ユーザー承認 → deploy の順を守る。',
@@ -624,7 +626,8 @@ export const BUILTIN_AGENT_SPECS: Record<
     promptVersion: 'v22-customizer',
     systemPrompt: CUSTOMIZER_SYSTEM_PROMPT,
     anthropicSkillIds: [],
-    customSkillFilter: () => true,
+    // JS/plugin 開発 skill + admin 追加分は attach するが、アプリ構造設計 skill は app-designer 専用なので除外。
+    customSkillFilter: (name) => name !== APP_DESIGN_SKILL_NAME,
     // ワークフロー系 (#22) は業務 Agent 専用、管理系 (#24) は admin 専用なので、どちらも除外。
     mcpToolFilter: (name) => !WORKFLOW_TOOL_NAMES.has(name) && !MANAGEMENT_TOOL_NAMES.has(name),
     iconKind: 'cust',
@@ -641,10 +644,12 @@ export const BUILTIN_AGENT_SPECS: Record<
     model: 'claude-opus-4-7',
     modelLabel: 'OPUS',
     modelKind: 'opus',
-    promptVersion: 'v1-app-designer',
+    // v2: ドメイン知識を kintone-app-design skill に集約 (プロンプト薄化 + skill attach) するため bump。
+    promptVersion: 'v2-app-designer',
     systemPrompt: APP_DESIGNER_SYSTEM_PROMPT,
     anthropicSkillIds: ['pdf', 'docx', 'xlsx', 'pptx'],
-    customSkillFilter: () => false,
+    // アプリ構造設計 skill のみ attach (資料読解の Anthropic 製 skill は anthropicSkillIds 側)。
+    customSkillFilter: (name) => name === APP_DESIGN_SKILL_NAME,
     mcpToolFilter: () => true, // 全 kintone ツール (CRUD + ワークフロー + 管理系) を attach
     iconKind: 'doc',
     iconColor: 'accent',

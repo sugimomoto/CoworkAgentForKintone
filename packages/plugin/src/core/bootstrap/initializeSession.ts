@@ -65,19 +65,22 @@ export async function initializeSession(
   const workerUrl = cfg.workerUrl ?? undefined;
   const kctx = getCurrentSessionContext();
 
-  // Anthropic 側 source-of-truth から custom skill_id を解決 (Plugin Config は介在しない)。
+  // Anthropic 側 source-of-truth から custom skill を解決 (Plugin Config は介在しない)。
+  // name も保持し、各 variant の customSkillFilter(name) で role 別に attach を選ぶ。
   // 失敗時は skill 無しで bootstrap を続行 (admin が同期ボタンを押せば後で attach される)。
-  let customSkillIds: string[] = [];
+  let customSkills: Array<{ name: string; skillId: string }> = [];
   if (workerUrl) {
     try {
       const resolved = await resolveBundledSkillIds();
-      customSkillIds = resolved
-        .map((r) => r.skillId)
-        .filter((id): id is string => typeof id === 'string' && id.length > 0);
+      customSkills = resolved
+        .filter((r): r is typeof r & { skillId: string } => Boolean(r.skillId))
+        .map((r) => ({ name: r.name, skillId: r.skillId }));
     } catch {
       // 解決失敗時は skill 無し継続 (Settings View 側でも fetch して UI 反映する)
     }
   }
+  // フォールバック (resolveDefaultAgent) 用の id 配列 (こちらは role 別 filter なし)
+  const customSkillIds: string[] = customSkills.map((s) => s.skillId);
   throwIfAborted(signal);
 
   const envPromise = resolveBootstrapEnvironment();
@@ -92,7 +95,7 @@ export async function initializeSession(
       resolveBuiltInAgents({
         workerUrl,
         kintoneDomain: kctx.kintoneDomain,
-        ...(customSkillIds.length > 0 ? { customSkillIds } : {}),
+        ...(customSkills.length > 0 ? { customSkills } : {}),
       }),
       envPromise,
       listCustomAgents({ workerUrl, kintoneDomain: kctx.kintoneDomain }).catch(() => []),
