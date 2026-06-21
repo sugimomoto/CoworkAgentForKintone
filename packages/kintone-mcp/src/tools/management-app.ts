@@ -3,11 +3,8 @@
 import { kintoneRequest } from '../kintone';
 
 import { createTool, toolResult } from './factory';
-import { appConfigPath, appIdSchema, previewSchema, revisionOptSchema } from './utils/schemas';
-
-function requireApp(tool: string, app: string): void {
-  if (!app) throw new Error(`${tool}: app is required`);
-}
+import { makeAppConfigGetTool, requireApp } from './utils/app-config';
+import { appConfigPath, appIdSchema, revisionOptSchema } from './utils/schemas';
 
 // ── create-app ──
 interface CreateAppArgs {
@@ -41,23 +38,12 @@ export const createApp = createTool<CreateAppArgs>(
 );
 
 // ── get-process-management ──
-export const getProcessManagement = createTool<{ app: string; preview?: boolean }>(
+export const getProcessManagement = makeAppConfigGetTool(
   'kintone-get-process-management',
-  {
-    title: 'Get Process Management',
-    description:
-      'アプリのプロセス管理 (ワークフロー) 設定を取得する。preview=true で運用前。' +
-      'ステータス・アクション・取り戻し可否などを含む。Returns { enable, states, actions, revision }.',
-    inputSchema: { app: appIdSchema, preview: previewSchema },
-  },
-  async (args, { creds }) => {
-    requireApp('kintone-get-process-management', args.app);
-    return toolResult(
-      await kintoneRequest(creds, 'GET', appConfigPath('status.json', args.preview ?? false), {
-        params: { app: args.app },
-      }),
-    );
-  },
+  'Get Process Management',
+  'アプリのプロセス管理 (ワークフロー) 設定を取得する。preview=true で運用前。' +
+    'ステータス・アクション・取り戻し可否などを含む。Returns { enable, states, actions, revision }.',
+  'status.json',
 );
 
 // ── update-process-management ──

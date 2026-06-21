@@ -4,29 +4,15 @@
 import { kintoneRequest } from '../kintone';
 
 import { createTool, toolResult } from './factory';
-import { appConfigPath, appIdSchema, previewSchema, revisionOptSchema } from './utils/schemas';
-
-function requireApp(tool: string, app: string): void {
-  if (!app) throw new Error(`${tool}: app is required`);
-}
+import { makeAppConfigGetTool, requireApp } from './utils/app-config';
+import { appConfigPath, appIdSchema, revisionOptSchema } from './utils/schemas';
 
 // ── get-views ──
-export const getViews = createTool<{ app: string; preview?: boolean }>(
+export const getViews = makeAppConfigGetTool(
   'kintone-get-views',
-  {
-    title: 'Get App Views',
-    description:
-      'アプリの一覧 (ビュー) 設定を取得する。preview=true で運用前。Returns { views, revision }.',
-    inputSchema: { app: appIdSchema, preview: previewSchema },
-  },
-  async (args, { creds }) => {
-    requireApp('kintone-get-views', args.app);
-    return toolResult(
-      await kintoneRequest(creds, 'GET', appConfigPath('views.json', args.preview ?? false), {
-        params: { app: args.app },
-      }),
-    );
-  },
+  'Get App Views',
+  'アプリの一覧 (ビュー) 設定を取得する。preview=true で運用前。Returns { views, revision }.',
+  'views.json',
 );
 
 // ── update-views ──
@@ -61,22 +47,11 @@ export const updateViews = createTool<{ app: string; views: Record<string, unkno
 );
 
 // ── get-form-layout ──
-export const getFormLayout = createTool<{ app: string; preview?: boolean }>(
+export const getFormLayout = makeAppConfigGetTool(
   'kintone-get-form-layout',
-  {
-    title: 'Get Form Layout',
-    description:
-      'アプリのフォームレイアウト (フィールド配置) を取得する。preview=true で運用前。Returns { layout, revision }.',
-    inputSchema: { app: appIdSchema, preview: previewSchema },
-  },
-  async (args, { creds }) => {
-    requireApp('kintone-get-form-layout', args.app);
-    return toolResult(
-      await kintoneRequest(creds, 'GET', appConfigPath('form/layout.json', args.preview ?? false), {
-        params: { app: args.app },
-      }),
-    );
-  },
+  'Get Form Layout',
+  'アプリのフォームレイアウト (フィールド配置) を取得する。preview=true で運用前。Returns { layout, revision }.',
+  'form/layout.json',
 );
 
 // ── update-form-layout ──

@@ -3,30 +3,16 @@
 import { kintoneRequest } from '../kintone';
 
 import { createTool, toolResult } from './factory';
-import { appConfigPath, appIdSchema, previewSchema, revisionOptSchema } from './utils/schemas';
-
-function requireApp(tool: string, app: string): void {
-  if (!app) throw new Error(`${tool}: app is required`);
-}
+import { makeAppConfigGetTool, requireApp } from './utils/app-config';
+import { appConfigPath, appIdSchema, revisionOptSchema } from './utils/schemas';
 
 // ── get-app-acl ──
-export const getAppAcl = createTool<{ app: string; preview?: boolean }>(
+export const getAppAcl = makeAppConfigGetTool(
   'kintone-get-app-acl',
-  {
-    title: 'Get App Permissions (ACL)',
-    description:
-      'アプリのアクセス権 (ACL) を取得する。preview=true で運用前。' +
-      'Returns { rights: [{ entity, appEditable, recordViewable, ... }], revision }.',
-    inputSchema: { app: appIdSchema, preview: previewSchema },
-  },
-  async (args, { creds }) => {
-    requireApp('kintone-get-app-acl', args.app);
-    return toolResult(
-      await kintoneRequest(creds, 'GET', appConfigPath('acl.json', args.preview ?? false), {
-        params: { app: args.app },
-      }),
-    );
-  },
+  'Get App Permissions (ACL)',
+  'アプリのアクセス権 (ACL) を取得する。preview=true で運用前。' +
+    'Returns { rights: [{ entity, appEditable, recordViewable, ... }], revision }.',
+  'acl.json',
 );
 
 // ── update-app-acl ──
@@ -54,23 +40,12 @@ export const updateAppAcl = createTool<{ app: string; rights: unknown[]; revisio
 );
 
 // ── get-app-plugins ──
-export const getAppPlugins = createTool<{ app: string; preview?: boolean }>(
+export const getAppPlugins = makeAppConfigGetTool(
   'kintone-get-app-plugins',
-  {
-    title: 'Get App Plugins',
-    description:
-      'アプリに追加されたプラグイン一覧を取得する。preview=true で運用前。' +
-      'Returns { plugins: [{ id, name, enabled, ... }], revision }.',
-    inputSchema: { app: appIdSchema, preview: previewSchema },
-  },
-  async (args, { creds }) => {
-    requireApp('kintone-get-app-plugins', args.app);
-    return toolResult(
-      await kintoneRequest(creds, 'GET', appConfigPath('plugins.json', args.preview ?? false), {
-        params: { app: args.app },
-      }),
-    );
-  },
+  'Get App Plugins',
+  'アプリに追加されたプラグイン一覧を取得する。preview=true で運用前。' +
+    'Returns { plugins: [{ id, name, enabled, ... }], revision }.',
+  'plugins.json',
 );
 
 // ── update-app-plugins ──

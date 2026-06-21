@@ -4,33 +4,16 @@
 import { kintoneRequest } from '../kintone';
 
 import { createTool, toolResult } from './factory';
-import { appConfigPath, appIdSchema, previewSchema, revisionOptSchema } from './utils/schemas';
-
-function requireApp(tool: string, app: string): void {
-  if (!app) throw new Error(`${tool}: app is required`);
-}
+import { makeAppConfigGetTool, requireApp } from './utils/app-config';
+import { appConfigPath, appIdSchema, revisionOptSchema } from './utils/schemas';
 
 // ── get-customize ──
-interface GetCustomizeArgs {
-  app: string;
-  preview?: boolean;
-}
-export const getCustomize = createTool<GetCustomizeArgs>(
+export const getCustomize = makeAppConfigGetTool(
   'kintone-get-customize',
-  {
-    title: 'Get App Customize',
-    description:
-      'アプリの JavaScript / CSS カスタマイズ設定を取得する。preview=true で運用前(編集中)、既定は運用環境。' +
-      'Returns { desktop, mobile, scope, revision }.',
-    inputSchema: { app: appIdSchema, preview: previewSchema },
-  },
-  async (args, { creds }) => {
-    requireApp('kintone-get-customize', args.app);
-    const result = await kintoneRequest(creds, 'GET', appConfigPath('customize.json', args.preview ?? false), {
-      params: { app: args.app },
-    });
-    return toolResult(result);
-  },
+  'Get App Customize',
+  'アプリの JavaScript / CSS カスタマイズ設定を取得する。preview=true で運用前(編集中)、既定は運用環境。' +
+    'Returns { desktop, mobile, scope, revision }.',
+  'customize.json',
 );
 
 // ── update-customize ──
