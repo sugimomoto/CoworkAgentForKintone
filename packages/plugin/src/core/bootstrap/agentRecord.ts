@@ -10,7 +10,7 @@ import {
   META_KEY_ALLOWED_USERS,
   META_KEY_QUICK_ACTIONS,
 } from './agentTypes';
-import { BUILTIN_AGENT_SPECS } from './builtInAgents';
+import { BUILTIN_AGENT_PURPOSES, BUILTIN_AGENT_SPECS } from './builtInAgents';
 import { readNotifyRecordFields } from './notifyRegistration';
 
 import type {
@@ -22,30 +22,31 @@ import type {
 } from './agentTypes';
 import type { Agent } from '../managed-agents/types';
 
-type BuiltInPurpose = Exclude<AgentPurpose, 'custom'>;
+export type BuiltInPurpose = Exclude<AgentPurpose, 'custom'>;
 
+/** built-in purpose 判定。canonical は BUILTIN_AGENT_PURPOSES (builtInAgents.ts) に一本化。 */
 function isBuiltInPurpose(p: string): p is BuiltInPurpose {
-  return (
-    p === 'business' ||
-    p === 'customizer-opus' ||
-    p === 'customizer-sonnet' ||
-    p === 'app-designer'
-  );
+  return (BUILTIN_AGENT_PURPOSES as readonly string[]).includes(p);
 }
 
 /**
  * Anthropic Agent オブジェクトを AgentRecord に変換する。
  *
  * 動作:
- *   - metadata.purpose を見て built-in / custom を判別
+ *   - purpose は purposeOverride (bootstrap で解決済 variant を渡すとき) を優先し、
+ *     無ければ metadata.purpose、それも無ければ 'custom'
  *   - built-in なら BUILTIN_AGENT_SPECS から不在 metadata を補完
  *   - custom なら metadata に全部入っている前提 (作成時に必ず埋める)
  *
  * 不正な metadata でも UI が崩れないように、すべて optional + fallback。
+ *
+ * bootstrap (resolveBuiltInAgents の戻り) と保存後リフレッシュの両経路から呼び、変換ロジックの
+ * 二重化 (= name / isDefault の解決差) を防ぐ。bootstrap 側は variant が確定しているので
+ * purposeOverride で明示する (metadata.purpose に依存しない)。
  */
-export function agentToRecord(agent: Agent): AgentRecord {
+export function agentToRecord(agent: Agent, purposeOverride?: BuiltInPurpose): AgentRecord {
   const meta = (agent.metadata ?? {}) as Record<string, string>;
-  const rawPurpose = meta.purpose ?? 'custom';
+  const rawPurpose = purposeOverride ?? meta.purpose ?? 'custom';
 
   if (isBuiltInPurpose(rawPurpose)) {
     const spec = BUILTIN_AGENT_SPECS[rawPurpose];

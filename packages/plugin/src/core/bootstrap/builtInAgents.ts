@@ -321,21 +321,31 @@ const CUSTOMIZER_WORKFLOW_PROMPT = [
 
 // ─── system prompt 合成 ───────────────────────────────────────────────────
 
+/**
+ * INTRO + 各ブロック (kintone ツール / ドメイン知識 / 共通ガードレール 等) を空行区切りで連結する。
+ * 各 variant の system prompt が同型の `[intro, '', block, '', ..., GUARDRAILS]` 組み立てを繰り返して
+ * いたのを 1 箇所に集約。ブロック間は空行 1 つ (旧 `[a, '', b].join('\n')` と同じ出力)。
+ */
+function composeSystemPrompt(...sections: string[]): string {
+  return sections.join('\n\n');
+}
+
 const BUSINESS_INTRO = 'あなたは kintone の業務支援エージェント Cowork Agent (業務エージェント) です。';
 const CUSTOMIZER_INTRO =
   'あなたは kintone の業務 + カスタマイズ開発支援エージェント Cowork Agent (カスタマイザーエージェント) です。';
 
-export const BUSINESS_SYSTEM_PROMPT = [BUSINESS_INTRO, '', KINTONE_TOOLS_PROMPT, '', COMMON_GUARDRAILS].join('\n');
-
-export const CUSTOMIZER_SYSTEM_PROMPT = [
-  CUSTOMIZER_INTRO,
-  '',
+export const BUSINESS_SYSTEM_PROMPT = composeSystemPrompt(
+  BUSINESS_INTRO,
   KINTONE_TOOLS_PROMPT,
-  '',
-  CUSTOMIZER_WORKFLOW_PROMPT,
-  '',
   COMMON_GUARDRAILS,
-].join('\n');
+);
+
+export const CUSTOMIZER_SYSTEM_PROMPT = composeSystemPrompt(
+  CUSTOMIZER_INTRO,
+  KINTONE_TOOLS_PROMPT,
+  CUSTOMIZER_WORKFLOW_PROMPT,
+  COMMON_GUARDRAILS,
+);
 
 // ─── BUILTIN_AGENT_SPECS テーブル ─────────────────────────────────────────
 
@@ -558,15 +568,12 @@ const APP_DESIGNER_DOMAIN_PROMPT = [
 const APP_DESIGNER_INTRO =
   'あなたは kintone のアプリ設計・構築支援エージェント Cowork Agent (アプリデザイナー) です。';
 
-export const APP_DESIGNER_SYSTEM_PROMPT = [
+export const APP_DESIGNER_SYSTEM_PROMPT = composeSystemPrompt(
   APP_DESIGNER_INTRO,
-  '',
   KINTONE_TOOLS_PROMPT,
-  '',
   APP_DESIGNER_DOMAIN_PROMPT,
-  '',
   COMMON_GUARDRAILS,
-].join('\n');
+);
 
 /**
  * V1 で auto-ensure される built-in variant の spec カタログ。
