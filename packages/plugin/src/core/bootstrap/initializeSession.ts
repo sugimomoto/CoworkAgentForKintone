@@ -179,12 +179,13 @@ function toAgentRecords(set: BuiltInAgentSet): AgentRecord[] {
     agentToRecord(set.business, 'business'),
     agentToRecord(set.customizerOpus, 'customizer-opus'),
     agentToRecord(set.customizerSonnet, 'customizer-sonnet'),
+    agentToRecord(set.appDesigner, 'app-designer'),
   ];
 }
 
 function agentToRecord(
   agent: Agent,
-  purpose: 'business' | 'customizer-opus' | 'customizer-sonnet',
+  purpose: 'business' | 'customizer-opus' | 'customizer-sonnet' | 'app-designer',
 ): AgentRecord {
   const spec = BUILTIN_AGENT_SPECS[purpose];
   const meta = (agent.metadata ?? {}) as Record<string, string>;

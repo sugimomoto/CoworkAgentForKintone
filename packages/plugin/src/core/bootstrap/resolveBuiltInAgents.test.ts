@@ -69,6 +69,7 @@ describe('resolveBuiltInAgents', () => {
     expect(result.business.id).toBe('agent_biz');
     expect(result.customizerOpus.id).toBe('agent_co');
     expect(result.customizerSonnet.id).toBe('agent_cs');
+    expect(result.appDesigner.id).toBe('agent_app-designer'); // idMap 未指定 → フォールバック
   });
 
   it('各 variant の POST body に正しい purpose / model / iconKind / variantGroup が含まれる', async () => {
@@ -81,12 +82,19 @@ describe('resolveBuiltInAgents', () => {
     await resolveBuiltInAgents(OPTIONS);
 
     const posts = fetchMock.mock.calls.filter((c) => c[1]?.method === 'POST');
-    expect(posts).toHaveLength(3);
+    expect(posts).toHaveLength(4);
 
     const bodies = posts.map((c) => JSON.parse(c[1].body));
     const businessBody = bodies.find((b) => b.metadata.purpose === 'business');
     const opusBody = bodies.find((b) => b.metadata.purpose === 'customizer-opus');
     const sonnetBody = bodies.find((b) => b.metadata.purpose === 'customizer-sonnet');
+    const appDesignerBody = bodies.find((b) => b.metadata.purpose === 'app-designer');
+
+    expect(appDesignerBody.model).toBe('claude-opus-4-7');
+    expect(appDesignerBody.metadata.iconKind).toBe('doc');
+    expect(appDesignerBody.metadata.iconColor).toBe('accent');
+    expect(appDesignerBody.metadata.variantGroup).toBeUndefined();
+    expect(appDesignerBody.metadata.isDefault).toBe('0');
 
     expect(businessBody.model).toBe('claude-sonnet-4-6');
     expect(businessBody.metadata.iconKind).toBe('biz');
@@ -119,9 +127,11 @@ describe('resolveBuiltInAgents', () => {
     const businessBody = bodies.find((b) => b.metadata.purpose === 'business');
     const opusBody = bodies.find((b) => b.metadata.purpose === 'customizer-opus');
     const sonnetBody = bodies.find((b) => b.metadata.purpose === 'customizer-sonnet');
+    const appDesignerBody = bodies.find((b) => b.metadata.purpose === 'app-designer');
     expect(businessBody.metadata.promptVersion).toBe('v20-business');
     expect(opusBody.metadata.promptVersion).toBe('v23-agent-designer');
     expect(sonnetBody.metadata.promptVersion).toBe('v22-customizer');
+    expect(appDesignerBody.metadata.promptVersion).toBe('v1-app-designer');
   });
 
   it('既存 Agent が見つかれば再利用 (POST 呼出 0 回)', async () => {
@@ -168,6 +178,18 @@ describe('resolveBuiltInAgents', () => {
                 toolsVersion: builtInToolsVersion('customizer-sonnet'),
               },
             }),
+            makeAgent({
+              id: 'appdes_existing',
+              metadata: {
+                source: 'cowork-agent-for-kintone',
+                type: 'default',
+                purpose: 'app-designer',
+                promptVersion: 'v1-app-designer',
+                workerUrl: OPTIONS.workerUrl,
+                kintoneDomain: OPTIONS.kintoneDomain,
+                toolsVersion: builtInToolsVersion('app-designer'),
+              },
+            }),
           ],
           next_page: null,
         };
@@ -180,6 +202,7 @@ describe('resolveBuiltInAgents', () => {
     expect(result.business.id).toBe('biz_existing');
     expect(result.customizerOpus.id).toBe('opus_existing');
     expect(result.customizerSonnet.id).toBe('sonnet_existing');
+    expect(result.appDesigner.id).toBe('appdes_existing');
     expect(fetchMock.mock.calls.filter((c) => c[1]?.method === 'POST')).toHaveLength(0);
   });
 
@@ -279,9 +302,9 @@ describe('resolveBuiltInAgents', () => {
     ]);
 
     expect(r1.business.id).toBe(r2.business.id);
-    // POST は variant ごとに 1 回ずつ = 計 3 回 (2 回呼出でも重複しない)
+    // POST は variant ごとに 1 回ずつ = 計 4 回 (2 回呼出でも重複しない)
     const posts = fetchMock.mock.calls.filter((c) => c[1]?.method === 'POST');
-    expect(posts).toHaveLength(3);
+    expect(posts).toHaveLength(4);
   });
 
   // #86: ツールドリフト修復 — 既存エージェントの toolsVersion が古い/未設定なら updateAgent で tools を追従
@@ -325,6 +348,18 @@ describe('resolveBuiltInAgents', () => {
             workerUrl: OPTIONS.workerUrl,
             kintoneDomain: OPTIONS.kintoneDomain,
             toolsVersion: builtInToolsVersion('customizer-sonnet'),
+          },
+        }),
+        makeAgent({
+          id: 'appdes_existing',
+          metadata: {
+            source: 'cowork-agent-for-kintone',
+            type: 'default',
+            purpose: 'app-designer',
+            promptVersion: 'v1-app-designer',
+            workerUrl: OPTIONS.workerUrl,
+            kintoneDomain: OPTIONS.kintoneDomain,
+            toolsVersion: builtInToolsVersion('app-designer'),
           },
         }),
       ],
