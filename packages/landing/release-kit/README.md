@@ -2,7 +2,8 @@
 
 1 つの **統合スペック**（`examples/<version>.json`）から、リリースの公開物を生成するツール群:
 
-1. **OGP / SNS シェアカード画像**（`ogp.mjs`）→ `packages/landing/public/images/ogp.png`
+1. **OGP / SNS シェアカード画像**（`ogp.mjs`）→ canonical `public/images/ogp.png`（og:image。毎回上書き）
+   ＋ 版別アーカイブ `public/images/og/<version>.png`（履歴保存。毎回追加、過去分は消さない）
 2. **リリースノート用エントリ**（`notes.mjs`）→ `src/data/releases.ts` に貼る Release オブジェクト
 3. **SNS 投稿文**（`sns.mjs`）→ X / 長文（note・Qiita 等）のドラフト
 
@@ -18,7 +19,8 @@
 # 1. examples/ を雛形に <version>.json を書く（1 ファイルで OGP / notes / SNS 全部を賄う）
 SPEC=packages/landing/release-kit/examples/v0.2.0.json
 
-# 2. OGP 画像（1200x630 + 2x）を生成 → public/images/ogp.png を上書き
+# 2. OGP 画像（1200x630 + 2x）を生成 → ogp.png を上書き ＋ og/<version>.png に複製保存
+#    （--no-archive でアーカイブ抑止。過去版だけ作り直すなら --out images/og/<ver> --no-archive）
 node packages/landing/release-kit/ogp.mjs $SPEC
 
 # 3. リリースノートのエントリを生成 → 出力を src/data/releases.ts の releases 先頭に貼る

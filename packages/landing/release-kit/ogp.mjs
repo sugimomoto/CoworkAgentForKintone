@@ -2,7 +2,7 @@
 // ogp.mjs — リリース告知 OGP カードを PNG 生成する (release-kit)
 //
 // 使い方:
-//   node packages/landing/release-kit/ogp.mjs <spec.json> [--out <basePath>] [--no-2x]
+//   node packages/landing/release-kit/ogp.mjs <spec.json> [--out <basePath>] [--no-2x] [--no-archive]
 //
 //   <spec.json>  : 統合スペック (README.md / examples 参照)。OGP は version / ogp.headline /
 //                  ogp.sub / repo / features[] を使う（features は ogpTitle/ogpDesc を優先）。
@@ -10,6 +10,13 @@
 //   --out        : 出力ベースパス (拡張子なし)。既定 packages/landing/public/images/ogp
 //                  → <base>.png (1200x630) と <base>@2x.png (2400x1260) を書き出す
 //   --no-2x      : 1x のみ生成
+//   --no-archive : バージョン別アーカイブを作らない (canonical の <base>.png のみ更新)
+//
+// 出力は 2 種:
+//   (1) canonical  : <base>.png (+@2x)。これが live の og:image。毎回上書き = 常に最新。
+//   (2) アーカイブ : <base のディレクトリ>/og/<version>.png (+@2x)。リリースごとに残す
+//                    (上書きしない)。canonical を copy するだけ (再レンダリングしない)。
+//                    履歴を残したいだけなので、--no-archive で抑止できる。
 //
 // icon: "bell" | "clock" | "grid" | "shield" | "wrench" | "doc"、または生 SVG 文字列 (26px/currentColor)。
 // ogp.headline / ogp.sub は生 HTML 可。`\n` は <br> に変換。highlight=<span class="hl">…</span>、sub の強調=<b>…</b>。
@@ -18,7 +25,7 @@
 // Playwright は packages/plugin の devDependency (@playwright/test) を createRequire で解決して使う。
 
 import { createRequire } from 'node:module';
-import { readFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,6 +44,7 @@ const outIdx = args.indexOf('--out');
 const outBase =
   outIdx >= 0 ? resolve(args[outIdx + 1]) : resolve(repoRoot, 'packages/landing/public/images/ogp');
 const skip2x = args.includes('--no-2x');
+const skipArchive = args.includes('--no-archive');
 
 const spec = JSON.parse(readFileSync(resolve(specPath), 'utf-8'));
 // 統合スペック対応: ogp.* を優先し、無ければトップレベル (旧 OGP 専用スペックと互換)。
@@ -271,9 +279,24 @@ async function shoot(scale, outPath) {
 
 mkdirSync(dirname(outBase), { recursive: true });
 await shoot(1, `${outBase}.png`);
-console.log(`[ogp] wrote ${outBase}.png (1200x630)`);
+console.log(`[ogp] wrote ${outBase}.png (1200x630)  ← canonical (og:image)`);
 if (!skip2x) {
   await shoot(2, `${outBase}@2x.png`);
   console.log(`[ogp] wrote ${outBase}@2x.png (2400x1260)`);
+}
+
+// バージョン別アーカイブ: canonical を <dir>/og/<version>.png に複製して履歴を残す
+// (再レンダリングせず copy)。--no-archive で抑止。--out で直接 og/ を指していれば二重化を避ける。
+if (!skipArchive) {
+  const archiveBase = resolve(dirname(outBase), 'og', spec.version);
+  if (archiveBase !== outBase) {
+    mkdirSync(dirname(archiveBase), { recursive: true });
+    copyFileSync(`${outBase}.png`, `${archiveBase}.png`);
+    console.log(`[ogp] archived ${archiveBase}.png`);
+    if (!skip2x) {
+      copyFileSync(`${outBase}@2x.png`, `${archiveBase}@2x.png`);
+      console.log(`[ogp] archived ${archiveBase}@2x.png`);
+    }
+  }
 }
 console.log('[ogp] done');
