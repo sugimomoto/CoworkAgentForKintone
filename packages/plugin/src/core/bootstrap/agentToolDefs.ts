@@ -34,12 +34,7 @@ export const KINTONE_TOOL_NAMES = [
  * 破壊的 (= 復元不能) なツール。これだけは `always_ask` で UI 承認を要求する。
  * update / add / comment はやり直しが効くので `always_allow` のままでよい。
  */
-export const DESTRUCTIVE_TOOL_NAMES = new Set<string>([
-  'kintone-delete-records',
-  // プロセス管理: ステータス変更は取り戻し不可があり得るため承認カード (#22)。assignees は可逆で対象外。
-  'kintone-update-record-status',
-  'kintone-update-records-statuses',
-]);
+export const DESTRUCTIVE_TOOL_NAMES = new Set<string>(['kintone-delete-records']);
 
 /**
  * `propose_agent` Custom Tool 定義 — エージェントデザイナー (#48) 専用。

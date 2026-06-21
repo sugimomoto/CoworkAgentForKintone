@@ -25,7 +25,7 @@ export const updateRecordsStatuses = createTool<Args>(
     description:
       '複数レコードのステータスを 1 リクエストで一括遷移させる (最大 100)。各 entry は ' +
       '`{ id, action, assignee?, revision? }`。「未対応案件を全部 完了に」のような一括処理に使う。' +
-      '取り戻し不可な遷移があるため UI で承認を求める想定。Returns { records: [{ id, revision }] }.',
+      'Returns { records: [{ id, revision }] }.',
     inputSchema: {
       app: appIdSchema,
       records: {

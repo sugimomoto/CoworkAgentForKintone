@@ -5,7 +5,8 @@ requirements.md の確定事項に基づく実装設計。
 ## 全体方針
 - **Worker（kintone-mcp）**: kintone REST API を叩く 3 ツールを既存 `createTool` パターンで追加。
 - **Plugin**: 3 ツールを Agent の toolset に公開。**業務（business）built-in variant のみ**。
-  ステータス変更系は `always_ask`（承認カード）、作業者変更は `always_allow`。
+  **3 ツールとも `always_allow`**（当初は status を always_ask 案としたが、通常のワークフロー操作のため
+  承認カードは挟まない方針に変更。2026-06-21 決定。取り戻し可否のガードは system prompt / Skills 側）。
 - エラーは既存 `KintoneApiError` がそのまま分かる形で surface する（特別処理は最小）。
 
 ---
@@ -74,17 +75,14 @@ MCP のツール結果としてそのまま LLM に渡る。これにより:
   → 両方の `KINTONE_TOOL_NAMES` に 3 ツールを追加（Worker の `TOOL_NAMES` と手動同期。コメントの指示どおり）。
 - **business variant のみ**に出す: 各 built-in spec の `mcpToolFilter(name)` で variant 別に絞っている。
   業務 spec の filter が 3 ツールを通し、Customizer Opus / Sonnet の filter は通さないようにする。
-- **always_ask**: `DESTRUCTIVE_TOOL_NAMES`（= `permission_policy: always_ask` にマップ）に
-  **status 系 2 ツールを追加**（`update-record-status` / `update-records-statuses`）。
-  `update-record-assignees` は追加しない（= `always_allow`、可逆操作）。
-  - 命名は「destructive」だが実体は「承認カードを要する（取り戻し不可リスク）」集合。コメントで補足する。
-  - 旧来の delete に加え status 系も承認対象になる。
+- **permission_policy**: **3 ツールとも `always_allow`**。`DESTRUCTIVE_TOOL_NAMES`（= always_ask）は
+  従来どおり `delete-records` のみで、ワークフロー系は追加しない。
 
-### 2.3 always_ask の根拠（確定）
-ステータス遷移は「完了 → 取り戻し不可」設定があり得る。アプリの取り戻し可否を事前判定するには
-`kintone-get-process-management`（#24, 本スコープ外）が必要なため、**当面は安全側に倒し status 変更を
-一律 `always_ask`**（承認カード）とする。作業者変更は可逆なので `always_allow`。
-（将来 #24 で取り戻し可否を読めるようになれば動的出し分けに変更可能。）
+### 2.3 承認カードを挟まない理由（確定 2026-06-21）
+当初は「完了 → 取り戻し不可」リスクに配慮し status 変更を `always_ask` とする案だったが、
+ステータス遷移は**通常のワークフロー操作**であり、毎回承認カードを挟むと業務の摩擦が大きい。
+よって **3 ツールとも `always_allow`**（即時実行）とし、取り戻し可否のガードは system prompt / Skills に委ねる。
+（将来 #24 の `kintone-get-process-management` で取り戻し可否を読めるようになれば、動的な出し分けも検討可能。）
 
 ### 2.4 toolsVersion 連動（#86）
 業務 spec の `mcpToolFilter` 出力が変わるため `computeToolsVersion` が変化し、既存の業務 built-in Agent は
@@ -123,5 +121,5 @@ MCP のツール結果としてそのまま LLM に渡る。これにより:
 |---|---|
 | AC-1/2/3 | 3 ツール実装 + 正常系テスト |
 | AC-4/5/6 | KintoneApiError がそのまま surface（追加処理不要）+ テストで確認 |
-| AC-7 | status 系 always_ask（承認カード）/ assignees always_allow |
+| AC-7 | 3 ツールとも always_allow（即時）。承認カードは挟まない（2026-06-21 決定。当初の status=always_ask 案を見直し） |
 | AC-8 | Worker/Plugin unit test green、business toolset に 3 ツール追加 |

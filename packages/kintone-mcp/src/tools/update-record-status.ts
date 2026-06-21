@@ -20,8 +20,7 @@ export const updateRecordStatus = createTool<Args>(
     description:
       'プロセス管理 (ワークフロー) で 1 レコードのステータスを遷移させる。' +
       '`action` はアプリで定義済みのアクション名。遷移先が作業者指定を要する場合は `assignee` (単一 code)。' +
-      '`revision` で楽観ロック (不一致なら 409)。取り戻し不可な遷移があるため UI で承認を求める想定。' +
-      'Returns { revision }.',
+      '`revision` で楽観ロック (不一致なら 409)。Returns { revision }.',
     inputSchema: {
       app: appIdSchema,
       id: { type: 'string', description: 'Record ID' },

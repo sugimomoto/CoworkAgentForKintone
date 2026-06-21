@@ -198,13 +198,13 @@ describe('共有定数', () => {
     expect(KINTONE_TOOL_NAMES).toContain('kintone-update-record-assignees');
   });
 
-  it('DESTRUCTIVE_TOOL_NAMES = delete + ステータス変更系 (assignees は always_allow)', () => {
+  it('DESTRUCTIVE_TOOL_NAMES は delete-records のみ (ワークフロー系は always_allow)', () => {
     expect(DESTRUCTIVE_TOOL_NAMES.has('kintone-delete-records')).toBe(true);
-    expect(DESTRUCTIVE_TOOL_NAMES.has('kintone-update-record-status')).toBe(true);
-    expect(DESTRUCTIVE_TOOL_NAMES.has('kintone-update-records-statuses')).toBe(true);
-    // 作業者変更は可逆なので承認カード対象外
+    // プロセス管理 (#22) は承認カードを挟まない (always_allow)
+    expect(DESTRUCTIVE_TOOL_NAMES.has('kintone-update-record-status')).toBe(false);
+    expect(DESTRUCTIVE_TOOL_NAMES.has('kintone-update-records-statuses')).toBe(false);
     expect(DESTRUCTIVE_TOOL_NAMES.has('kintone-update-record-assignees')).toBe(false);
-    expect(DESTRUCTIVE_TOOL_NAMES.size).toBe(3);
+    expect(DESTRUCTIVE_TOOL_NAMES.size).toBe(1);
   });
 
   it('ワークフロー系は業務 Agent のみ (customizer-sonnet / designer には出ない)', () => {

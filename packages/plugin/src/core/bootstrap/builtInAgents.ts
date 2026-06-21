@@ -50,15 +50,11 @@ export const KINTONE_TOOL_NAMES = [
 export type KintoneToolName = (typeof KINTONE_TOOL_NAMES)[number];
 
 /**
- * `always_ask`（UI 承認カード）を要求するツール。命名は破壊的だが、実体は「取り戻し不可リスクなど
- * 確認を挟むべき」集合。delete に加え、プロセス管理のステータス変更（完了 → 取り戻し不可があり得る）も対象 (#22)。
- * 作業者変更 (assignees) は可逆なので含めない (= always_allow)。
+ * 破壊的 = `always_ask` で UI 承認を要求するツール。
+ * 復元不能な delete のみ。プロセス管理のステータス変更 (#22) は通常のワークフロー操作なので
+ * 承認カードは挟まず always_allow（取り戻し可否のガードは system prompt / Skills 側に委ねる）。
  */
-export const DESTRUCTIVE_TOOL_NAMES = new Set<KintoneToolName>([
-  'kintone-delete-records',
-  'kintone-update-record-status',
-  'kintone-update-records-statuses',
-]);
+export const DESTRUCTIVE_TOOL_NAMES = new Set<KintoneToolName>(['kintone-delete-records']);
 
 /**
  * プロセス管理（ワークフロー）系ツール (#22)。**業務 Agent のみ** に出すため、
