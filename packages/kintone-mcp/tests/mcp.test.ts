@@ -73,7 +73,7 @@ describe('handleMcp', () => {
     expect(json.result.capabilities).toBeDefined();
   });
 
-  it('tools/list は read 6 + write 6 + bulk 1 + file 2 ツールを返す', async () => {
+  it('tools/list は read 6 + write 6 + process 2 + bulk 1 + file 2 ツールを返す', async () => {
     const res = await handleMcp(mcpRequest({ jsonrpc: '2.0', method: 'tools/list', id: 2 }));
     const json = (await res.json()) as { result: { tools: Array<{ name: string }> } };
     const names = json.result.tools.map((t) => t.name);
@@ -93,6 +93,9 @@ describe('handleMcp', () => {
         'kintone-update-records',
         'kintone-delete-records',
         'kintone-add-record-comment',
+        // Process management (workflow, #22)
+        'kintone-update-records-statuses',
+        'kintone-update-record-assignees',
         // Bulk
         'kintone-bulk-request',
         // File
@@ -100,7 +103,7 @@ describe('handleMcp', () => {
         'kintone-download-file',
       ]),
     );
-    expect(names).toHaveLength(15);
+    expect(names).toHaveLength(17);
   });
 
   it('tools/call kintone-get-apps は URL のドメインに対して Bearer で叩く', async () => {
