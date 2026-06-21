@@ -47,10 +47,12 @@ requirements.md の調査結果を受けた実装設計。
   promptVersion を変える必要がある。
 - `'v1-app-designer'` → `'v2-app-designer'` に bump。これで (a) 薄くした新プロンプト (b) app-design skill 付与
   の両方が、再 bootstrap 時の新規作成で反映される。
-- **運用順序の制約** (既存スキル基盤と同じ): admin が先に「Skills 同期」を押して skill_id を発番してから
-  プロンプト bump が効くと、新 Agent に skill が attach される。同期前に bootstrap が走ると skill 無しで
-  作られる (= 既存 kintone-customize-js と同じ既知の挙動)。リリースノート / README に「配信時は Skills 同期を
-  先に」を明記する。自己修復 (skillsVersion reconcile) は今回スコープ外。
+- **skill 後付け (self-heal) を実装**: 当初スコープ外としていたが、レビュー指摘により実装。reconcile が
+  tools しか追従しておらず、同期前に作られたエージェントに skill が永久に付かない穴があったため。
+  `reconcileBuiltInAgent` を skillsVersion ドリフト修復に拡張: `metadata.skillsVersion` 不一致 かつ
+  同期済 custom skill 有り のときだけ `updateAgent` で skills を上書き (未解決時は送らず既存を消さない)。
+  → admin が「Skills 同期」を押せば次回 bootstrap で既存 app-designer にも後付けされる (再作成不要)。
+  customizer-sonnet の JS/plugin skill も同じ仕組みで同期後に追従 (潜在レースの解消)。
 
 ## 4. `APP_DESIGNER_DOMAIN_PROMPT` の薄化
 
