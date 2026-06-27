@@ -30,3 +30,10 @@ accent は light/dark とも `#0d9488`。影は rgba 黒で両テーマ共通に
 - 形状: `rounded-full` → `rounded-[16px]`（ヘッダーの 32px rounded-[9px] を 56px に比例スケール）
 - 内容: 星アイコン SVG → 白の `CA`（`font-mono text-[18px] font-extrabold tracking-[-0.5px]`、ヘッダーと同字形）
 - 背景は引き続き `var(--cw-accent)`(teal)、#113 の二層シャドウ＋ring＋hover は維持
+
+## 真因の訂正（背景が透明だった）
+#113 の「半透明に見える」の真因は影の薄さだけでなく、**FAB が ChatPanel(.cowork-agent-root) の外に
+マウントされ、`var(--cw-accent)` がスコープ外で解決できず背景が透明**だったこと。
+- 対策: FAB ボタン自身に `cowork-agent-root` クラスを付与し、トークンを要素スコープで解決させる。
+  `.cowork-agent-root` は CSS 変数 + `font-family` のみ定義（背景/色の指定なし）なので副作用なし。
+  font-family は font-mono(JetBrains Mono) で上書き済み（ヘッダー CA と同じ）。

@@ -98,6 +98,9 @@ function ResizeHandle({
   );
 }
 
+// FAB は ChatPanel の外 (cowork-agent-root の外) にマウントされるため、ボタン自身に
+// cowork-agent-root クラスを付けて --cw-accent 等のトークンをこの要素スコープで解決させる。
+// 付けないと var(--cw-accent) が解決できず背景が透明になる (#113 の真因)。
 function Fab({ onClick }: { onClick: () => void }): JSX.Element {
   return (
     <button
@@ -105,7 +108,7 @@ function Fab({ onClick }: { onClick: () => void }): JSX.Element {
       data-testid="cowork-agent-fab"
       aria-label="Cowork Agent を開く"
       onClick={onClick}
-      className="fixed bottom-[20px] right-[20px] z-[100] flex h-[56px] w-[56px] items-center justify-center rounded-[16px] font-mono text-[18px] font-extrabold tracking-[-0.5px] text-white ring-1 ring-black/5 shadow-[0_4px_12px_rgba(0,0,0,0.18),0_2px_4px_rgba(0,0,0,0.12)] transition-[transform,box-shadow] hover:scale-105 hover:shadow-[0_6px_16px_rgba(0,0,0,0.24),0_3px_6px_rgba(0,0,0,0.16)]"
+      className="cowork-agent-root fixed bottom-[20px] right-[20px] z-[100] flex h-[56px] w-[56px] items-center justify-center rounded-[16px] font-mono text-[18px] font-extrabold tracking-[-0.5px] text-white ring-1 ring-black/5 shadow-[0_4px_12px_rgba(0,0,0,0.18),0_2px_4px_rgba(0,0,0,0.12)] transition-[transform,box-shadow] hover:scale-105 hover:shadow-[0_6px_16px_rgba(0,0,0,0.24),0_3px_6px_rgba(0,0,0,0.16)]"
       style={{ background: 'var(--cw-accent)' }}
     >
       CA
