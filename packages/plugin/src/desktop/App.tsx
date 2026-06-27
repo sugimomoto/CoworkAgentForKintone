@@ -108,8 +108,11 @@ function Fab({ onClick }: { onClick: () => void }): JSX.Element {
       data-testid="cowork-agent-fab"
       aria-label="Cowork Agent を開く"
       onClick={onClick}
-      className="cowork-agent-root fixed bottom-[20px] right-[20px] z-[100] flex h-[56px] w-[56px] items-center justify-center rounded-[16px] font-mono text-[18px] font-extrabold tracking-[-0.5px] text-white ring-1 ring-black/5 shadow-[0_4px_12px_rgba(0,0,0,0.18),0_2px_4px_rgba(0,0,0,0.12)] transition-[transform,box-shadow] hover:scale-105 hover:shadow-[0_6px_16px_rgba(0,0,0,0.24),0_3px_6px_rgba(0,0,0,0.16)]"
-      style={{ background: 'var(--cw-accent)' }}
+      className="cowork-agent-root fixed bottom-[20px] right-[20px] z-[100] flex h-[56px] w-[56px] items-center justify-center rounded-[16px] font-mono text-[18px] font-extrabold tracking-[-0.5px] ring-1 ring-black/5 shadow-[0_4px_12px_rgba(0,0,0,0.18),0_2px_4px_rgba(0,0,0,0.12)] transition-[transform,box-shadow] hover:scale-105 hover:shadow-[0_6px_16px_rgba(0,0,0,0.24),0_3px_6px_rgba(0,0,0,0.16)]"
+      // 文字色は inline で --cw-on-accent(白) を指定。cowork-agent-root の base ルール
+      // (.cowork-agent-root{color:var(--cw-text)}) が text-white と同詳細度で後勝ちするため、
+      // inline で確実に白くする (背景の var(--cw-accent) も base の background-color に勝たせる)。
+      style={{ background: 'var(--cw-accent)', color: 'var(--cw-on-accent)' }}
     >
       CA
     </button>
