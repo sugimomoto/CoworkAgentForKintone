@@ -105,7 +105,7 @@ function Fab({ onClick }: { onClick: () => void }): JSX.Element {
       data-testid="cowork-agent-fab"
       aria-label="Cowork Agent を開く"
       onClick={onClick}
-      className="fixed bottom-[20px] right-[20px] z-[100] flex h-[56px] w-[56px] items-center justify-center rounded-full text-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-transform hover:scale-105"
+      className="fixed bottom-[20px] right-[20px] z-[100] flex h-[56px] w-[56px] items-center justify-center rounded-full text-white ring-1 ring-black/5 shadow-[0_4px_12px_rgba(0,0,0,0.18),0_2px_4px_rgba(0,0,0,0.12)] transition-[transform,box-shadow] hover:scale-105 hover:shadow-[0_6px_16px_rgba(0,0,0,0.24),0_3px_6px_rgba(0,0,0,0.16)]"
       style={{ background: 'var(--cw-accent)' }}
     >
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
