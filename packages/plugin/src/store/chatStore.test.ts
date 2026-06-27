@@ -528,12 +528,14 @@ describe('chatStore', () => {
       expect(useChatStore.getState().attachedFiles).toEqual([]);
     });
 
-    it('startNewConversation で attachedFiles もクリアされる', () => {
+    it('startNewConversation では attachedFiles を保持する (#121: 会話リセットと添付クリアの分離)', () => {
       useChatStore.getState().addAttachedFile({
         localId: 'f1', filename: 'a', size: 1, mimeType: 't', kind: 'text', status: 'ready',
       });
       useChatStore.getState().startNewConversation();
-      expect(useChatStore.getState().attachedFiles).toEqual([]);
+      // エージェント切替/新規会話で添付が消えると、クイックアクション送信に添付が乗らなくなる。
+      expect(useChatStore.getState().attachedFiles).toHaveLength(1);
+      expect(useChatStore.getState().attachedFiles[0]?.localId).toBe('f1');
     });
 
     it('reset で attachedFiles もクリアされる', () => {
