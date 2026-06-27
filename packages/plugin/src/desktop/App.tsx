@@ -105,12 +105,14 @@ function Fab({ onClick }: { onClick: () => void }): JSX.Element {
       data-testid="cowork-agent-fab"
       aria-label="Cowork Agent を開く"
       onClick={onClick}
-      className="fixed bottom-[20px] right-[20px] z-[100] flex h-[56px] w-[56px] items-center justify-center rounded-full text-white ring-1 ring-black/5 shadow-[0_4px_12px_rgba(0,0,0,0.18),0_2px_4px_rgba(0,0,0,0.12)] transition-[transform,box-shadow] hover:scale-105 hover:shadow-[0_6px_16px_rgba(0,0,0,0.24),0_3px_6px_rgba(0,0,0,0.16)]"
+      className="fixed bottom-[20px] right-[20px] z-[100] flex h-[56px] w-[56px] items-center justify-center rounded-[16px] font-mono text-[18px] font-extrabold tracking-[-0.5px] text-white ring-1 ring-black/5 shadow-[0_4px_12px_rgba(0,0,0,0.18),0_2px_4px_rgba(0,0,0,0.12)] transition-[transform,box-shadow] hover:scale-105 hover:shadow-[0_6px_16px_rgba(0,0,0,0.24),0_3px_6px_rgba(0,0,0,0.16)]"
       style={{ background: 'var(--cw-accent)' }}
     >
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-      </svg>
+      CA
+      <span
+        className="absolute bottom-[-2px] right-[-2px] h-[16px] w-[16px] rounded-full bg-[#22c55e] ring-2 ring-[color:var(--cw-bg)]"
+        aria-hidden="true"
+      />
     </button>
   );
 }
