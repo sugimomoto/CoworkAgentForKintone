@@ -25,8 +25,8 @@ accent は light/dark とも `#0d9488`。影は rgba 黒で両テーマ共通に
 - [ ] light/dark 実機目視（ユーザー確認）
 
 ## 追補: ヘッダー CA ブランドマークにデザイン統一
+（緑ステータスドットはユーザー判断で不採用 → CA バッジのみ、背景 --cw-accent 維持）
 視認性強化に加え、ヘッダー上段の CA ブランドマーク（Header.tsx BrandMark）と見た目を統一する方針に変更。
 - 形状: `rounded-full` → `rounded-[16px]`（ヘッダーの 32px rounded-[9px] を 56px に比例スケール）
 - 内容: 星アイコン SVG → 白の `CA`（`font-mono text-[18px] font-extrabold tracking-[-0.5px]`、ヘッダーと同字形）
-- 右下に緑ステータスドット `#22c55e`（16px, `ring-2 ring-[color:var(--cw-bg)]`）をヘッダー同様に付与
 - 背景は引き続き `var(--cw-accent)`(teal)、#113 の二層シャドウ＋ring＋hover は維持

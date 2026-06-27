@@ -109,10 +109,6 @@ function Fab({ onClick }: { onClick: () => void }): JSX.Element {
       style={{ background: 'var(--cw-accent)' }}
     >
       CA
-      <span
-        className="absolute bottom-[-2px] right-[-2px] h-[16px] w-[16px] rounded-full bg-[#22c55e] ring-2 ring-[color:var(--cw-bg)]"
-        aria-hidden="true"
-      />
     </button>
   );
 }
