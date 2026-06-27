@@ -22,7 +22,7 @@
 ## 合意した設計決定（AskUserQuestion）
 - **登録者/スコープ**: 各ユーザーが自分用に認証情報を持つ（per-user credential / per-user Vault）。
   サーバー定義自体はテナント共有（admin が Plugin Config で定義）。
-- **認証方式**: `none` / `static_bearer`(API キー) / `mcp_oauth`(OAuth PKCE+refresh, kintone と同方式) の3種を対象。
+- **認証方式**: `none` / `static_bearer`(API キー) / `mcp_oauth`(OAuth, kintone と同じ confidential client_secret_basic + 自動 refresh) の3種を対象。
 - **attach**: 登録はテナント全体で可視 → 各エージェントで個別 ON/OFF（#40 連動）。
 - **UI 配置**: サーバー定義+secret は Plugin Config、認証/認可と解除の管理は Settings。
 
@@ -48,10 +48,10 @@
 - 接続テスト（`tools/list` 取得）/ 公開ツール一覧表示 / **解除**（Vault credential を archive）。
 - mcp_oauth_validate を使った接続状態の確認（#124 で追加済の検証経路を再利用）。
 
-### Agent 詳細編集（#40 連動・最小）
+### Agent 詳細編集（既存 AgentDetailModal に差し込む・#40 依存は解消済み）
 - 登録済 MCP Server を Agent に attach/detach、tool ごとの ON-OFF。
-- attach 時に Agent の `mcp_servers` と `tools(mcp_toolset)` を更新、環境 allowed_hosts に host 追記、
-  session 作成時に当該 Vault を `vault_ids` に含める。
+- attach 時に Agent の `mcp_servers` と `tools(mcp_toolset)` を更新、
+  session 作成時に当該 Vault を `vault_ids` に含める（allowed_hosts 操作は不要）。
 
 ## スコープ: none / bearer / OAuth すべて今回の実装に含める
 （ユーザー指示により OAuth も今回スコープ。フェーズ分割はせず一括実装する。）
@@ -60,10 +60,10 @@
 1. 基盤: サーバー定義(Plugin Config) + getPluginConfig 拡張。
 2. 接続(none/bearer): Settings 一覧/接続/tools-list/解除 + per-user Vault(static_bearer)。
 3. 接続(OAuth): 汎用 OAuth connect（kintone 専用フローを McpServerDef でパラメタライズ）。
-   - **PKCE public client (token_endpoint_auth: none) を第一級サポート → client_secret 不要で最小**。
-   - confidential (basic/post) は client_secret を proxy 注入で対応（副次）。
+   - **confidential `client_secret_basic`（client_secret を Plugin Config 保持・proxy 注入）を主**＝ kintone 方式の一般化。
+   - public (`token_endpoint_auth: none`) は client_secret 空欄で同フロー吸収（おまけ）。`post` は対象外。
    - 初回 token 交換はプラグインが実施（Vault は交換しない）。以降の refresh は Vault が自動（#124 実証）。
-4. attach: Agent attach/detach + session vault_ids 拡張（#40 協調）。
+4. attach: 既存 AgentDetailModal に McpAttachSection を差込 + session vault_ids 拡張（#40 依存は解消済み）。
 
 > 補足: Vault credential 作成 API は `access_token` 必須 + `refresh{refresh_token, token_endpoint,
 > token_endpoint_auth, client_id, scope}`。token 交換は client 側、refresh のみ platform 自動。
