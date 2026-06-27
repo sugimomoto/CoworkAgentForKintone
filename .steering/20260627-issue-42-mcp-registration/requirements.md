@@ -84,10 +84,15 @@
 - 1 ユーザーが任意 URL を自由登録（サーバー定義は admin がテナントで管理。ユーザーは「接続」のみ）。
 - GitHub 連携(#17) の具体ツール実装（本 Issue は基盤。#17 が最初の利用インスタンス）。
 
-## 主要な未決事項（design で詰める）
-1. **OAuth 汎用化の Worker 経路**: 任意 token endpoint への client_secret 注入をどう実現するか
-   （kintone は固定 proxy header。サーバーごとに setProxyConfig 登録 or 別方式か）。
-2. **環境 allowed_hosts 更新の同時実行/競合**: 複数 Agent 共有の単一環境を更新する際の整合。
-3. **サーバー定義の保存先**: Plugin Config（config 肥大）か、テナント Vault/metadata か。
-4. **tools/list の取得元**: Worker proxy 経由か、Anthropic 経由か、直叩きか（CORS/認証の都合）。
-5. **kintone/notify を新機構に寄せるか**（今回は据え置き、互換維持を優先）。
+## 主要論点の決着（すべて design / point1・2 で確定済み）
+1. **OAuth 汎用化の Worker 経路** → ✅ 決定: confidential `client_secret_basic`（client_secret を Plugin Config 保持）。
+   per-server に setProxyConfig 登録（token_endpoint への Basic 注入 + Worker `/credentials/upsert/{serverId}` への注入）。
+   public は `token_endpoint_auth:none` で同フロー吸収、`post` は対象外。（design 未決#1 / point2）
+2. **環境 allowed_hosts** → ✅ 不要: MCP 接続は `allow_mcp_servers:true` で許可（allowed_hosts は container egress 用）。
+   競合管理・updateEnvironment は不要。（design 未決#2）
+3. **サーバー定義の保存先** → ✅ Plugin Config の `mcpServers`(JSON)。getPluginConfig 拡張。（design 未決#3）
+4. **tools/list の取得元** → ✅ `kintone.plugin.app.proxy` 経由で接続時取得 + サーバー定義にキャッシュ。（design 未決#4）
+5. **kintone/notify を新機構に寄せるか** → ✅ 寄せない（互換維持・新機構は追加 MCP 専用）。（design 未決#5）
+6. **M4 と #40 の順序** → ✅ 解消: AgentDetailModal は編集可能で実装済み。McpAttachSection を差し込むだけ。（point1）
+
+→ 着手前に詰めるべき未決事項は無し。M1 から実装可能。
