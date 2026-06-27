@@ -99,6 +99,23 @@ export interface VaultCredential {
   type: 'credential';
 }
 
+/**
+ * mcp_oauth_validate のレスポンス (Issue #124 診断用)。
+ * grant が生きているか / refresh_token が有効かを返す。
+ * status: 'valid' = リフレッシュ可能 / 'invalid' = grant 喪失 (要再認可) / 'unknown' = 一時エラー。
+ * secret 値は含まれない。
+ */
+export interface McpOAuthValidation {
+  type: 'vault_credential_validation';
+  vault_id: string;
+  credential_id: string;
+  status: 'valid' | 'invalid' | 'unknown';
+  has_refresh_token: boolean;
+  refresh?: { status?: string } | null;
+  mcp_probe?: { http_response?: number; status?: string } | null;
+  validated_at?: string;
+}
+
 /** Session リソース */
 export interface Session {
   id: string;

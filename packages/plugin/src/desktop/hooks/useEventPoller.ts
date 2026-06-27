@@ -17,6 +17,7 @@ import { fetchAllEventsSince } from '../../core/managed-agents/events';
 import { mapEventToProgressKind } from '../../core/managed-agents/progressEvent';
 import { retrieveSession } from '../../core/managed-agents/resources';
 import { isTerminated } from '../../core/managed-agents/sessionLifecycle';
+import { captureAuthFailure, installAuthLogInspector } from '../../core/oauth/authDiagnostics';
 import { useChatStore } from '../../store/chatStore';
 
 import type { ProgressEventKind } from '../../core/managed-agents/progressEvent';
@@ -68,6 +69,9 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
 
   useEffect(() => {
     if (!enabled || !sessionId) return;
+
+    // Issue #124 観測: window.__coworkAuthLog() で OAuth 失効ログを吸い出せるよう露出 (冪等)
+    installAuthLogInspector();
 
     // 一度リセット (新セッションごとに)
     lastEventIdRef.current = undefined;
@@ -166,6 +170,19 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
               isOAuthFailureText(r.patch.errorText) &&
               useChatStore.getState().bindingStatus !== 'error'
             ) {
+              // 観測 (Issue #124): 何が引き金か + その瞬間の grant 生死を永続記録する。
+              // 挙動は変えない (fire-and-forget)。後で window.__coworkAuthLog() で吸い出す。
+              const st = useChatStore.getState();
+              const toolMsg = st.messages.find((m) => m.kind === 'tool' && m.id === r.toolUseId);
+              const toolName = toolMsg && toolMsg.kind === 'tool' ? toolMsg.name : null;
+              void captureAuthFailure({
+                toolName,
+                toolUseId: r.toolUseId,
+                errorText: r.patch.errorText,
+                bindingStatusBefore: st.bindingStatus,
+                vaultId: st.vaultId,
+                credentialId: st.credentialId,
+              });
               setBindingStatus('error', 'kintone の認証が切れました');
             }
           } else if (r.kind === 'upsert-artifact') {
