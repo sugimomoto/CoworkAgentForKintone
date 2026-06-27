@@ -69,7 +69,7 @@ afterEach(() => {
 
 describe('initializeSession — workerUrl あり (rich path)', () => {
   beforeEach(() => {
-    mockGetPluginConfig.mockReturnValue({ workerUrl: 'https://worker.example.com', oauthClientId: null });
+    mockGetPluginConfig.mockReturnValue({ workerUrl: 'https://worker.example.com', oauthClientId: null, mcpServers: [] });
   });
 
   it('built-in 3 variant を解決し、isDefault (customizer-opus) を初期選択する', async () => {
@@ -137,7 +137,7 @@ describe('initializeSession — workerUrl なし (フォールバック path)', 
 
 describe('initializeSession — AbortSignal', () => {
   it('中断済みの signal を渡すと AbortError を throw する', async () => {
-    mockGetPluginConfig.mockReturnValue({ workerUrl: 'https://worker.example.com', oauthClientId: null });
+    mockGetPluginConfig.mockReturnValue({ workerUrl: 'https://worker.example.com', oauthClientId: null, mcpServers: [] });
     const controller = new AbortController();
     controller.abort();
     await expect(
