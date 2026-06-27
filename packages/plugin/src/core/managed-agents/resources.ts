@@ -14,6 +14,7 @@ import type {
   Environment,
   ListResponse,
   ManagedAgentsMetadata,
+  McpOAuthValidation,
   NetworkingConfig,
   PackagesConfig,
   Session,
@@ -232,6 +233,20 @@ export async function archiveVaultCredential(vaultId: string, credentialId: stri
   await apiRequest<unknown>(
     'POST',
     `/v1/vaults/${vaultId}/credentials/${credentialId}/archive`,
+    {},
+  );
+}
+
+/**
+ * mcp_oauth_validate — credential の grant が生きているか / refresh_token が有効かを診断する (Issue #124)。
+ * tool_result の OAuth 失効らしきエラーが「本物の grant 喪失」か「一過性/誤検知」かを区別するのに使う。
+ */
+export function validateMcpOAuth(
+  vaultId: string,
+  credentialId: string,
+): Promise<McpOAuthValidation> {
+  return post<McpOAuthValidation>(
+    `/v1/vaults/${vaultId}/credentials/${credentialId}/mcp_oauth_validate`,
     {},
   );
 }

@@ -8,7 +8,7 @@ import { createUserSession } from '../../core/bootstrap/resolveSession';
 import { useChatStore } from '../../store/chatStore';
 import { makeAgent, makeEnv, makeSession } from '../../test/fixtures';
 
-import { useSession } from './useSession';
+import { selectAgent, useSession } from './useSession';
 
 vi.mock('../../core/bootstrap/resolveAgent', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../core/bootstrap/resolveAgent')>();
@@ -234,5 +234,27 @@ describe('useSession.selectSession / startNewConversation', () => {
 
     expect(useChatStore.getState().sessionId).toBeNull();
     expect(useChatStore.getState().messages).toEqual([]);
+  });
+});
+
+describe('selectAgent (#121: エージェント切替で添付を失わない)', () => {
+  const ctx = { kintoneDomain: 'd.cybozu.com', kintoneUserCode: 'u' };
+
+  it('別エージェントへ切替えても attachedFiles を保持する (messages は会話リセット)', () => {
+    useChatStore.getState().setCurrentAgentId('agent_prev');
+    useChatStore.getState().addMessage({ id: 'm1', kind: 'user', text: 'x' });
+    useChatStore.getState().addAttachedFile({
+      localId: 'f1', filename: 'a.png', size: 1, mimeType: 'image/png', kind: 'image', status: 'ready',
+    });
+
+    act(() => {
+      selectAgent('agent_next', ctx);
+    });
+
+    // 会話はリセットされるが、クイックアクション送信に乗せるため添付は残る
+    expect(useChatStore.getState().messages).toEqual([]);
+    expect(useChatStore.getState().sessionId).toBeNull();
+    expect(useChatStore.getState().attachedFiles).toHaveLength(1);
+    expect(useChatStore.getState().attachedFiles[0]?.localId).toBe('f1');
   });
 });

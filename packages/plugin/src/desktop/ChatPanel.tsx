@@ -350,7 +350,11 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
       )}
 
       {view === 'history' && agentId ? (
-        <HistoryView agentId={agentId} onSelect={handleHistorySelect} />
+        <HistoryView
+          agentId={agentId}
+          onSelect={handleHistorySelect}
+          onClose={() => setView('chat')}
+        />
       ) : (
         // Conversation を常時マウントし、右ペインに Settings / Artifact を出し分ける。
         // handoff (wedge-settings.jsx) の "Artifact ペインを置換する形で Side-by-Side で開く" 仕様。

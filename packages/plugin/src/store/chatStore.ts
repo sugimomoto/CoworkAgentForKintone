@@ -87,6 +87,9 @@ export const useChatStore = create<ChatState>()((...a) => {
     resetConversation: () => set({ messages: [] }),
 
     startNewConversation: () =>
+      // #121: 会話リセットと添付クリアは分離する。添付は送信時 (handleSubmit の
+      // clearAttachedFiles) / ユーザーの明示削除 / ハードリセット (reset) でのみ消す。
+      // エージェント切替・新規会話開始では保持し、クイックアクション送信に添付が乗るようにする。
       set({
         messages: [],
         sessionId: null,
@@ -97,7 +100,6 @@ export const useChatStore = create<ChatState>()((...a) => {
         artifacts: new Map(),
         activeArtifactId: null,
         pendingCustomToolUseIds: new Map(),
-        attachedFiles: [],
         pendingAgentProposal: null,
       }),
   };

@@ -38,7 +38,7 @@ describe('HistoryView', () => {
         }),
     );
 
-    render(<HistoryView agentId="agent_1" onSelect={() => {}} />);
+    render(<HistoryView agentId="agent_1" onSelect={() => {}} onClose={() => {}} />);
 
     expect(screen.getByText(/読み込み中/)).toBeInTheDocument();
 
@@ -51,7 +51,7 @@ describe('HistoryView', () => {
 
   it('listUserSessions に agentId + kctx が渡される', async () => {
     mockList.mockResolvedValue([]);
-    render(<HistoryView agentId="agent_x" onSelect={() => {}} />);
+    render(<HistoryView agentId="agent_x" onSelect={() => {}} onClose={() => {}} />);
 
     await waitFor(() => {
       expect(mockList).toHaveBeenCalledWith({
@@ -64,7 +64,7 @@ describe('HistoryView', () => {
 
   it('Session が空なら "まだ会話がありません" が表示される', async () => {
     mockList.mockResolvedValue([]);
-    render(<HistoryView agentId="agent_1" onSelect={() => {}} />);
+    render(<HistoryView agentId="agent_1" onSelect={() => {}} onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText(/まだ会話がありません/)).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe('HistoryView', () => {
 
   it('fetch 失敗時はエラーメッセージと再試行ボタンを出す', async () => {
     mockList.mockRejectedValueOnce(new Error('boom'));
-    render(<HistoryView agentId="agent_1" onSelect={() => {}} />);
+    render(<HistoryView agentId="agent_1" onSelect={() => {}} onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText(/履歴の取得に失敗しました/)).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe('HistoryView', () => {
     ]);
     const onSelect = vi.fn();
     const user = userEvent.setup();
-    render(<HistoryView agentId="agent_1" onSelect={onSelect} />);
+    render(<HistoryView agentId="agent_1" onSelect={onSelect} onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('first')).toBeInTheDocument();
@@ -111,10 +111,20 @@ describe('HistoryView', () => {
     const s = makeSession({ id: 'sess_x' });
     delete (s as { title?: string }).title;
     mockList.mockResolvedValue([s]);
-    render(<HistoryView agentId="agent_1" onSelect={() => {}} />);
+    render(<HistoryView agentId="agent_1" onSelect={() => {}} onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('(無題)')).toBeInTheDocument();
     });
+  });
+
+  it('#102: 閉じるボタンクリックで onClose が呼ばれる (会話を選ばず戻れる)', async () => {
+    mockList.mockResolvedValue([]);
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<HistoryView agentId="agent_1" onSelect={() => {}} onClose={onClose} />);
+
+    await user.click(screen.getByTestId('history-close'));
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });

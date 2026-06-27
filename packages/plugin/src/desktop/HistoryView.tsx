@@ -16,6 +16,8 @@ export interface HistoryViewProps {
   /** Agent ID。useSession で解決済みの id を渡す */
   agentId: string;
   onSelect: (sessionId: string) => void;
+  /** #102: 会話を選ばずにチャット画面へ戻る (SettingsView の onClose と同パターン) */
+  onClose: () => void;
 }
 
 type LoadState =
@@ -23,7 +25,7 @@ type LoadState =
   | { status: 'ready'; sessions: Session[] }
   | { status: 'error'; message: string };
 
-export function HistoryView({ agentId, onSelect }: HistoryViewProps): JSX.Element {
+export function HistoryView({ agentId, onSelect, onClose }: HistoryViewProps): JSX.Element {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -55,9 +57,19 @@ export function HistoryView({ agentId, onSelect }: HistoryViewProps): JSX.Elemen
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto bg-bg">
-      <h2 className="border-b border-border px-[16px] py-[12px] text-[13px] font-semibold text-text">
-        過去の会話
-      </h2>
+      <div className="flex items-center gap-[8px] border-b border-border px-[16px] py-[12px]">
+        <h2 className="flex-1 text-[13px] font-semibold text-text">過去の会話</h2>
+        <button
+          type="button"
+          data-testid="history-close"
+          aria-label="閉じる"
+          title="閉じる"
+          onClick={onClose}
+          className="flex h-[28px] w-[28px] items-center justify-center rounded-[7px] text-muted hover:bg-accent-soft hover:text-accent"
+        >
+          <CloseIcon />
+        </button>
+      </div>
       <div className="flex-1 px-[8px] py-[8px]">
         {state.status === 'loading' && (
           <div className="px-[8px] py-[16px] text-[12px] text-muted">読み込み中...</div>
@@ -102,4 +114,21 @@ export function HistoryView({ agentId, onSelect }: HistoryViewProps): JSX.Elemen
 
 function labelOf(s: Session): string {
   return s.title && s.title.length > 0 ? s.title : '(無題)';
+}
+
+function CloseIcon(): JSX.Element {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M3 3l6 6M9 3l-6 6" />
+    </svg>
+  );
 }
