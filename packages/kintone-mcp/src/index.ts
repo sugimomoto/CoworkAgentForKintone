@@ -40,7 +40,12 @@ export default {
       return handleOAuthCallback(request);
     }
 
-    if (url.pathname === '/credentials/upsert' && request.method === 'POST') {
+    // /credentials/upsert（kintone OAuth）+ /credentials/upsert/{serverId}（#42 追加 MCP の per-server）。
+    // per-server URL は kintone proxy 最長一致で専用ヘッダ(X-Mcp-OAuth-Client-*/X-Anthropic-Api-Key)を受ける。
+    if (
+      (url.pathname === '/credentials/upsert' || url.pathname.startsWith('/credentials/upsert/')) &&
+      request.method === 'POST'
+    ) {
       return handleCredentialsUpsert(request);
     }
 

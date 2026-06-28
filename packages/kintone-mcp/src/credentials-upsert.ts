@@ -80,9 +80,12 @@ export async function handleCredentialsUpsert(request: Request): Promise<Respons
   const isUpdate = isString(body.credentialId);
   const hasRefresh = isString(body.refreshToken);
 
-  // OAuth client header (Create 時 + refresh 有時のみ必須)
-  const clientId = request.headers.get('X-Kintone-OAuth-Client-Id');
-  const clientSecret = request.headers.get('X-Kintone-OAuth-Client-Secret');
+  // OAuth client header (Create 時 + refresh 有時のみ必須)。
+  // kintone OAuth は X-Kintone-OAuth-Client-*、#42 追加 MCP の per-server は X-Mcp-OAuth-Client-*。
+  const clientId =
+    request.headers.get('X-Mcp-OAuth-Client-Id') ?? request.headers.get('X-Kintone-OAuth-Client-Id');
+  const clientSecret =
+    request.headers.get('X-Mcp-OAuth-Client-Secret') ?? request.headers.get('X-Kintone-OAuth-Client-Secret');
   if (!isUpdate && hasRefresh) {
     if (!isString(clientId)) {
       return jsonResponse(

@@ -137,11 +137,16 @@ export function McpServersConfigSection({
   async function persist(next: McpServerDef[], secretDraft: Draft | null): Promise<void> {
     if (typeof kintone === 'undefined' || !kintone) return;
     const k = kintone; // await をまたぐと global の絞り込みが解けるためキャプチャ
-    // OAuth confidential(basic) で secret 入力があれば per-server proxy を登録
+    // OAuth confidential(basic) で secret 入力があれば per-server proxy を登録。
+    // 最長一致の総取り対策として、保存済み Anthropic キーを getProxyConfig で読み戻し、
+    // per-server URL の登録に同梱する（admin に再入力させない）。
     if (secretDraft && secretDraft.clientSecret.trim() && workerRootUrl) {
+      const anthropicApiKey =
+        k.plugin.app.getProxyConfig?.(workerRootUrl, 'POST')?.headers?.['X-Anthropic-Api-Key'] ?? '';
       const steps = buildMcpProxySteps({
         server: draftToDef(secretDraft),
         clientSecret: secretDraft.clientSecret.trim(),
+        anthropicApiKey,
         workerRootUrl,
       });
       for (const step of steps) {

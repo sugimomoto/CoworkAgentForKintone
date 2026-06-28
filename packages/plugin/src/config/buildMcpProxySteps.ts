@@ -7,8 +7,11 @@
 //
 // 2 経路に登録する:
 //   1. token_endpoint (POST): プラグインの authorization_code 交換用に Authorization: Basic を注入
-//   2. per-server upsert URL <workerRoot>credentials/upsert/{serverId} (POST): Worker が Anthropic Vault の
-//      refresh 設定 (auth.refresh.token_endpoint_auth.client_secret) に積むための client_id/secret を注入
+//      （第三者ホスト＝そのホストの最長一致になるので独立して効く）
+//   2. per-server upsert URL <workerRoot>credentials/upsert/{serverId} (POST):
+//      kintone proxy は「最長一致の1登録だけ適用（マージ無し）」なので、この URL 専用登録に
+//      **必要なヘッダを全部自己完結で載せる** = X-Anthropic-Api-Key（getProxyConfig で読戻し）
+//      + X-Mcp-OAuth-Client-Id/Secret。Worker はこれらで Anthropic Vault の refresh 設定を作る。
 
 import type { ProxyStep } from './buildProxySteps';
 import type { McpServerDef } from '../core/mcp/registry';
@@ -16,19 +19,22 @@ import type { McpServerDef } from '../core/mcp/registry';
 export interface BuildMcpProxyStepsInput {
   server: Pick<McpServerDef, 'id' | 'authType' | 'tokenEndpoint' | 'clientId' | 'tokenEndpointAuthType'>;
   clientSecret: string;
+  /** 保存済み Worker ルート proxy から getProxyConfig で読み戻した Anthropic API キー。 */
+  anthropicApiKey: string;
   /** Worker root URL（末尾スラッシュ付き） */
   workerRootUrl: string;
 }
 
 /**
- * OAuth confidential(basic) サーバーの secret 注入用 proxy ステップ。
- * 対象外（none/bearer、oauth public、secret 未入力、post）のときは空配列を返す。
+ * OAuth confidential(basic) サーバーの per-server proxy ステップ。
+ * 対象外（none/bearer、oauth public、secret 未入力、post、Anthropic キー未取得）のときは空配列を返す。
  */
 export function buildMcpProxySteps(input: BuildMcpProxyStepsInput): ProxyStep[] {
-  const { server, clientSecret, workerRootUrl } = input;
+  const { server, clientSecret, anthropicApiKey, workerRootUrl } = input;
   if (server.authType !== 'oauth') return [];
   if (server.tokenEndpointAuthType !== 'basic') return []; // none(PKCE)=secret不要, post=非対応
   if (!clientSecret || !server.clientId || !server.tokenEndpoint) return [];
+  if (!anthropicApiKey) return []; // per-server URL は最長一致で総取り → Anthropic キーを自己完結で載せる必要
 
   const basic = btoa(`${server.clientId}:${clientSecret}`);
   const upsertUrl = `${workerRootUrl}credentials/upsert/${server.id}`;
@@ -43,11 +49,13 @@ export function buildMcpProxySteps(input: BuildMcpProxyStepsInput): ProxyStep[] 
         'Content-Type': 'application/x-www-form-urlencoded',
       },
     },
-    // 2. Vault refresh 設定用（Worker が serverId 限定 URL で受け取り Anthropic に転送）
+    // 2. Vault refresh 設定用（Worker が serverId 限定 URL で受け取り Anthropic に転送）。
+    //    最長一致で総取りされるため Anthropic キーもこの登録に自己完結で載せる。
     {
       url: upsertUrl,
       method: 'POST',
       headers: {
+        'X-Anthropic-Api-Key': anthropicApiKey,
         'X-Mcp-OAuth-Client-Id': server.clientId,
         'X-Mcp-OAuth-Client-Secret': clientSecret,
         'Content-Type': 'application/json',
