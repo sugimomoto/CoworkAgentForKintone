@@ -277,6 +277,7 @@ export function parseProposeAgentInput(
     allowedUsers: [],
     allowedGroups: [],
     allowedOrganizations: [],
+    mcpAttachments: [],
   };
   return { draft, rationale, model };
 }
