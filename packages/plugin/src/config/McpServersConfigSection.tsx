@@ -262,6 +262,7 @@ export function McpServersConfigSection({
         <div className="mt-[12px] rounded-[10px] border border-card-border bg-bg p-[12px]">
           <McpField label="表示名">
             <input
+              data-testid="mcp-name-input"
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               className="w-full rounded-[7px] border border-card-border bg-card px-[10px] py-[7px] text-[12px] text-text outline-none focus:border-accent"
@@ -269,6 +270,7 @@ export function McpServersConfigSection({
           </McpField>
           <McpField label="サーバー URL (https)">
             <input
+              data-testid="mcp-url-input"
               value={draft.url}
               onChange={(e) => setDraft({ ...draft, url: e.target.value })}
               placeholder="https://example.com/mcp"
