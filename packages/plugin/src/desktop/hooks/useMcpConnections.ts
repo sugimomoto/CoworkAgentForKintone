@@ -10,6 +10,7 @@ import { resolveUserVault } from '../../core/bootstrap/resolveVault';
 import { getPluginConfig } from '../../core/kintone/pluginConfig';
 import { getCurrentSessionContext } from '../../core/kintone/user';
 import { archiveVaultCredential, listVaultCredentials } from '../../core/managed-agents/resources';
+import { connectMcpOAuth } from '../../core/mcp/connectMcpOAuth';
 import { fetchMcpTools } from '../../core/mcp/toolsList';
 import { upsertStaticBearerCredential } from '../../core/oauth/credentialsUpsertClient';
 import { toErrorMessage } from '../../core/utils';
@@ -31,6 +32,8 @@ export interface UseMcpConnectionsResult {
   reload: () => void;
   /** bearer: トークン検証(tools/list) → per-user Vault に static_bearer 保存。 */
   connectBearer: (server: McpServerDef, token: string) => Promise<McpTool[]>;
+  /** oauth: 認可フロー → per-user Vault に mcp_oauth 保存。 */
+  connectOAuth: (server: McpServerDef) => Promise<void>;
   /** 接続解除（Vault credential を archive）。 */
   disconnect: (server: McpServerDef) => Promise<void>;
 }
@@ -119,6 +122,19 @@ export function useMcpConnections(pluginId: string | null): UseMcpConnectionsRes
     [pluginId, reload],
   );
 
+  const connectOAuth = useCallback(
+    async (server: McpServerDef): Promise<void> => {
+      const cfg = pluginId ? getPluginConfig(pluginId) : { workerUrl: null };
+      const workerUrl = cfg.workerUrl;
+      if (!pluginId || !workerUrl) throw new Error('Worker URL が未設定です');
+      const vaultId = vaultIdRef.current;
+      if (!vaultId) throw new Error('Vault が未解決です');
+      await connectMcpOAuth({ pluginId, workerUrl, vaultId, server });
+      reload();
+    },
+    [pluginId, reload],
+  );
+
   const disconnect = useCallback(
     async (server: McpServerDef): Promise<void> => {
       const vaultId = vaultIdRef.current;
@@ -133,5 +149,5 @@ export function useMcpConnections(pluginId: string | null): UseMcpConnectionsRes
     [connections, reload],
   );
 
-  return { servers, connections, loading, error, reload, connectBearer, disconnect };
+  return { servers, connections, loading, error, reload, connectBearer, connectOAuth, disconnect };
 }

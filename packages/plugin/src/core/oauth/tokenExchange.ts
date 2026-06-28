@@ -11,6 +11,11 @@ export interface ExchangeArgs {
   redirectUri: string;
   code: string;
   codeVerifier: string;
+  /**
+   * #42: public(PKCE) クライアントは client_secret を持たないため、token リクエストの body に
+   * client_id を載せて本人性を示す。confidential は proxy が Basic 注入するので不要。
+   */
+  clientId?: string;
 }
 
 export interface KintoneTokens {
@@ -25,12 +30,14 @@ export async function exchangeCodeForTokens(args: ExchangeArgs): Promise<Kintone
   if (typeof kintone === 'undefined' || !kintone?.plugin?.app?.proxy) {
     throw new Error('kintone JavaScript API is not available');
   }
-  const body = new URLSearchParams({
+  const params = new URLSearchParams({
     grant_type: 'authorization_code',
     code: args.code,
     redirect_uri: args.redirectUri,
     code_verifier: args.codeVerifier,
-  }).toString();
+  });
+  if (args.clientId) params.set('client_id', args.clientId);
+  const body = params.toString();
 
   const [respBody, status] = await kintone.plugin.app.proxy(
     args.pluginId,

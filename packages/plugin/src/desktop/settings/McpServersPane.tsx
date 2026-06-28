@@ -13,7 +13,8 @@ export interface McpServersPaneProps {
 }
 
 export function McpServersPane({ pluginId }: McpServersPaneProps): JSX.Element {
-  const { servers, connections, loading, error, connectBearer, disconnect } = useMcpConnections(pluginId);
+  const { servers, connections, loading, error, connectBearer, connectOAuth, disconnect } =
+    useMcpConnections(pluginId);
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto bg-bg p-[22px]" data-testid="mcp-pane">
@@ -46,6 +47,7 @@ export function McpServersPane({ pluginId }: McpServersPaneProps): JSX.Element {
               server={s}
               connected={connections[s.id]?.status === 'connected'}
               onConnectBearer={(token) => connectBearer(s, token)}
+              onConnectOAuth={() => connectOAuth(s)}
               onDisconnect={() => disconnect(s)}
             />
           ))}
@@ -61,11 +63,13 @@ function McpServerRow({
   server,
   connected,
   onConnectBearer,
+  onConnectOAuth,
   onDisconnect,
 }: {
   server: McpServerDef;
   connected: boolean;
   onConnectBearer: (token: string) => Promise<McpTool[]>;
+  onConnectOAuth: () => Promise<void>;
   onDisconnect: () => Promise<void>;
 }): JSX.Element {
   const [phase, setPhase] = useState<RowPhase>('idle');
@@ -88,6 +92,22 @@ function McpServerRow({
     } catch (err) {
       setRowError(toErrorMessage(err));
       setPhase('bearer-input');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleOAuthConnect(): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    setRowError(null);
+    setPhase('verifying');
+    try {
+      await onConnectOAuth();
+      setPhase('idle');
+    } catch (err) {
+      setRowError(toErrorMessage(err));
+      setPhase('idle');
     } finally {
       setBusy(false);
     }
@@ -140,7 +160,7 @@ function McpServerRow({
           <button
             type="button"
             data-testid="mcp-connect-button"
-            onClick={() => (server.authType === 'oauth' ? setRowError('OAuth 接続は次のステップで有効化されます') : setPhase('bearer-input'))}
+            onClick={() => (server.authType === 'oauth' ? void handleOAuthConnect() : setPhase('bearer-input'))}
             className="rounded-[7px] bg-accent px-[12px] py-[6px] text-[12px] font-semibold text-white"
           >
             {connectLabel(server.authType)}
