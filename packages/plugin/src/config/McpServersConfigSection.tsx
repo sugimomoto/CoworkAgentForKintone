@@ -314,6 +314,7 @@ export function McpServersConfigSection({
               )}
               <McpField label="authorization_endpoint">
                 <input
+                  data-testid="mcp-oauth-authz"
                   value={draft.authorizationEndpoint}
                   onChange={(e) => setDraft({ ...draft, authorizationEndpoint: e.target.value })}
                   spellCheck={false}
@@ -322,6 +323,7 @@ export function McpServersConfigSection({
               </McpField>
               <McpField label="token_endpoint">
                 <input
+                  data-testid="mcp-oauth-token"
                   value={draft.tokenEndpoint}
                   onChange={(e) => setDraft({ ...draft, tokenEndpoint: e.target.value })}
                   spellCheck={false}
@@ -330,6 +332,7 @@ export function McpServersConfigSection({
               </McpField>
               <McpField label="client_id">
                 <input
+                  data-testid="mcp-oauth-clientid"
                   value={draft.clientId}
                   onChange={(e) => setDraft({ ...draft, clientId: e.target.value })}
                   spellCheck={false}
@@ -346,6 +349,7 @@ export function McpServersConfigSection({
               </McpField>
               <McpField label="client 認証方式">
                 <select
+                  data-testid="mcp-oauth-authtype"
                   value={draft.tokenEndpointAuthType}
                   onChange={(e) =>
                     setDraft({ ...draft, tokenEndpointAuthType: e.target.value as TokenEndpointAuthType })
@@ -362,6 +366,7 @@ export function McpServersConfigSection({
               {needsClientSecret(draftToDef(draft)) && (
                 <McpField label={`client_secret${draft.hasSecret ? '（保存済み・再入力で更新）' : ''}`}>
                   <PasswordInput
+                    id="mcp-oauth-secret"
                     value={draft.clientSecret}
                     onChange={(v) => setDraft({ ...draft, clientSecret: v })}
                     placeholder={draft.hasSecret ? '●●●●●●●● (再入力で更新)' : ''}
