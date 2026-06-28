@@ -250,6 +250,7 @@ export function SettingsViewBound({
       <SettingsView
         onClose={onClose}
         isAdmin={isAdmin}
+        pluginId={pluginId}
         {...(onOpenSession ? { onOpenSession } : {})}
         {...(onPluginConfigClick ? { onPluginConfigClick } : {})}
         bundledSkills={bundledSkills}

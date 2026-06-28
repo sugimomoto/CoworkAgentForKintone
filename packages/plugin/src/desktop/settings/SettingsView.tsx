@@ -10,6 +10,7 @@ import { useState } from 'react';
 
 import { AgentsListPane } from './AgentsListPane';
 import { DeploymentsPaneBound } from './DeploymentsPaneBound';
+import { McpServersPane } from './McpServersPane';
 import { SettingsNav } from './SettingsNav';
 import { SkillsPane } from './SkillsPane';
 
@@ -45,6 +46,8 @@ export interface SettingsViewProps {
   isAdmin?: boolean;
   /** 定期実行の run セッションを会話ビューで開く (#81) */
   onOpenSession?: (sessionId: string) => void;
+  /** #42 MCP 接続管理に渡す Plugin ID */
+  pluginId?: string | null;
 }
 
 export function SettingsView({
@@ -61,6 +64,7 @@ export function SettingsView({
   onCreateAgent,
   isAdmin = false,
   onOpenSession,
+  pluginId,
 }: SettingsViewProps): JSX.Element {
   // 非 admin は「定期実行」のみアクセス可能なので初期セクションをそこに寄せる
   const [section, setSection] = useState<SettingsSection>(isAdmin ? 'agents' : 'deployments');
@@ -122,21 +126,9 @@ export function SettingsView({
               {...(onDeleteCustomSkill ? { onDeleteCustomSkill } : {})}
             />
           )}
-          {section === 'mcp' && isAdmin && <MCPPanePlaceholder />}
+          {section === 'mcp' && isAdmin && <McpServersPane pluginId={pluginId ?? null} />}
         </div>
       </div>
-    </div>
-  );
-}
-
-/**
- * V1 では disabled なので、ここに到達しない (Nav 側で click 不可) が、
- * 万一の事故防止に簡素な placeholder を出す。
- */
-function MCPPanePlaceholder(): JSX.Element {
-  return (
-    <div className="p-[24px] text-[12px] text-muted" data-testid="mcp-pane-placeholder">
-      MCP サーバー管理は V2 で提供されます。
     </div>
   );
 }
