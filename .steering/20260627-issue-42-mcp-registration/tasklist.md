@@ -3,6 +3,17 @@
 正本: requirements.md / design.md / docs/design-handoff/mcp-registration/。
 none / bearer / OAuth すべて今回スコープ。allowed_hosts 管理は不要（`allow_mcp_servers:true`）。
 
+## 実装状況（2026-06-28 時点）
+- **M1 完了**: registry + pluginConfig.mcpServers + ConfigScreen MCP カタログ CRUD + buildMcpProxySteps。unit + 実機 E2E(mcp-config)。
+- **M2 完了**: tools/list(MCP handshake) + useMcpConnections + McpServersPane(none/bearer/解除) + SettingsView 結線。unit + 実機 E2E(mcp-connect)。
+- **M3 完了**: connectMcpOAuth 汎用化(public PKCE / confidential basic) + Worker /credentials/upsert/{serverId} + getProxyConfig で Anthropic キー読戻し（再入力不要）+ 本番 Worker デプロイ。unit + 実機 E2E(mcp-oauth)。
+  - 注: 認可ポップアップ完了までの自動 E2E は headless 制約で未実施（実機手動 + unit でカバー）。
+- **M4 完了**: McpAttachSection を AgentDetailModal に差込 + attachSpec(mcp_servers/toolset 構築・metadata 往復) + applyAgentEdit/createCustomAgentFrom 統合。session vault_ids は拡張不要（per-user Vault に同居）。unit + 実機 E2E(mcp-attach)。
+- **横断**: tsc/lint クリーン（既存無関係 warning 1 除く）、全 1114 テスト緑、build OK。
+- **未了**: docs/LP 同期（ユーザー向け機能追加のため PR 時に要判断）、任意第三者 confidential の本番完走 E2E。
+
+---
+
 ## 完了済み（spec/design フェーズ）
 - [x] requirements.md（Model A・3層・認証3種・OAuth 全部入り）
 - [x] design.md（未決5点判断・OAuth 汎用化・handoff 反映）
