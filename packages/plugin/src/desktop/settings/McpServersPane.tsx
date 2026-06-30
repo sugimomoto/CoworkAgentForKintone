@@ -145,12 +145,14 @@ function McpServerRow({
         >
           {meta.label}
         </span>
-        {connected ? (
+        {/* none は credential を持たない（接続/解除の概念が無い）ので「利用可（認証不要）」を優先表示。
+            bearer/oauth のみ per-user credential の有無で「接続済み」を出す。 */}
+        {server.authType === 'none' ? (
+          <span className="text-[11px] text-muted">利用可（認証不要）</span>
+        ) : connected ? (
           <span className="flex items-center gap-[4px] text-[11px] text-text">
             <span className="h-[7px] w-[7px] rounded-full bg-[#22c55e]" /> 接続済み
           </span>
-        ) : server.authType === 'none' ? (
-          <span className="text-[11px] text-muted">利用可（認証不要）</span>
         ) : null}
       </div>
 
@@ -210,8 +212,8 @@ function McpServerRow({
         <div className="mt-[8px] text-[11px] text-muted">接続を確認中…（tools/list 疎通）</div>
       )}
 
-      {/* 接続済み: ツール一覧 + 解除 */}
-      {connected && (
+      {/* 接続済み: ツール一覧 + 解除（none は credential が無く解除対象が無いので出さない） */}
+      {connected && server.authType !== 'none' && (
         <div className="mt-[8px]">
           {tools && tools.length > 0 && (
             <details className="mb-[6px]">
