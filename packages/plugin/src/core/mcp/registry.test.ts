@@ -84,13 +84,17 @@ describe('canSaveServerDef', () => {
 
 describe('attachHeadState', () => {
   const all = ['a', 'b', 'c'];
-  it('null / 空 = off', () => {
+  it('null / subset 空 = off', () => {
     expect(attachHeadState(null, all)).toBe('off');
-    expect(attachHeadState({ serverId: 's', enabledTools: [] }, all)).toBe('off');
+    expect(attachHeadState({ serverId: 's', mode: 'subset', enabledTools: [] }, all)).toBe('off');
   });
-  it('全 = on / 一部 = indeterminate', () => {
-    expect(attachHeadState({ serverId: 's', enabledTools: all }, all)).toBe('on');
-    expect(attachHeadState({ serverId: 's', enabledTools: ['a'] }, all)).toBe('indeterminate');
+  it('mode=all は常に on（ツール一覧未取得でも）', () => {
+    expect(attachHeadState({ serverId: 's', mode: 'all', enabledTools: [] }, all)).toBe('on');
+    expect(attachHeadState({ serverId: 's', mode: 'all', enabledTools: [] }, [])).toBe('on');
+  });
+  it('subset 全 = on / 一部 = indeterminate', () => {
+    expect(attachHeadState({ serverId: 's', mode: 'subset', enabledTools: all }, all)).toBe('on');
+    expect(attachHeadState({ serverId: 's', mode: 'subset', enabledTools: ['a'] }, all)).toBe('indeterminate');
   });
 });
 

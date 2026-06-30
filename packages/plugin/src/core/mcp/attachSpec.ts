@@ -12,7 +12,7 @@ export const META_KEY_MCP_ATTACHMENTS = 'mcpAttachments';
 
 const ALWAYS_ALLOW = { type: 'always_allow' as const };
 
-/** attach 済み（enabledTools 1件以上 & カタログに存在）のサーバーのみ対象にする。 */
+/** attach 有効（カタログに存在し、mode='all' か subset で 1件以上）のサーバーのみ対象にする。 */
 function activeAttachments(
   attachments: readonly McpAttachment[],
   catalog: readonly McpServerDef[],
@@ -21,7 +21,8 @@ function activeAttachments(
   const out: Array<{ att: McpAttachment; def: McpServerDef }> = [];
   for (const att of attachments) {
     const def = byId.get(att.serverId);
-    if (def && att.enabledTools.length > 0) out.push({ att, def });
+    if (!def) continue;
+    if (att.mode === 'all' || att.enabledTools.length > 0) out.push({ att, def });
   }
   return out;
 }
@@ -38,15 +39,26 @@ export function buildAttachedMcpServers(
   }));
 }
 
-/** attach 済みサーバーの mcp_toolset（選択ツールのみ enabled）。 */
+/** attach 済みサーバーの mcp_toolset。
+ *  - mode='all'    : default_config.enabled=true（全ツール許可）。ツール一覧が不要なので configs は空。
+ *  - mode='subset' : default_config.enabled=false + 選択ツールのみ enabled。
+ *                    カタログに tools があれば全ツールを列挙して per-tool enable、無ければ
+ *                    enabledTools を直接 configs に。 */
 export function buildAttachedMcpToolsets(
   attachments: readonly McpAttachment[],
   catalog: readonly McpServerDef[],
 ): Array<Record<string, unknown>> {
   return activeAttachments(attachments, catalog).map(({ att, def }) => {
+    if (att.mode === 'all') {
+      return {
+        type: 'mcp_toolset',
+        mcp_server_name: att.serverId,
+        default_config: { enabled: true, permission_policy: ALWAYS_ALLOW },
+        configs: [],
+      };
+    }
     const allTools = (def.tools ?? []).map((t) => t.name);
     const enabledSet = new Set(att.enabledTools);
-    // tools/list キャッシュがあれば全ツールを列挙して per-tool enable、無ければ enabledTools を直接 configs に。
     const names = allTools.length > 0 ? allTools : att.enabledTools;
     return {
       type: 'mcp_toolset',
@@ -76,11 +88,18 @@ export function parseMcpAttachments(raw: unknown): McpAttachment[] {
     return [];
   }
   if (!Array.isArray(parsed)) return [];
-  return parsed.filter(
-    (a): a is McpAttachment =>
-      !!a &&
-      typeof a === 'object' &&
-      typeof (a as McpAttachment).serverId === 'string' &&
-      Array.isArray((a as McpAttachment).enabledTools),
-  );
+  const out: McpAttachment[] = [];
+  for (const a of parsed) {
+    if (!a || typeof a !== 'object') continue;
+    const serverId = (a as { serverId?: unknown }).serverId;
+    if (typeof serverId !== 'string') continue;
+    const rawTools = (a as { enabledTools?: unknown }).enabledTools;
+    const enabledTools = Array.isArray(rawTools) ? rawTools.filter((t): t is string => typeof t === 'string') : [];
+    // mode 明示が無い旧データは「ツール指定あり=subset / 無し=all」とみなす（後方互換）。
+    const rawMode = (a as { mode?: unknown }).mode;
+    const mode: 'all' | 'subset' =
+      rawMode === 'all' || rawMode === 'subset' ? rawMode : enabledTools.length > 0 ? 'subset' : 'all';
+    out.push(mode === 'all' ? { serverId, mode, enabledTools: [] } : { serverId, mode, enabledTools });
+  }
+  return out;
 }

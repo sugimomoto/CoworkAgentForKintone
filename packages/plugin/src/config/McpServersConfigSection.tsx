@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 
 import { PLUGIN_CONFIG_KEYS, serializeMcpServers } from '../core/kintone/pluginConfig';
 import { setProxyConfigAsync } from '../core/kintone/setProxyConfigAsync';
+import { fetchMcpToolsViaOAuth } from '../core/mcp/connectMcpOAuth';
 import {
   MCP_AUTH,
   TOKEN_AUTH,
@@ -18,8 +19,10 @@ import {
   needsClientSecret,
   type McpAuthType,
   type McpServerDef,
+  type McpTool,
   type TokenEndpointAuthType,
 } from '../core/mcp/registry';
+import { fetchMcpTools } from '../core/mcp/toolsList';
 import { sleep, toErrorMessage } from '../core/utils';
 import { PasswordInput } from '../desktop/components/ui/PasswordInput';
 
@@ -211,6 +214,23 @@ export function McpServersConfigSection({
     }
   }
 
+  // ツール一覧を tools/list で取得してカタログ（McpServerDef.tools）に保存する。
+  // none=トークン不要 / bearer=admin が一度トークンを入れる（保存はしない） / oauth=1回認可（使い捨て）。
+  async function fetchAndSaveTools(server: McpServerDef, bearerToken?: string): Promise<McpTool[]> {
+    let tools: McpTool[];
+    if (server.authType === 'oauth') {
+      if (!workerUrl) throw new Error('Worker URL が未設定です');
+      tools = await fetchMcpToolsViaOAuth({ pluginId, workerUrl, server });
+    } else {
+      tools = await fetchMcpTools({ url: server.url, ...(bearerToken ? { bearerToken } : {}) });
+    }
+    const next = servers.map((s) => (s.id === server.id ? { ...s, tools } : s));
+    await persist(next, null);
+    setServers(next);
+    setSavedMsg(`「${server.name}」のツールを ${tools.length} 件取得しました`);
+    return tools;
+  }
+
   return (
     <section className="mb-[20px] rounded-[12px] border border-card-border bg-card p-[16px]">
       <h2 className="mb-[4px] text-[14px] font-semibold">追加 MCP サーバー</h2>
@@ -239,40 +259,16 @@ export function McpServersConfigSection({
         </p>
       ) : (
         <ul className="mb-[10px] flex flex-col gap-[6px]">
-          {servers.map((s) => {
-            const meta = MCP_AUTH[s.authType];
-            return (
-              <li
-                key={s.id}
-                className="flex items-center gap-[8px] rounded-[8px] border border-card-border bg-bg px-[10px] py-[8px]"
-              >
-                <span className="flex-1 truncate">
-                  <span className="text-[12px] font-medium text-text">{s.name}</span>
-                  <span className="ml-[6px] font-mono text-[10.5px] text-muted">{s.url}</span>
-                </span>
-                <span
-                  className="rounded-[3px] px-[6px] py-[1px] text-[9.5px] font-semibold"
-                  style={{ background: meta.soft, color: meta.color }}
-                >
-                  {meta.label}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setDraft(draftFromDef(s))}
-                  className="rounded-[6px] border border-card-border px-[8px] py-[3px] text-[11px] text-muted hover:text-accent"
-                >
-                  編集
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleDelete(s.id)}
-                  className="rounded-[6px] border border-warn/40 px-[8px] py-[3px] text-[11px] text-warn hover:bg-warn-soft"
-                >
-                  削除
-                </button>
-              </li>
-            );
-          })}
+          {servers.map((s) => (
+            <ServerRow
+              key={s.id}
+              server={s}
+              workerReady={s.authType !== 'oauth' || workerUrl !== null}
+              onEdit={() => setDraft(draftFromDef(s))}
+              onDelete={() => void handleDelete(s.id)}
+              onFetchTools={(token) => fetchAndSaveTools(s, token)}
+            />
+          ))}
         </ul>
       )}
 
@@ -432,6 +428,133 @@ export function McpServersConfigSection({
         </div>
       )}
     </section>
+  );
+}
+
+// 一覧の 1 行。ツール取得（カタログへの tools/list キャッシュ）導線を内包する。
+function ServerRow({
+  server,
+  workerReady,
+  onEdit,
+  onDelete,
+  onFetchTools,
+}: {
+  server: McpServerDef;
+  workerReady: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onFetchTools: (bearerToken?: string) => Promise<McpTool[]>;
+}): JSX.Element {
+  const meta = MCP_AUTH[server.authType];
+  const toolCount = server.tools?.length ?? 0;
+  const [phase, setPhase] = useState<'idle' | 'token' | 'busy'>('idle');
+  const [token, setToken] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+
+  async function run(bearer?: string): Promise<void> {
+    setPhase('busy');
+    setErr(null);
+    try {
+      await onFetchTools(bearer);
+      setToken('');
+      setPhase('idle');
+    } catch (e) {
+      setErr(toErrorMessage(e));
+      setPhase(server.authType === 'bearer' ? 'token' : 'idle');
+    }
+  }
+  const onFetchClick = (): void => {
+    if (server.authType === 'bearer') setPhase('token');
+    else void run();
+  };
+  const fetchDisabled = phase === 'busy' || (server.authType === 'oauth' && !workerReady);
+
+  return (
+    <li className="flex flex-col gap-[6px] rounded-[8px] border border-card-border bg-bg px-[10px] py-[8px]">
+      <div className="flex items-center gap-[8px]">
+        <span className="flex-1 truncate">
+          <span className="text-[12px] font-medium text-text">{server.name}</span>
+          <span className="ml-[6px] font-mono text-[10.5px] text-muted">{server.url}</span>
+        </span>
+        <span
+          className="rounded-[3px] px-[6px] py-[1px] text-[9.5px] font-semibold"
+          style={{ background: meta.soft, color: meta.color }}
+        >
+          {meta.label}
+        </span>
+        <span
+          title="カタログに保存済みのツール数（エージェント編集の絞り込みに使う）"
+          className={`rounded-[3px] px-[6px] py-[1px] text-[9.5px] ${toolCount > 0 ? 'bg-ok-soft text-ok' : 'bg-card text-subtle'}`}
+        >
+          {toolCount > 0 ? `${toolCount} ツール` : 'ツール未取得'}
+        </span>
+        <button
+          type="button"
+          data-testid="mcp-fetch-tools-button"
+          onClick={onFetchClick}
+          disabled={fetchDisabled}
+          className="rounded-[6px] border border-card-border px-[8px] py-[3px] text-[11px] text-muted hover:text-accent disabled:opacity-50"
+        >
+          {phase === 'busy' ? '取得中…' : toolCount > 0 ? 'ツール再取得' : 'ツール取得'}
+        </button>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="rounded-[6px] border border-card-border px-[8px] py-[3px] text-[11px] text-muted hover:text-accent"
+        >
+          編集
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="rounded-[6px] border border-warn/40 px-[8px] py-[3px] text-[11px] text-warn hover:bg-warn-soft"
+        >
+          削除
+        </button>
+      </div>
+
+      {server.authType === 'oauth' && !workerReady && (
+        <p className="text-[10px] text-warn">ツール取得には Step 1 の Worker URL が必要です。</p>
+      )}
+
+      {phase === 'token' && (
+        <div className="flex items-center gap-[6px]">
+          <input
+            data-testid="mcp-fetch-token-input"
+            type="password"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="API キー / トークン（取得のみに使用・保存しません）"
+            className="flex-1 rounded-[6px] border border-card-border bg-card px-[8px] py-[5px] font-mono text-[11px] text-text outline-none focus:border-accent"
+          />
+          <button
+            type="button"
+            data-testid="mcp-fetch-token-submit"
+            onClick={() => void run(token.trim())}
+            disabled={!token.trim()}
+            className="rounded-[6px] bg-accent px-[10px] py-[5px] text-[11px] font-semibold text-white disabled:opacity-50"
+          >
+            取得
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPhase('idle');
+              setErr(null);
+            }}
+            className="rounded-[6px] border border-card-border px-[10px] py-[5px] text-[11px] text-muted"
+          >
+            キャンセル
+          </button>
+        </div>
+      )}
+
+      {server.authType === 'oauth' && phase === 'idle' && (
+        <p className="text-[10px] text-subtle">OAuth: 「ツール取得」で一度だけ認可します（トークンは保存しません）。</p>
+      )}
+
+      {err && <p className="text-[10.5px] text-warn">⚠ {err}</p>}
+    </li>
   );
 }
 

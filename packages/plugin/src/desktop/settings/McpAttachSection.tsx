@@ -23,10 +23,14 @@ export function McpAttachSection({
 }: McpAttachSectionProps): JSX.Element {
   const byId = useMemo(() => Object.fromEntries(value.map((a) => [a.serverId, a])), [value]);
 
-  const setAttachment = (serverId: string, enabledTools: string[]): void => {
+  const replace = (serverId: string, next: McpAttachment | null): void => {
     const rest = value.filter((a) => a.serverId !== serverId);
-    onChange(enabledTools.length ? [...rest, { serverId, enabledTools }] : rest);
+    onChange(next ? [...rest, next] : rest);
   };
+  const setAll = (serverId: string): void => replace(serverId, { serverId, mode: 'all', enabledTools: [] });
+  const setSubset = (serverId: string, enabledTools: string[]): void =>
+    replace(serverId, { serverId, mode: 'subset', enabledTools });
+  const detach = (serverId: string): void => replace(serverId, null);
 
   return (
     <div data-testid="mcp-attach-section">
@@ -52,7 +56,9 @@ export function McpAttachSection({
               server={s}
               attachment={byId[s.id]}
               connection={connections[s.id]}
-              onChange={(tools) => setAttachment(s.id, tools)}
+              onSetAll={() => setAll(s.id)}
+              onSetSubset={(tools) => setSubset(s.id, tools)}
+              onDetach={() => detach(s.id)}
             />
           ))
         )}
@@ -72,44 +78,66 @@ function AttachRow({
   server,
   attachment,
   connection,
-  onChange,
+  onSetAll,
+  onSetSubset,
+  onDetach,
 }: {
   server: McpServerDef;
   attachment?: McpAttachment | undefined;
   connection?: McpConnection | undefined;
-  onChange: (tools: string[]) => void;
+  onSetAll: () => void;
+  onSetSubset: (tools: string[]) => void;
+  onDetach: () => void;
 }): JSX.Element {
   const allNames = (server.tools ?? []).map((t) => t.name);
-  const enabled = new Set(attachment?.enabledTools ?? []);
-  const attached = enabled.size > 0;
-  const [open, setOpen] = useState(attached);
+  const hasToolList = allNames.length > 0;
+  const attached = !!attachment;
+  // 実効的に有効なツール集合（mode='all' は全ツール扱い）。
+  const enabled = new Set(attachment?.mode === 'all' ? allNames : (attachment?.enabledTools ?? []));
+  const [open, setOpen] = useState(attached && hasToolList);
   const head = attachHeadState(attachment ?? null, allNames);
   const meta = MCP_AUTH[server.authType];
   const connected = connection?.status === 'connected';
+  const canExpand = attached && hasToolList;
 
   const toggleAttach = (): void => {
-    if (attached) onChange([]);
+    if (attached) onDetach();
     else {
-      onChange(allNames);
-      setOpen(true);
+      onSetAll();
+      if (hasToolList) setOpen(true);
     }
+  };
+  // ツール一覧が分かるときのみ呼ばれる。全選択なら mode='all'、それ以外は subset。
+  const applyEnabled = (next: Set<string>): void => {
+    if (next.size === allNames.length) onSetAll();
+    else onSetSubset([...next]);
   };
   const toggleTool = (name: string): void => {
     const n = new Set(enabled);
     if (n.has(name)) n.delete(name);
     else n.add(name);
-    onChange([...n]);
+    applyEnabled(n);
   };
+
+  const sub = !hasToolList
+    ? attached
+      ? '全ツール有効（一覧未取得）'
+      : 'ツール未取得'
+    : attached
+      ? attachment?.mode === 'all'
+        ? `全 ${allNames.length} ツール有効`
+        : `${enabled.size} / ${allNames.length} ツール有効`
+      : `${allNames.length} ツール`;
 
   return (
     <div className="border-b border-border last:border-b-0">
       <div className="flex items-center gap-[10px] px-[14px] py-[11px]">
         <button
           type="button"
-          onClick={() => attached && setOpen((v) => !v)}
-          disabled={!attached}
+          onClick={() => canExpand && setOpen((v) => !v)}
+          disabled={!canExpand}
           aria-label="ツール一覧"
-          className={`flex text-subtle transition-transform ${open && attached ? 'rotate-90' : ''} ${attached ? '' : 'opacity-30'}`}
+          className={`flex text-subtle transition-transform ${open && canExpand ? 'rotate-90' : ''} ${canExpand ? '' : 'opacity-30'}`}
         >
           <ChevronIcon />
         </button>
@@ -129,9 +157,7 @@ function AttachRow({
               {meta.label}
             </span>
           </div>
-          <div className="mt-[2px] text-[9.5px] text-subtle">
-            {attached ? `${enabled.size} / ${allNames.length} ツール有効` : `${allNames.length} ツール`}
-          </div>
+          <div className="mt-[2px] text-[9.5px] text-subtle">{sub}</div>
         </div>
         <span
           title={connected ? 'あなたは接続済み' : 'あなたは未接続 — 設定 → MCP で接続できます'}
@@ -163,11 +189,11 @@ function AttachRow({
         </button>
       </div>
 
-      {attached && open && (
+      {attached && open && hasToolList && (
         <div className="bg-card-hi px-[14px] pb-[12px] pl-[50px] pt-[4px]">
           <button
             type="button"
-            onClick={() => onChange(head === 'on' ? [] : allNames)}
+            onClick={() => (head === 'on' ? onSetSubset([]) : onSetAll())}
             className="mb-[2px] flex w-full items-center gap-[8px] py-[6px]"
           >
             <Checkbox state={head} />
@@ -192,6 +218,12 @@ function AttachRow({
               </button>
             );
           })}
+        </div>
+      )}
+
+      {attached && !hasToolList && (
+        <div className="bg-card-hi px-[14px] pb-[10px] pl-[50px] pt-[2px] text-[9.5px] leading-[1.5] text-subtle">
+          全ツールが対象です。Plugin Config でこのサーバーの「ツール取得」を行うと、ツール単位で選べます。
         </div>
       )}
     </div>

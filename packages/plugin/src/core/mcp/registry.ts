@@ -46,10 +46,15 @@ export interface McpConnection {
   at?: string;
 }
 
-/** ③ attach（agent ごと）。 */
+/** ③ attach（agent ごと）。
+ *  - `mode: 'all'`    : サーバーの全ツールを許可（ツール一覧を知らなくても attach 可能・既定）。
+ *  - `mode: 'subset'` : `enabledTools` のツールのみ許可（カタログに tools がある場合のみ選べる）。
+ *  attach 自体の ON/OFF は「この配列に存在するか」で表す（存在＝ON）。 */
 export interface McpAttachment {
   serverId: string;
-  enabledTools: string[]; // 空 = サーバー attach OFF
+  mode: 'all' | 'subset';
+  /** mode='subset' のとき有効化するツール名。mode='all' では未使用（[]）。 */
+  enabledTools: string[];
 }
 
 // ── 認証方式メタ（識別の差し色 — 同一 chroma 帯で揃える） ──
@@ -123,9 +128,11 @@ export function connectLabel(authType: McpAuthType): string {
   return authType === 'oauth' ? '認可して接続' : '接続';
 }
 
-/** attach のヘッダ チェック状態（全 ON / 一部 / OFF）。 */
+/** attach のヘッダ「すべてのツール」チェック状態（全 ON / 一部 / OFF）。 */
 export function attachHeadState(att: McpAttachment | null, allTools: string[]): 'on' | 'off' | 'indeterminate' {
-  if (!att || att.enabledTools.length === 0) return 'off';
-  if (att.enabledTools.length === allTools.length) return 'on';
+  if (!att) return 'off';
+  if (att.mode === 'all') return 'on';
+  if (att.enabledTools.length === 0) return 'off';
+  if (allTools.length > 0 && att.enabledTools.length === allTools.length) return 'on';
   return 'indeterminate';
 }
