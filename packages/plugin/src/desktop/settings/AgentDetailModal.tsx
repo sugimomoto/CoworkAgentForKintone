@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { BUILTIN_AGENT_SPECS } from '../../core/bootstrap/builtInAgents';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useMcpConnections } from '../hooks/useMcpConnections';
 
 import { buildDraftFromAgent, buildDraftFromSpec, isBuiltInPurpose } from './agent-detail/buildDraft';
 import { DraftForm } from './agent-detail/DraftForm';
@@ -51,6 +52,8 @@ export interface AgentDetailModalProps {
   availableSkills: readonly AvailableSkill[];
   /** #42 追加 MCP カタログ（attach セクションの選択肢）。 */
   mcpServers?: readonly McpServerDef[];
+  /** #42 接続状態の参考表示用（admin 自身の per-user 接続）。 */
+  pluginId?: string | null;
   /**
    * create-from-proposal モードで「雛形から作り直す」を押した時の templates ソース。
    * 通常は builtInAgents をそのまま渡す。
@@ -72,6 +75,9 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
     setTemplateId,
     sourceAgent,
   } = useAgentModalMode(props.mode, fallbackTemplates);
+
+  // #42: 接続状態の参考表示（admin 自身の per-user 接続）。attach 自体には影響しない。
+  const { connections: mcpConnections } = useMcpConnections(props.pluginId ?? null);
 
   const [draft, setDraft] = useState<AgentEditDraft | null>(null);
   // 通知先 Webhook の working copy (#13)。既存 Agent が登録済なら伏字 ({platform}) で初期化。
@@ -286,6 +292,7 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
               <div className="mt-[16px] border-t border-border pt-[14px]">
                 <McpAttachSection
                   servers={[...(props.mcpServers ?? [])]}
+                  connections={mcpConnections}
                   value={[...draft.mcpAttachments]}
                   onChange={(next) => setDraft({ ...draft, mcpAttachments: next })}
                 />

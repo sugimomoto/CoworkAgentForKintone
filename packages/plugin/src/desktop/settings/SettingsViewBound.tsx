@@ -273,6 +273,7 @@ export function SettingsViewBound({
           onDelete={handleDeleteAgent}
           availableSkills={availableSkills}
           mcpServers={pluginId ? getPluginConfig(pluginId).mcpServers : []}
+          pluginId={pluginId}
           onClose={() => setModalState(null)}
         />
       )}
