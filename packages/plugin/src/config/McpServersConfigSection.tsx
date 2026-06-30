@@ -5,7 +5,7 @@
 // - client_secret は config に保存せず、OAuth confidential(basic) のとき setProxyConfig で per-server 注入。
 // - 保存は getConfig をマージして setConfig（workerUrl 等を壊さない）。
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { PLUGIN_CONFIG_KEYS, serializeMcpServers } from '../core/kintone/pluginConfig';
 import { setProxyConfigAsync } from '../core/kintone/setProxyConfigAsync';
@@ -118,6 +118,15 @@ export function McpServersConfigSection({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 保存/削除はこの欄だけで即時 setConfig される（他の項目と挙動が異なる）。
+  // 「保存された」ことが分かるよう、成功時に一時メッセージを出す。
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!savedMsg) return;
+    const t = setTimeout(() => setSavedMsg(null), 4000);
+    return () => clearTimeout(t);
+  }, [savedMsg]);
 
   const workerRootUrl = workerUrl ? `${workerUrl.replace(/\/$/, '')}/` : '';
   const redirectUri = workerUrl ? buildRedirectUri(workerUrl) : '';
@@ -175,6 +184,7 @@ export function McpServersConfigSection({
       await persist(next, draft);
       setServers(next);
       setDraft(null);
+      setSavedMsg(`「${def.name}」を保存しました`);
     } catch (err) {
       setError(toErrorMessage(err));
     } finally {
@@ -188,10 +198,12 @@ export function McpServersConfigSection({
     setSaving(true);
     setError(null);
     try {
+      const removed = servers.find((s) => s.id === id);
       const next = servers.filter((s) => s.id !== id);
       await persist(next, null);
       setServers(next);
       if (draft?.id === id) setDraft(null);
+      setSavedMsg(removed ? `「${removed.name}」を削除しました` : '削除しました');
     } catch (err) {
       setError(toErrorMessage(err));
     } finally {
@@ -202,10 +214,23 @@ export function McpServersConfigSection({
   return (
     <section className="mb-[20px] rounded-[12px] border border-card-border bg-card p-[16px]">
       <h2 className="mb-[4px] text-[14px] font-semibold">追加 MCP サーバー</h2>
-      <p className="mb-[10px] text-[11px] leading-[1.6] text-muted">
+      <p className="mb-[8px] text-[11px] leading-[1.6] text-muted">
         kintone 以外のリモート MCP サーバーをテナント共有で登録します。各ユーザーは Chat Panel の設定 → MCP から
         自分のアカウントで接続します。
       </p>
+      <p className="mb-[10px] rounded-[6px] bg-bg px-[10px] py-[7px] text-[10.5px] leading-[1.6] text-subtle">
+        ※ この欄の <strong>追加・更新・削除はボタンを押した時点で即時保存</strong>されます（画面下部の保存ボタンとは独立）。
+        各ユーザーの画面に反映するには、保存後に <strong>アプリの更新（運用環境へ反映）</strong> が必要です。
+      </p>
+
+      {savedMsg && (
+        <p
+          data-testid="mcp-saved-msg"
+          className="mb-[10px] rounded-[8px] border border-ok/30 bg-ok-soft px-[12px] py-[8px] text-[11px] font-medium text-ok"
+        >
+          ✓ {savedMsg}
+        </p>
+      )}
 
       {/* 一覧 */}
       {servers.length === 0 ? (
