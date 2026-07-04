@@ -150,6 +150,15 @@ export function McpServersConfigSection({
     // OAuth は Worker URL（redirect/secret proxy）が前提
     (draft.authType !== 'oauth' || workerUrl !== null);
 
+  // 「保存してツールを取得」を出せる条件（bearer はフォームにトークンが無いので対象外）:
+  //   none / oauth public は無条件、oauth confidential は secret がメモリにある（入力済み）とき。
+  const canSaveAndFetch =
+    draftValid &&
+    draft !== null &&
+    (draft.authType === 'none' ||
+      (draft.authType === 'oauth' &&
+        (draft.tokenEndpointAuthType === 'none' || draft.clientSecret.trim().length > 0)));
+
   async function persist(next: McpServerDef[], secretDraft: Draft | null): Promise<void> {
     if (typeof kintone === 'undefined' || !kintone) return;
     const k = kintone; // await をまたぐと global の絞り込みが解けるためキャプチャ
@@ -179,19 +188,39 @@ export function McpServersConfigSection({
     });
   }
 
-  async function handleSave(): Promise<void> {
+  // 保存フォーム内でその場ツール取得（cfDeploy と同型）。secret がまだ draft にある間に
+  // in-memory の値で token 交換 → tools/list。proxyConfig の読み戻し/デプロイ反映に依存しない。
+  // oauth の場合は認可 popup が走るので OAuth 疎通確認も兼ねる。bearer はフォームにトークンが
+  // 無いため対象外（行の「ツール取得」で入力する）。
+  async function probeToolsForDraft(def: McpServerDef, clientSecret: string): Promise<McpTool[]> {
+    if (def.authType === 'oauth') {
+      if (!workerUrl) throw new Error('Worker URL が未設定です');
+      return fetchMcpToolsViaOAuth({ workerUrl, server: def, ...(clientSecret ? { clientSecret } : {}) });
+    }
+    return fetchMcpTools({ url: def.url }); // none
+  }
+
+  async function handleSave(alsoFetchTools = false): Promise<void> {
     if (!draft || !draftValid || saving) return;
     setSaving(true);
     setError(null);
     try {
-      const def = draftToDef(draft);
+      let def = draftToDef(draft);
+      if (alsoFetchTools) {
+        const tools = await probeToolsForDraft(def, draft.clientSecret);
+        def = { ...def, tools };
+      }
       const next = editingExisting
         ? servers.map((s) => (s.id === def.id ? def : s))
         : [...servers, def];
       await persist(next, draft);
       setServers(next);
       setDraft(null);
-      setSavedMsg(`「${def.name}」を保存しました`);
+      setSavedMsg(
+        alsoFetchTools
+          ? `「${def.name}」を保存し、ツールを ${def.tools?.length ?? 0} 件取得しました`
+          : `「${def.name}」を保存しました`,
+      );
     } catch (err) {
       setError(toErrorMessage(err));
     } finally {
@@ -428,7 +457,7 @@ export function McpServersConfigSection({
 
           {error && <p className="mt-[8px] text-[11px] text-warn">⚠ {error}</p>}
 
-          <div className="mt-[12px] flex gap-[8px]">
+          <div className="mt-[12px] flex flex-wrap gap-[8px]">
             <button
               type="button"
               data-testid="mcp-save-button"
@@ -438,6 +467,17 @@ export function McpServersConfigSection({
             >
               {saving ? '保存中…' : editingExisting ? '更新' : '追加'}
             </button>
+            {canSaveAndFetch && (
+              <button
+                type="button"
+                data-testid="mcp-save-fetch-button"
+                onClick={() => void handleSave(true)}
+                disabled={saving}
+                className="rounded-[7px] border border-accent bg-accent-soft px-[12px] py-[6px] text-[12px] font-semibold text-accent disabled:opacity-50"
+              >
+                {saving ? '処理中…' : draft?.authType === 'oauth' ? '保存して認可 → ツール取得' : '保存してツールを取得'}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setDraft(null)}
@@ -447,6 +487,11 @@ export function McpServersConfigSection({
               キャンセル
             </button>
           </div>
+          {draft?.authType === 'oauth' && (
+            <p className="mt-[6px] text-[10.5px] leading-[1.5] text-subtle">
+              「保存して認可 → ツール取得」を押すと、いま入力した client_secret を使って認可・token 交換・ツール取得まで一度に行います（OAuth 疎通確認を兼ねます）。
+            </p>
+          )}
         </div>
       )}
     </section>
@@ -474,12 +519,10 @@ function ServerRow({
   const [err, setErr] = useState<string | null>(null);
 
   // bearer は取得時にトークンを一度入力する（保存しない）。
-  // oauth confidential(basic) は保存済み client_secret を getProxyConfig で読み戻して使う。
-  // 読み戻せないときだけ（NEED_CLIENT_SECRET）secret 入力欄にフォールバックする。
+  // oauth confidential(basic) の再取得は保存済み client_secret を getProxyConfig で読み戻して使う。
+  // 読み戻せないとき（NEED_CLIENT_SECRET）は入力を促さず、編集フォームの「保存して認可 → ツール取得」へ誘導する。
   const isOAuthBasic = server.authType === 'oauth' && server.tokenEndpointAuthType === 'basic';
-  const inputLabel = isOAuthBasic
-    ? 'client_secret（取得のみに使用・保存しません）'
-    : 'API キー / トークン（取得のみに使用・保存しません）';
+  const inputLabel = 'API キー / トークン（取得のみに使用・保存しません）';
 
   async function run(secret?: string): Promise<void> {
     setPhase('busy');
@@ -489,9 +532,11 @@ function ServerRow({
       setToken('');
       setPhase('idle');
     } catch (e) {
-      // 保存済み secret を読み戻せなかった confidential は入力欄へフォールバック。
       if (e instanceof Error && e.message === NEED_CLIENT_SECRET) {
-        setPhase('token');
+        setErr(
+          '保存済みの client_secret を読み戻せませんでした（アプリ未更新の可能性）。「編集」→ client_secret を入れ直して「保存して認可 → ツール取得」を使ってください。',
+        );
+        setPhase('idle');
         return;
       }
       setErr(toErrorMessage(e));
@@ -500,7 +545,7 @@ function ServerRow({
   }
   const onFetchClick = (): void => {
     if (server.authType === 'bearer') setPhase('token');
-    else void run(); // none / oauth（basic は読み戻し→失敗時のみ入力へ）
+    else void run(); // none / oauth（confidential は保存済み secret を読み戻し）
   };
   const fetchDisabled = phase === 'busy' || (server.authType === 'oauth' && !workerReady);
 
