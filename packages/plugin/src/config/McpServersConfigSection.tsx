@@ -249,19 +249,43 @@ export function McpServersConfigSection({
 
   // confidential(basic) の client_secret は保存時に per-server proxy へ登録済み。
   // 設定画面では getProxyConfig で伏字なしに読み戻せる（Anthropic キーと同じ流儀・再入力不要）。
-  // 読めないときの原因切り分け用に diag を返す（未デプロイ / proxy 未登録 / Anthropic キー未読 の判別）。
-  function readStoredClientSecret(serverId: string): { secret: string; diag: string } {
+  // 2 経路を試す:
+  //   ① per-server upsert URL の X-Mcp-OAuth-Client-Secret（worker のサブパス）
+  //   ② token_endpoint の Authorization: Basic をデコード（別ホストなので独立に読める）
+  // サブパスが親プレフィックスに吸収されて読めない環境でも ② で復元できる。
+  function readStoredClientSecret(server: McpServerDef): { secret: string; diag: string } {
     if (typeof kintone === 'undefined' || !kintone) return { secret: '', diag: 'kintone 不在' };
     if (!workerRootUrl) return { secret: '', diag: 'workerUrl 未設定' };
     const gpc = kintone.plugin.app.getProxyConfig;
     if (!gpc) return { secret: '', diag: 'getProxyConfig 使用不可' };
-    const upsertUrl = `${workerRootUrl}credentials/upsert/${serverId}`;
+
+    const upsertUrl = `${workerRootUrl}credentials/upsert/${server.id}`;
     const up = gpc(upsertUrl, 'POST');
-    const root = gpc(workerRootUrl, 'POST');
-    const secret = up?.headers?.['X-Mcp-OAuth-Client-Secret'] ?? '';
+    let secret = up?.headers?.['X-Mcp-OAuth-Client-Secret'] ?? '';
+
+    // ② token_endpoint の Basic から復元
+    let tokDiag = 'n/a';
+    if (!secret && server.tokenEndpoint) {
+      const tok = gpc(server.tokenEndpoint, 'POST');
+      const authz = tok?.headers?.['Authorization'] ?? tok?.headers?.['authorization'] ?? '';
+      tokDiag = tok ? `登録あり[${Object.keys(tok.headers ?? {}).join('|') || '空'}]` : '登録なし';
+      if (authz.startsWith('Basic ')) {
+        try {
+          const dec = atob(authz.slice(6)); // clientId:clientSecret
+          const i = dec.indexOf(':');
+          if (i >= 0) secret = dec.slice(i + 1);
+        } catch {
+          /* base64 でない場合は無視 */
+        }
+      }
+    }
+
     const upKeys = up?.headers ? Object.keys(up.headers).join('|') || '(空)' : '(登録なし)';
-    const rootKey = root?.headers?.['X-Anthropic-Api-Key'] ? '読める' : '読めない';
-    return { secret, diag: `upsert登録=${up ? 'あり' : 'なし'} headers=[${upKeys}] / rootのAnthropicキー=${rootKey}` };
+    const rootKey = gpc(workerRootUrl, 'POST')?.headers?.['X-Anthropic-Api-Key'] ? '読める' : '読めない';
+    return {
+      secret,
+      diag: `upsert=${up ? 'あり' : 'なし'}[${upKeys}] / token_endpoint=${tokDiag} / root.Anthropic=${rootKey}`,
+    };
   }
 
   // ツール一覧を tools/list で取得してカタログ（McpServerDef.tools）に保存する。
@@ -275,7 +299,7 @@ export function McpServersConfigSection({
       if (!clientSecret && server.tokenEndpointAuthType === 'basic') {
         // まず保存済み secret の読み戻しを試す（再入力不要の速い経路）。
         // 読み戻せない（proxy 未登録 / 未デプロイ等）ときは診断付きで行 UI に返す。
-        const r = readStoredClientSecret(server.id);
+        const r = readStoredClientSecret(server);
         clientSecret = r.secret;
         if (!clientSecret) throw new Error(`${NEED_CLIENT_SECRET}: ${r.diag}`);
       }
