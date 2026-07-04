@@ -214,15 +214,33 @@ export function McpServersConfigSection({
     }
   }
 
+  // confidential(basic) の client_secret は保存時に per-server proxy へ登録済み。
+  // 設定画面では getProxyConfig で伏字なしに読み戻せる（Anthropic キーと同じ流儀・再入力不要）。
+  function readStoredClientSecret(serverId: string): string {
+    if (typeof kintone === 'undefined' || !kintone || !workerRootUrl) return '';
+    const upsertUrl = `${workerRootUrl}credentials/upsert/${serverId}`;
+    return (
+      kintone.plugin.app.getProxyConfig?.(upsertUrl, 'POST')?.headers?.['X-Mcp-OAuth-Client-Secret'] ?? ''
+    );
+  }
+
   // ツール一覧を tools/list で取得してカタログ（McpServerDef.tools）に保存する。
-  // none=トークン不要 / bearer=admin が一度トークンを入れる（保存はしない） /
-  // oauth=1回認可（使い捨て）。confidential(basic) は secret を取得時に一度入力（保存しない）。
-  // secret 引数の意味は authType で変わる（bearer=API トークン / oauth basic=client_secret）。
+  // none=トークン不要 / bearer=admin が一度トークンを入れる（保存はしない） / oauth=1回認可（使い捨て）。
+  // confidential(basic) は保存済み client_secret を getProxyConfig で読み戻して使う（再入力不要）。
   async function fetchAndSaveTools(server: McpServerDef, secret?: string): Promise<McpTool[]> {
     let tools: McpTool[];
     if (server.authType === 'oauth') {
       if (!workerUrl) throw new Error('Worker URL が未設定です');
-      tools = await fetchMcpToolsViaOAuth({ workerUrl, server, ...(secret ? { clientSecret: secret } : {}) });
+      let clientSecret = secret;
+      if (!clientSecret && server.tokenEndpointAuthType === 'basic') {
+        clientSecret = readStoredClientSecret(server.id);
+        if (!clientSecret) {
+          throw new Error(
+            '保存済みの client_secret を読み戻せませんでした。サーバーを「編集」→ client_secret を保存し直してから再取得してください。',
+          );
+        }
+      }
+      tools = await fetchMcpToolsViaOAuth({ workerUrl, server, ...(clientSecret ? { clientSecret } : {}) });
     } else {
       tools = await fetchMcpTools({ url: server.url, ...(secret ? { bearerToken: secret } : {}) });
     }
@@ -453,13 +471,11 @@ function ServerRow({
   const [token, setToken] = useState('');
   const [err, setErr] = useState<string | null>(null);
 
-  // bearer は API トークン、oauth confidential(basic) は client_secret を取得時に一度入力する
-  // （どちらも保存しない）。none / oauth public は入力不要。
+  // bearer のみ取得時にトークンを一度入力する（保存しない）。
+  // oauth confidential(basic) は保存済み client_secret を getProxyConfig で読み戻すため入力不要。
   const isOAuthBasic = server.authType === 'oauth' && server.tokenEndpointAuthType === 'basic';
-  const needsInput = server.authType === 'bearer' || isOAuthBasic;
-  const inputLabel = isOAuthBasic
-    ? 'client_secret（取得のみに使用・保存しません）'
-    : 'API キー / トークン（取得のみに使用・保存しません）';
+  const needsInput = server.authType === 'bearer';
+  const inputLabel = 'API キー / トークン（取得のみに使用・保存しません）';
 
   async function run(secret?: string): Promise<void> {
     setPhase('busy');
@@ -562,7 +578,7 @@ function ServerRow({
       {server.authType === 'oauth' && phase === 'idle' && (
         <p className="text-[10px] text-subtle">
           OAuth: 「ツール取得」で一度だけ認可します（トークンは保存しません）。
-          {isOAuthBasic && ' confidential のため取得時に client_secret を一度入力します。'}
+          {isOAuthBasic && ' confidential は保存済みの client_secret を使います（再入力不要）。'}
         </p>
       )}
 
