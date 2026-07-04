@@ -249,12 +249,19 @@ export function McpServersConfigSection({
 
   // confidential(basic) の client_secret は保存時に per-server proxy へ登録済み。
   // 設定画面では getProxyConfig で伏字なしに読み戻せる（Anthropic キーと同じ流儀・再入力不要）。
-  function readStoredClientSecret(serverId: string): string {
-    if (typeof kintone === 'undefined' || !kintone || !workerRootUrl) return '';
+  // 読めないときの原因切り分け用に diag を返す（未デプロイ / proxy 未登録 / Anthropic キー未読 の判別）。
+  function readStoredClientSecret(serverId: string): { secret: string; diag: string } {
+    if (typeof kintone === 'undefined' || !kintone) return { secret: '', diag: 'kintone 不在' };
+    if (!workerRootUrl) return { secret: '', diag: 'workerUrl 未設定' };
+    const gpc = kintone.plugin.app.getProxyConfig;
+    if (!gpc) return { secret: '', diag: 'getProxyConfig 使用不可' };
     const upsertUrl = `${workerRootUrl}credentials/upsert/${serverId}`;
-    return (
-      kintone.plugin.app.getProxyConfig?.(upsertUrl, 'POST')?.headers?.['X-Mcp-OAuth-Client-Secret'] ?? ''
-    );
+    const up = gpc(upsertUrl, 'POST');
+    const root = gpc(workerRootUrl, 'POST');
+    const secret = up?.headers?.['X-Mcp-OAuth-Client-Secret'] ?? '';
+    const upKeys = up?.headers ? Object.keys(up.headers).join('|') || '(空)' : '(登録なし)';
+    const rootKey = root?.headers?.['X-Anthropic-Api-Key'] ? '読める' : '読めない';
+    return { secret, diag: `upsert登録=${up ? 'あり' : 'なし'} headers=[${upKeys}] / rootのAnthropicキー=${rootKey}` };
   }
 
   // ツール一覧を tools/list で取得してカタログ（McpServerDef.tools）に保存する。
@@ -267,9 +274,10 @@ export function McpServersConfigSection({
       let clientSecret = secret;
       if (!clientSecret && server.tokenEndpointAuthType === 'basic') {
         // まず保存済み secret の読み戻しを試す（再入力不要の速い経路）。
-        // 読み戻せない（proxy 未登録 / 未デプロイ等）ときは行 UI に入力を促す。
-        clientSecret = readStoredClientSecret(server.id);
-        if (!clientSecret) throw new Error(NEED_CLIENT_SECRET);
+        // 読み戻せない（proxy 未登録 / 未デプロイ等）ときは診断付きで行 UI に返す。
+        const r = readStoredClientSecret(server.id);
+        clientSecret = r.secret;
+        if (!clientSecret) throw new Error(`${NEED_CLIENT_SECRET}: ${r.diag}`);
       }
       tools = await fetchMcpToolsViaOAuth({ workerUrl, server, ...(clientSecret ? { clientSecret } : {}) });
     } else {
@@ -532,9 +540,10 @@ function ServerRow({
       setToken('');
       setPhase('idle');
     } catch (e) {
-      if (e instanceof Error && e.message === NEED_CLIENT_SECRET) {
+      if (e instanceof Error && e.message.startsWith(NEED_CLIENT_SECRET)) {
+        const diag = e.message.slice(NEED_CLIENT_SECRET.length).replace(/^:\s*/, '');
         setErr(
-          '保存済みの client_secret を読み戻せませんでした（アプリ未更新の可能性）。「編集」→ client_secret を入れ直して「保存して認可 → ツール取得」を使ってください。',
+          `保存済みの client_secret を読み戻せませんでした（アプリ未更新の可能性）。「編集」→ client_secret を入れ直して「保存して認可 → ツール取得」を使ってください。［診断: ${diag}］`,
         );
         setPhase('idle');
         return;
