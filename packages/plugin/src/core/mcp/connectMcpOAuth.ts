@@ -13,7 +13,7 @@
 import { upsertKintoneCredential } from '../oauth/credentialsUpsertClient';
 import { clearPkce, generatePkce, savePkce } from '../oauth/pkce';
 import { openOAuthPopup } from '../oauth/popup';
-import { exchangeCodeForTokens } from '../oauth/tokenExchange';
+import { exchangeCodeForTokens, exchangeCodeForTokensViaProxy } from '../oauth/tokenExchange';
 import { joinUrl } from '../utils';
 
 import { fetchMcpTools } from './toolsList';
@@ -41,20 +41,25 @@ function buildAuthorizationUrl(args: {
 
 /**
  * OAuth(PKCE Authorization Code) で access_token を1回取得する（Vault には保存しない）。
- * connectMcpOAuth と同じ認可フローだが、credential 化せず token をそのまま返す。
+ * Plugin 設定画面で動く前提のため、token 交換は `kintone.proxy`（設定画面OK）を使う
+ * exchangeCodeForTokensViaProxy 経由。confidential(basic) は clientSecret を明示的に渡す
+ * （設定画面では proxyConfig の Basic 注入が使えないため、取得時に一度入力してもらう）。
  * 管理画面でのツール一覧取得（使い捨てプローブ）に使う。
  */
 async function acquireOAuthAccessToken(args: {
-  pluginId: string;
   workerUrl: string;
   server: McpServerDef;
+  clientSecret?: string;
 }): Promise<string> {
-  const { pluginId, workerUrl, server } = args;
+  const { workerUrl, server, clientSecret } = args;
   if (server.authType !== 'oauth') throw new Error('OAuth 接続対象ではありません');
   if (!server.authorizationEndpoint || !server.tokenEndpoint || !server.clientId) {
     throw new Error('OAuth エンドポイント / client_id が未設定です');
   }
   const isPublic = (server.tokenEndpointAuthType ?? 'none') === 'none';
+  if (!isPublic && !clientSecret) {
+    throw new Error('confidential クライアントは client_secret が必要です');
+  }
   const workerOrigin = new URL(workerUrl).origin;
   const redirectUri = joinUrl(workerUrl.replace(/\/$/, ''), 'oauth/callback');
 
@@ -75,13 +80,13 @@ async function acquireOAuthAccessToken(args: {
       expectedOrigin: workerOrigin,
     });
     if (!payload.code) throw new Error('OAuth callback に code がありません');
-    const tokens = await exchangeCodeForTokens({
-      pluginId,
+    const tokens = await exchangeCodeForTokensViaProxy({
       tokenUrl: server.tokenEndpoint,
       redirectUri,
       code: payload.code,
       codeVerifier: pkce.codeVerifier,
-      ...(isPublic ? { clientId: server.clientId } : {}),
+      clientId: server.clientId,
+      ...(isPublic ? {} : { clientSecret: clientSecret! }),
     });
     clearPkce();
     return tokens.access_token;
@@ -94,11 +99,12 @@ async function acquireOAuthAccessToken(args: {
 /**
  * OAuth サーバーの公開ツール一覧を取得する（管理者がカタログにツールをキャッシュする用）。
  * 認可フローで一時 access_token を得て tools/list を叩き、token は保持しない。
+ * confidential(basic) は clientSecret を渡す（public は不要）。
  */
 export async function fetchMcpToolsViaOAuth(args: {
-  pluginId: string;
   workerUrl: string;
   server: McpServerDef;
+  clientSecret?: string;
 }): Promise<McpTool[]> {
   const accessToken = await acquireOAuthAccessToken(args);
   return fetchMcpTools({ url: args.server.url, bearerToken: accessToken });

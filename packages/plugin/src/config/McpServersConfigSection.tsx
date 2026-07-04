@@ -215,14 +215,16 @@ export function McpServersConfigSection({
   }
 
   // ツール一覧を tools/list で取得してカタログ（McpServerDef.tools）に保存する。
-  // none=トークン不要 / bearer=admin が一度トークンを入れる（保存はしない） / oauth=1回認可（使い捨て）。
-  async function fetchAndSaveTools(server: McpServerDef, bearerToken?: string): Promise<McpTool[]> {
+  // none=トークン不要 / bearer=admin が一度トークンを入れる（保存はしない） /
+  // oauth=1回認可（使い捨て）。confidential(basic) は secret を取得時に一度入力（保存しない）。
+  // secret 引数の意味は authType で変わる（bearer=API トークン / oauth basic=client_secret）。
+  async function fetchAndSaveTools(server: McpServerDef, secret?: string): Promise<McpTool[]> {
     let tools: McpTool[];
     if (server.authType === 'oauth') {
       if (!workerUrl) throw new Error('Worker URL が未設定です');
-      tools = await fetchMcpToolsViaOAuth({ pluginId, workerUrl, server });
+      tools = await fetchMcpToolsViaOAuth({ workerUrl, server, ...(secret ? { clientSecret: secret } : {}) });
     } else {
-      tools = await fetchMcpTools({ url: server.url, ...(bearerToken ? { bearerToken } : {}) });
+      tools = await fetchMcpTools({ url: server.url, ...(secret ? { bearerToken: secret } : {}) });
     }
     const next = servers.map((s) => (s.id === server.id ? { ...s, tools } : s));
     await persist(next, null);
@@ -451,20 +453,28 @@ function ServerRow({
   const [token, setToken] = useState('');
   const [err, setErr] = useState<string | null>(null);
 
-  async function run(bearer?: string): Promise<void> {
+  // bearer は API トークン、oauth confidential(basic) は client_secret を取得時に一度入力する
+  // （どちらも保存しない）。none / oauth public は入力不要。
+  const isOAuthBasic = server.authType === 'oauth' && server.tokenEndpointAuthType === 'basic';
+  const needsInput = server.authType === 'bearer' || isOAuthBasic;
+  const inputLabel = isOAuthBasic
+    ? 'client_secret（取得のみに使用・保存しません）'
+    : 'API キー / トークン（取得のみに使用・保存しません）';
+
+  async function run(secret?: string): Promise<void> {
     setPhase('busy');
     setErr(null);
     try {
-      await onFetchTools(bearer);
+      await onFetchTools(secret);
       setToken('');
       setPhase('idle');
     } catch (e) {
       setErr(toErrorMessage(e));
-      setPhase(server.authType === 'bearer' ? 'token' : 'idle');
+      setPhase(needsInput ? 'token' : 'idle');
     }
   }
   const onFetchClick = (): void => {
-    if (server.authType === 'bearer') setPhase('token');
+    if (needsInput) setPhase('token');
     else void run();
   };
   const fetchDisabled = phase === 'busy' || (server.authType === 'oauth' && !workerReady);
@@ -524,7 +534,7 @@ function ServerRow({
             type="password"
             value={token}
             onChange={(e) => setToken(e.target.value)}
-            placeholder="API キー / トークン（取得のみに使用・保存しません）"
+            placeholder={inputLabel}
             className="flex-1 rounded-[6px] border border-card-border bg-card px-[8px] py-[5px] font-mono text-[11px] text-text outline-none focus:border-accent"
           />
           <button
@@ -550,7 +560,10 @@ function ServerRow({
       )}
 
       {server.authType === 'oauth' && phase === 'idle' && (
-        <p className="text-[10px] text-subtle">OAuth: 「ツール取得」で一度だけ認可します（トークンは保存しません）。</p>
+        <p className="text-[10px] text-subtle">
+          OAuth: 「ツール取得」で一度だけ認可します（トークンは保存しません）。
+          {isOAuthBasic && ' confidential のため取得時に client_secret を一度入力します。'}
+        </p>
       )}
 
       {err && <p className="text-[10.5px] text-warn">⚠ {err}</p>}

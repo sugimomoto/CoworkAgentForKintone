@@ -26,31 +26,10 @@ export interface KintoneTokens {
   scope?: string;
 }
 
-export async function exchangeCodeForTokens(args: ExchangeArgs): Promise<KintoneTokens> {
-  if (typeof kintone === 'undefined' || !kintone?.plugin?.app?.proxy) {
-    throw new Error('kintone JavaScript API is not available');
-  }
-  const params = new URLSearchParams({
-    grant_type: 'authorization_code',
-    code: args.code,
-    redirect_uri: args.redirectUri,
-    code_verifier: args.codeVerifier,
-  });
-  if (args.clientId) params.set('client_id', args.clientId);
-  const body = params.toString();
-
-  const [respBody, status] = await kintone.plugin.app.proxy(
-    args.pluginId,
-    args.tokenUrl,
-    'POST',
-    {}, // ヘッダは setProxyConfig で固定済 (Basic auth + Content-Type)
-    body,
-  );
-
+function parseTokenResponse(respBody: string, status: number): KintoneTokens {
   if (status < 200 || status >= 300) {
     throw new Error(`token exchange failed (${status}): ${respBody}`);
   }
-
   let parsed: KintoneTokens;
   try {
     parsed = JSON.parse(respBody) as KintoneTokens;
@@ -64,4 +43,62 @@ export async function exchangeCodeForTokens(args: ExchangeArgs): Promise<Kintone
     throw new Error('token exchange returned without expires_in');
   }
   return parsed;
+}
+
+export async function exchangeCodeForTokens(args: ExchangeArgs): Promise<KintoneTokens> {
+  if (typeof kintone === 'undefined' || !kintone?.plugin?.app?.proxy) {
+    throw new Error('kintone JavaScript API is not available');
+  }
+  const params = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code: args.code,
+    redirect_uri: args.redirectUri,
+    code_verifier: args.codeVerifier,
+  });
+  if (args.clientId) params.set('client_id', args.clientId);
+
+  const [respBody, status] = await kintone.plugin.app.proxy(
+    args.pluginId,
+    args.tokenUrl,
+    'POST',
+    {}, // ヘッダは setProxyConfig で固定済 (Basic auth + Content-Type)
+    params.toString(),
+  );
+  return parseTokenResponse(respBody, status);
+}
+
+export interface ExchangeViaProxyArgs {
+  tokenUrl: string;
+  redirectUri: string;
+  code: string;
+  codeVerifier: string;
+  clientId: string;
+  /** confidential(client_secret_basic) のとき指定。public(PKCE) は省略。 */
+  clientSecret?: string;
+}
+
+/**
+ * Plugin 設定画面用の token 交換。設定画面では `kintone.plugin.app.proxy` が使えないため、
+ * 汎用 `kintone.proxy()` に明示ヘッダを載せて token_endpoint を直接叩く（cfDeploy と同じ流儀）。
+ * confidential は Authorization: Basic を自前で組み立て、public は client_id を body に載せる。
+ * setProxyConfig の固定ヘッダ注入には依存しない（管理者が取得時に client_secret を一度入力する）。
+ */
+export async function exchangeCodeForTokensViaProxy(args: ExchangeViaProxyArgs): Promise<KintoneTokens> {
+  if (typeof kintone === 'undefined' || typeof kintone.proxy !== 'function') {
+    throw new Error('kintone.proxy is not available (Plugin 設定画面以外では使えません)');
+  }
+  const params = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code: args.code,
+    redirect_uri: args.redirectUri,
+    code_verifier: args.codeVerifier,
+  });
+  const headers: Record<string, string> = { 'Content-Type': 'application/x-www-form-urlencoded' };
+  if (args.clientSecret) {
+    headers.Authorization = `Basic ${btoa(`${args.clientId}:${args.clientSecret}`)}`;
+  } else {
+    params.set('client_id', args.clientId); // public(PKCE)
+  }
+  const [respBody, status] = await kintone.proxy(args.tokenUrl, 'POST', headers, params.toString());
+  return parseTokenResponse(respBody, status);
 }
