@@ -30,6 +30,10 @@ import { buildMcpProxySteps } from './buildMcpProxySteps';
 
 const PROXY_STEP_DELAY_MS = 700;
 
+// confidential のツール取得で保存済み client_secret を読み戻せなかったときの sentinel。
+// これを受けた行 UI は secret 入力欄にフォールバックする（入力値は直接 token 交換に使う）。
+const NEED_CLIENT_SECRET = 'NEED_CLIENT_SECRET';
+
 export interface McpServersConfigSectionProps {
   pluginId: string;
   /** Worker URL（redirect_uri 表示 + per-server upsert proxy 登録に使う）。未設定なら OAuth 登録は不可。 */
@@ -233,12 +237,10 @@ export function McpServersConfigSection({
       if (!workerUrl) throw new Error('Worker URL が未設定です');
       let clientSecret = secret;
       if (!clientSecret && server.tokenEndpointAuthType === 'basic') {
+        // まず保存済み secret の読み戻しを試す（再入力不要の速い経路）。
+        // 読み戻せない（proxy 未登録 / 未デプロイ等）ときは行 UI に入力を促す。
         clientSecret = readStoredClientSecret(server.id);
-        if (!clientSecret) {
-          throw new Error(
-            '保存済みの client_secret を読み戻せませんでした。サーバーを「編集」→ client_secret を保存し直してから再取得してください。',
-          );
-        }
+        if (!clientSecret) throw new Error(NEED_CLIENT_SECRET);
       }
       tools = await fetchMcpToolsViaOAuth({ workerUrl, server, ...(clientSecret ? { clientSecret } : {}) });
     } else {
@@ -471,11 +473,13 @@ function ServerRow({
   const [token, setToken] = useState('');
   const [err, setErr] = useState<string | null>(null);
 
-  // bearer のみ取得時にトークンを一度入力する（保存しない）。
-  // oauth confidential(basic) は保存済み client_secret を getProxyConfig で読み戻すため入力不要。
+  // bearer は取得時にトークンを一度入力する（保存しない）。
+  // oauth confidential(basic) は保存済み client_secret を getProxyConfig で読み戻して使う。
+  // 読み戻せないときだけ（NEED_CLIENT_SECRET）secret 入力欄にフォールバックする。
   const isOAuthBasic = server.authType === 'oauth' && server.tokenEndpointAuthType === 'basic';
-  const needsInput = server.authType === 'bearer';
-  const inputLabel = 'API キー / トークン（取得のみに使用・保存しません）';
+  const inputLabel = isOAuthBasic
+    ? 'client_secret（取得のみに使用・保存しません）'
+    : 'API キー / トークン（取得のみに使用・保存しません）';
 
   async function run(secret?: string): Promise<void> {
     setPhase('busy');
@@ -485,13 +489,18 @@ function ServerRow({
       setToken('');
       setPhase('idle');
     } catch (e) {
+      // 保存済み secret を読み戻せなかった confidential は入力欄へフォールバック。
+      if (e instanceof Error && e.message === NEED_CLIENT_SECRET) {
+        setPhase('token');
+        return;
+      }
       setErr(toErrorMessage(e));
-      setPhase(needsInput ? 'token' : 'idle');
+      setPhase(server.authType === 'bearer' ? 'token' : 'idle');
     }
   }
   const onFetchClick = (): void => {
-    if (needsInput) setPhase('token');
-    else void run();
+    if (server.authType === 'bearer') setPhase('token');
+    else void run(); // none / oauth（basic は読み戻し→失敗時のみ入力へ）
   };
   const fetchDisabled = phase === 'busy' || (server.authType === 'oauth' && !workerReady);
 
