@@ -26,7 +26,7 @@ export interface KintoneTokens {
   scope?: string;
 }
 
-function parseTokenResponse(respBody: string, status: number): KintoneTokens {
+function parseTokenResponse(respBody: string, status: number, requireExpiry: boolean): KintoneTokens {
   if (status < 200 || status >= 300) {
     throw new Error(`token exchange failed (${status}): ${respBody}`);
   }
@@ -40,7 +40,10 @@ function parseTokenResponse(respBody: string, status: number): KintoneTokens {
     throw new Error('token exchange returned without access_token');
   }
   if (typeof parsed.expires_in !== 'number') {
-    throw new Error('token exchange returned without expires_in');
+    // Notion 等、失効しない/expires_in を返さないプロバイダがある。cybozu(kintone) は必ず返すので
+    // ランタイム(requireExpiry=true)は厳格に。設定画面のプローブは access_token だけ使うので 0 埋め。
+    if (requireExpiry) throw new Error('token exchange returned without expires_in');
+    parsed = { ...parsed, expires_in: 0 };
   }
   return parsed;
 }
@@ -64,7 +67,7 @@ export async function exchangeCodeForTokens(args: ExchangeArgs): Promise<Kintone
     {}, // ヘッダは setProxyConfig で固定済 (Basic auth + Content-Type)
     params.toString(),
   );
-  return parseTokenResponse(respBody, status);
+  return parseTokenResponse(respBody, status, true);
 }
 
 export interface ExchangeViaProxyArgs {
@@ -100,5 +103,5 @@ export async function exchangeCodeForTokensViaProxy(args: ExchangeViaProxyArgs):
     params.set('client_id', args.clientId); // public(PKCE)
   }
   const [respBody, status] = await kintone.proxy(args.tokenUrl, 'POST', headers, params.toString());
-  return parseTokenResponse(respBody, status);
+  return parseTokenResponse(respBody, status, false);
 }
