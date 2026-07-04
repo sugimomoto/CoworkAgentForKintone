@@ -27,6 +27,8 @@ function buildAuthorizationUrl(args: {
   scope?: string;
   state: string;
   codeChallenge: string;
+  /** RFC 8707 Resource Indicator（MCP サーバーの正規 URL）。 */
+  resource?: string;
 }): string {
   const u = new URL(args.authorizationEndpoint);
   u.searchParams.set('response_type', 'code');
@@ -36,6 +38,7 @@ function buildAuthorizationUrl(args: {
   u.searchParams.set('state', args.state);
   u.searchParams.set('code_challenge', args.codeChallenge);
   u.searchParams.set('code_challenge_method', 'S256');
+  if (args.resource) u.searchParams.set('resource', args.resource);
   return u.toString();
 }
 
@@ -73,6 +76,7 @@ async function acquireOAuthAccessToken(args: {
       ...(server.scope ? { scope: server.scope } : {}),
       state: pkce.state,
       codeChallenge: pkce.codeChallenge,
+      resource: server.url, // RFC 8707: token を MCP サーバー向けに発行させる
     });
     const payload = await openOAuthPopup({
       authorizationUrl: authUrl,
@@ -86,6 +90,7 @@ async function acquireOAuthAccessToken(args: {
       code: payload.code,
       codeVerifier: pkce.codeVerifier,
       clientId: server.clientId,
+      resource: server.url,
       ...(isPublic ? {} : { clientSecret: clientSecret! }),
     });
     clearPkce();
@@ -147,6 +152,7 @@ export async function connectMcpOAuth(
       ...(server.scope ? { scope: server.scope } : {}),
       state: pkce.state,
       codeChallenge: pkce.codeChallenge,
+      resource: server.url, // RFC 8707: token を MCP サーバー向けに発行させる
     });
     const payload = await openOAuthPopup({
       authorizationUrl: authUrl,
@@ -162,6 +168,7 @@ export async function connectMcpOAuth(
       redirectUri,
       code: payload.code,
       codeVerifier: pkce.codeVerifier,
+      resource: server.url,
       ...(isPublic ? { clientId: server.clientId } : {}),
     });
 

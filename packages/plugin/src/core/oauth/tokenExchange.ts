@@ -16,6 +16,12 @@ export interface ExchangeArgs {
    * client_id を載せて本人性を示す。confidential は proxy が Basic 注入するので不要。
    */
   clientId?: string;
+  /**
+   * #42: RFC 8707 Resource Indicator。MCP の認可仕様が要求する MCP サーバーの正規 URL。
+   * これが無いと token が対象リソース向けに発行されず、MCP 側で invalid_token になる。
+   * kintone 自身の OAuth では未指定（付けると弾く AS があるため）。
+   */
+  resource?: string;
 }
 
 export interface KintoneTokens {
@@ -59,6 +65,7 @@ export async function exchangeCodeForTokens(args: ExchangeArgs): Promise<Kintone
     code_verifier: args.codeVerifier,
   });
   if (args.clientId) params.set('client_id', args.clientId);
+  if (args.resource) params.set('resource', args.resource);
 
   const [respBody, status] = await kintone.plugin.app.proxy(
     args.pluginId,
@@ -78,6 +85,8 @@ export interface ExchangeViaProxyArgs {
   clientId: string;
   /** confidential(client_secret_basic) のとき指定。public(PKCE) は省略。 */
   clientSecret?: string;
+  /** RFC 8707 Resource Indicator（MCP サーバーの正規 URL）。MCP OAuth では必須級。 */
+  resource?: string;
 }
 
 /**
@@ -96,6 +105,7 @@ export async function exchangeCodeForTokensViaProxy(args: ExchangeViaProxyArgs):
     redirect_uri: args.redirectUri,
     code_verifier: args.codeVerifier,
   });
+  if (args.resource) params.set('resource', args.resource);
   const headers: Record<string, string> = { 'Content-Type': 'application/x-www-form-urlencoded' };
   if (args.clientSecret) {
     headers.Authorization = `Basic ${btoa(`${args.clientId}:${args.clientSecret}`)}`;
