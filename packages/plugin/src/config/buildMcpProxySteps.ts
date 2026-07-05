@@ -31,9 +31,23 @@ export interface BuildMcpProxyStepsInput {
  */
 export function buildMcpProxySteps(input: BuildMcpProxyStepsInput): ProxyStep[] {
   const { server, clientSecret, anthropicApiKey, workerRootUrl } = input;
-  if (server.authType !== 'oauth') return [];
-  if (server.tokenEndpointAuthType !== 'basic') return []; // none(PKCE)=secret不要, post=非対応
-  if (!clientSecret || !server.clientId || !server.tokenEndpoint) return [];
+  if (server.authType !== 'oauth' || !server.tokenEndpoint) return [];
+
+  const authType = server.tokenEndpointAuthType ?? 'none';
+  // public(PKCE): secret を持たないが、ランタイム(kintone.plugin.app.proxy)は proxyConfig 登録済みの
+  // ヘッダしか付けないため、token_endpoint に Content-Type だけ登録しておく必要がある
+  // （これが無いと Auth0 等がフォームボディを解釈できず invalid_grant になる）。
+  if (authType === 'none') {
+    return [
+      {
+        url: server.tokenEndpoint,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      },
+    ];
+  }
+  if (authType !== 'basic') return []; // post=非対応
+  if (!clientSecret || !server.clientId) return [];
   if (!anthropicApiKey) return []; // per-server URL は最長一致で総取り → Anthropic キーを自己完結で載せる必要
 
   const basic = btoa(`${server.clientId}:${clientSecret}`);

@@ -15,7 +15,7 @@ describe('buildMcpProxySteps', () => {
     ).toEqual([]);
   });
 
-  it('oauth public(none) は secret 不要なので空', () => {
+  it('oauth public(none) は token_endpoint に Content-Type だけ登録（runtime proxy 用・secret 不要）', () => {
     expect(
       buildMcpProxySteps({
         server: { id: 's', authType: 'oauth', tokenEndpointAuthType: 'none', clientId: 'c', tokenEndpoint: 'https://e/t' },
@@ -23,7 +23,9 @@ describe('buildMcpProxySteps', () => {
         anthropicApiKey: API_KEY,
         workerRootUrl: WORKER_ROOT,
       }),
-    ).toEqual([]);
+    ).toEqual([
+      { url: 'https://e/t', method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+    ]);
   });
 
   it('oauth post は非対応なので空', () => {

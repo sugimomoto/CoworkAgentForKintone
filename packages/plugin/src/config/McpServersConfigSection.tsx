@@ -162,10 +162,12 @@ export function McpServersConfigSection({
   async function persist(next: McpServerDef[], secretDraft: Draft | null): Promise<void> {
     if (typeof kintone === 'undefined' || !kintone) return;
     const k = kintone; // await をまたぐと global の絞り込みが解けるためキャプチャ
-    // OAuth confidential(basic) で secret 入力があれば per-server proxy を登録。
-    // 最長一致の総取り対策として、保存済み Anthropic キーを getProxyConfig で読み戻し、
-    // per-server URL の登録に同梱する（admin に再入力させない）。
-    if (secretDraft && secretDraft.clientSecret.trim() && workerRootUrl) {
+    // OAuth の token_endpoint 等に per-server proxy を登録（ランタイムの kintone.plugin.app.proxy 用）。
+    // - public(PKCE): Content-Type だけ登録（secret 不要）。これが無いと runtime で Content-Type が
+    //   付かず token エンドポイントがボディを解釈できず invalid_grant になる。
+    // - confidential(basic): Basic + per-server upsert URL（Anthropic キーを getProxyConfig で読戻し同梱）。
+    // secret 入力が無い confidential の再保存では buildMcpProxySteps が [] を返し、既存登録を保つ。
+    if (secretDraft && workerRootUrl && draftToDef(secretDraft).authType === 'oauth') {
       const anthropicApiKey =
         k.plugin.app.getProxyConfig?.(workerRootUrl, 'POST')?.headers?.['X-Anthropic-Api-Key'] ?? '';
       const steps = buildMcpProxySteps({
