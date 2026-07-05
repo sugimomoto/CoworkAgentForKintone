@@ -67,11 +67,17 @@ export async function exchangeCodeForTokens(args: ExchangeArgs): Promise<Kintone
   if (args.clientId) params.set('client_id', args.clientId);
   if (args.resource) params.set('resource', args.resource);
 
+  // confidential は token_endpoint に proxyConfig（Basic + Content-Type）が登録済みなので {} でよい。
+  // public(PKCE, client_id を body に載せる=clientId 指定時) は secret が無く proxyConfig を登録しない
+  // ため Content-Type が付かず、フォームボディを解釈できず invalid_grant になる。明示的に付与する。
+  const headers: Record<string, string> = args.clientId
+    ? { 'Content-Type': 'application/x-www-form-urlencoded' }
+    : {};
   const [respBody, status] = await kintone.plugin.app.proxy(
     args.pluginId,
     args.tokenUrl,
     'POST',
-    {}, // ヘッダは setProxyConfig で固定済 (Basic auth + Content-Type)
+    headers,
     params.toString(),
   );
   return parseTokenResponse(respBody, status, true);
