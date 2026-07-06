@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cowork Agent — 定期実行 (Deployments) UI 検討</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; background: #f0eee9; }
+    body { font-family: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', sans-serif; }
+    * { box-sizing: border-box; }
+    select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236b5f4a' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; padding-right: 26px !important; cursor: pointer; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: rgba(35,18,0,0.16); border-radius: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    /* kintone host frame */
+    .kt { width: 100%; height: 100%; display: flex; flex-direction: column; background: #fafbfc; color: #374151; }
+    .kt-top { height: 34px; background: #231200; color: #f5e6b8; display: flex; align-items: center; padding: 0 14px; font-size: 11.5px; gap: 14px; flex: 0 0 auto; }
+    .kt-logo { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #ffbf00; letter-spacing: .3px; }
+    .kt-logo-mark { width: 18px; height: 18px; border-radius: 5px; background: #ffbf00; color: #231200; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; }
+    .kt-crumb { flex: 1; color: #9a8f7a; }
+    .kt-appbar { height: 48px; background: #fff; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; padding: 0 18px; gap: 12px; flex: 0 0 auto; }
+    .kt-app-icon { width: 28px; height: 28px; border-radius: 6px; background: #ffbf00; color: #231200; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
+    .kt-app-title { font-size: 14px; font-weight: 600; color: #111827; }
+    .kt-body { flex: 1; display: flex; min-height: 0; }
+    .kt-list { flex: 1; padding: 16px 22px; overflow: hidden; background: #fafbfc; }
+    .kt-tabs { display: flex; gap: 2px; margin-bottom: 12px; border-bottom: 1px solid #e5e7eb; }
+    .kt-tab { padding: 7px 13px; font-size: 11.5px; color: #6b7280; border-bottom: 2px solid transparent; }
+    .kt-tab.active { color: #231200; border-bottom-color: #ffbf00; font-weight: 600; }
+    .kt-table { width: 100%; border-collapse: collapse; font-size: 11.5px; background: #fff; border: 1px solid #e5e7eb; border-radius: 4px; }
+    .kt-table th { background: #f9fafb; color: #6b7280; font-weight: 500; text-align: left; padding: 9px 11px; border-bottom: 1px solid #e5e7eb; font-size: 10.5px; }
+    .kt-table td { padding: 10px 11px; border-bottom: 1px solid #f3f4f6; color: #374151; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <!-- 依存順: header / settings (glyph+badge 共有) → canvas → deployments 基盤 → panes → modal → glue -->
+  <script type="text/babel" src="wedge-header.jsx"></script>
+  <script type="text/babel" src="wedge-settings.jsx"></script>
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="deployments-data.jsx"></script>
+  <script type="text/babel" src="deployments-panes.jsx"></script>
+  <script type="text/babel" src="deployments-modal.jsx"></script>
+
+  <script type="text/babel">
+    // ── フレーム: 2-pane シェル全体 ──
+    function ShellFrame({ role, section = 'deployments', children }) {
+      return (
+        <div style={{ display: 'flex', width: '100%', height: '100%', background: D.bg }}>
+          <DeploymentsShell role={role} section={section}>{children}</DeploymentsShell>
+        </div>
+      );
+    }
+    // ── フレーム: 右 detail ペイン単体 ──
+    function PaneFrame({ children }) {
+      return <div style={{ width: '100%', height: '100%', background: D.bg, overflow: 'auto', position: 'relative' }}>{children}</div>;
+    }
+    // ── モーダル舞台: 背後に薄い一覧 + オーバーレイ ──
+    function ModalStage({ behind, children }) {
+      return (
+        <div style={{ position: 'relative', width: '100%', height: '100%', background: D.bg, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', opacity: 0.5, pointerEvents: 'none' }}>{behind}</div>
+          {children}
+        </div>
+      );
+    }
+    // ── スケジュール入力 単体プレビュー (state を持つ) ──
+    function SchedDemo({ init }) {
+      const [s, setS] = React.useState(init);
+      return (
+        <div style={{ width: '100%', height: '100%', background: D.bg, padding: 22, overflowY: 'auto' }}>
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: D.text, marginBottom: 10 }}>スケジュール</div>
+          <SchedulePicker value={s} onChange={setS} />
+        </div>
+      );
+    }
+
+    // ── kintone ホスト (設定が右ペインで開いた状態) ──
+    function KintoneHost({ children }) {
+      const rows = [
+        ['#1042', '株式会社サクラ商事 — 新規導入', '田中', '対応中'],
+        ['#1041', 'みらいテック — 追加ライセンス', '佐藤', '対応中'],
+        ['#1039', '北斗物流 — 更新見込み', '鈴木', '新規'],
+        ['#1037', 'グリーン製作所 — 保守契約', '高橋', '完了'],
+      ];
+      return (
+        <div className="kt">
+          <div className="kt-top">
+            <div className="kt-logo"><span className="kt-logo-mark">k</span>kintone</div>
+            <span className="kt-crumb">営業部 ポータル / 案件管理</span>
+          </div>
+          <div className="kt-appbar">
+            <div className="kt-app-icon">案</div>
+            <div className="kt-app-title">案件管理</div>
+          </div>
+          <div className="kt-body">
+            <div className="kt-list">
+              <div className="kt-tabs"><div className="kt-tab active">一覧</div><div className="kt-tab">グラフ</div></div>
+              <table className="kt-table">
+                <thead><tr><th>番号</th><th>案件名</th><th>担当</th><th>状況</th></tr></thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r[0]}>
+                      <td style={{ color: '#9ca3af', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5 }}>{r[0]}</td>
+                      <td style={{ fontWeight: 500 }}>{r[1]}</td>
+                      <td>{r[2]}</td>
+                      <td>{r[3]}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ width: 768, flex: '0 0 768px', height: '100%' }}>{children}</div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── 比較表 ──
+    function InfoCard({ title, children }) {
+      return (
+        <div style={{ width: '100%', height: '100%', background: D.bg, padding: 26, overflowY: 'auto', fontFamily: "'Noto Sans JP', sans-serif" }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: D.text, letterSpacing: -0.3, marginBottom: 16 }}>{title}</div>
+          {children}
+        </div>
+      );
+    }
+    function Rec({ label, children }) {
+      return (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+            <span style={{ width: 18, height: 18, borderRadius: 5, background: D.accentSoft, color: D.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 18px' }}><CheckIcon size={11} /></span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: D.text }}>{label}</span>
+          </div>
+          <div style={{ fontSize: 12, color: D.muted, lineHeight: 1.75, paddingLeft: 25 }}>{children}</div>
+        </div>
+      );
+    }
+
+    function App() {
+      const PH = 800;
+      return (
+        <DesignCanvas>
+          {/* 1. Settings 左 nav — 定期実行 追加 */}
+          <DCSection id="nav" title="① Settings に「定期実行」を追加"
+            subtitle="左 nav (192px) に時計アイコンで追加。権限でセクション数を出し分ける — 一般ユーザーは定期実行のみ、admin は全セクション。">
+            <DCArtboard id="user" label="一般ユーザー視点 — 定期実行のみ / 自分の登録だけ" width={768} height={PH}>
+              <ShellFrame role="user"><DeploymentsListPane role="user" /></ShellFrame>
+            </DCArtboard>
+            <DCArtboard id="admin" label="admin 視点 — 全セクション + 全ユーザー分" width={768} height={PH}>
+              <ShellFrame role="admin"><DeploymentsListPane role="admin" /></ShellFrame>
+            </DCArtboard>
+          </DCSection>
+
+          {/* 2. 一覧ペイン */}
+          <DCSection id="list" title="② 定期実行 一覧ペイン"
+            subtitle="各行: 名前 / 対象エージェント / cron の人間可読表記 / status / 次回実行 / 直近 run 成否 /(admin)所有者。行内アクション = 今すぐ実行・一時停止トグル・編集・アーカイブ。">
+            <DCArtboard id="admin-all" label="admin — 全件 (失敗 run・一時停止・所有者を含む)" width={576} height={1180}>
+              <PaneFrame><DeploymentsListPane role="admin" /></PaneFrame>
+            </DCArtboard>
+            <DCArtboard id="user-mine" label="一般ユーザー — 自分の登録のみ" width={576} height={560}>
+              <PaneFrame><DeploymentsListPane role="user" /></PaneFrame>
+            </DCArtboard>
+            <DCArtboard id="empty" label="空状態 — 説明 + 作成導線 + ユースケース例" width={576} height={620}>
+              <PaneFrame><DeploymentsEmpty role="user" /></PaneFrame>
+            </DCArtboard>
+            <DCArtboard id="admin-mine" label="admin — スコープ「自分のみ」に切替" width={576} height={620}>
+              <PaneFrame><DeploymentsListPane role="admin" scope="mine" /></PaneFrame>
+            </DCArtboard>
+          </DCSection>
+
+          {/* 3. kintone 文脈 */}
+          <DCSection id="context" title="③ kintone 画面内での見え方"
+            subtitle="レコード画面の右に設定ペインが開く。クリーム×ティールの温かみは admin / 一般で共通。">
+            <DCArtboard id="in-context" label="案件管理アプリ + 右ペインに「定期実行」" width={1240} height={820}>
+              <KintoneHost><ShellFrame role="admin"><DeploymentsListPane role="admin" /></ShellFrame></KintoneHost>
+            </DCArtboard>
+          </DCSection>
+
+          {/* 4. 作成 / 編集モーダル */}
+          <DCSection id="modal" title="④ 作成 / 編集モーダル"
+            subtitle="名前 / 対象エージェント / 初回メッセージ / スケジュール。クリックで実際にプリセット切替・時刻変更・cron 生成・次回プレビューが動きます。">
+            <DCArtboard id="create" label="新規作成 (毎日プリセット)" width={636} height={920}>
+              <ModalStage behind={<PaneFrame><DeploymentsListPane role="user" /></PaneFrame>}>
+                <DeploymentModal mode="create" />
+              </ModalStage>
+            </DCArtboard>
+            <DCArtboard id="edit" label="編集 (「変更を保存」)" width={636} height={920}>
+              <ModalStage behind={<PaneFrame><DeploymentsListPane role="admin" /></PaneFrame>}>
+                <DeploymentModal mode="edit" />
+              </ModalStage>
+            </DCArtboard>
+            <DCArtboard id="agent-open" label="対象エージェント選択を展開" width={636} height={920}>
+              <ModalStage behind={<PaneFrame><DeploymentsListPane role="user" /></PaneFrame>}>
+                <DeploymentModal mode="create" agentOpenInit />
+              </ModalStage>
+            </DCArtboard>
+          </DCSection>
+
+          {/* 5. スケジュール入力の見せ方 */}
+          <DCSection id="schedule" title="⑤ スケジュール入力 — プリセット別の見せ方"
+            subtitle="専門用語 (cron) はプリセット + 時刻 + tz に噛み砕き、結果を「生成された cron」と「次回3回プレビュー」で確認させる。下のカードは各プリセットを単体表示 — 操作できます。">
+            <DCArtboard id="sched-weekly" label="毎週 (曜日指定)" width={520} height={620}>
+              <SchedDemo init={{ presetType: 'weekly', hour: 8, minute: 0, weekday: 1, monthday: 1, customCron: '0 8 * * 1', tz: 'Asia/Tokyo' }} />
+            </DCArtboard>
+            <DCArtboard id="sched-monthly" label="毎月 (日指定)" width={520} height={640}>
+              <SchedDemo init={{ presetType: 'monthly', hour: 10, minute: 0, weekday: 1, monthday: 1, customCron: '0 10 1 * *', tz: 'Asia/Tokyo' }} />
+            </DCArtboard>
+            <DCArtboard id="sched-custom" label="カスタム cron + DST 警告 (海外 tz / 2時台)" width={520} height={620}>
+              <SchedDemo init={{ presetType: 'custom', hour: 2, minute: 0, weekday: 1, monthday: 1, customCron: '0 2 * * 1-5', tz: 'America/New_York' }} />
+            </DCArtboard>
+          </DCSection>
+
+          {/* 6. 手動実行フィードバック */}
+          <DCSection id="run" title="⑥ 手動実行 (今すぐ実行) のフィードバック"
+            subtitle="行の「今すぐ実行」押下 → トーストで結果は実行履歴へ誘導。一覧の文脈を保ったまま確認できる。">
+            <DCArtboard id="toast" label="テスト実行トースト — 「履歴を開く」導線つき" width={576} height={620}>
+              <PaneFrame><DeploymentsListPane role="user" toast={{ name: '毎朝の未対応集計' }} /></PaneFrame>
+            </DCArtboard>
+          </DCSection>
+
+          {/* 7. 実行履歴 */}
+          <DCSection id="history" title="⑦ 実行履歴 (Run 一覧)"
+            subtitle="行 → 実行履歴のサブビュー (一覧ペイン内で breadcrumb 遷移)。各 run の時刻 / 成否 / エラー種別 / セッション導線。「失敗のみ」フィルタつき。">
+            <DCArtboard id="hist-all" label="すべて — 成功/失敗を時系列で" width={576} height={680}>
+              <PaneFrame><RunHistoryPane /></PaneFrame>
+            </DCArtboard>
+            <DCArtboard id="hist-fail" label="失敗のみフィルタ" width={576} height={520}>
+              <PaneFrame><RunHistoryPane failOnly /></PaneFrame>
+            </DCArtboard>
+          </DCSection>
+
+          {/* 8. アーカイブ確認 */}
+          <DCSection id="archive" title="⑧ アーカイブ確認ダイアログ"
+            subtitle="破壊的操作。「アーカイブは取り消せません」を明示。warn (琥珀) で注意を引きつつ既存 ConfirmDialog の語彙を踏襲。">
+            <DCArtboard id="confirm" label="アーカイブ確認 (取消不可の明示)" width={576} height={620}>
+              <ModalStage behind={<PaneFrame><DeploymentsListPane role="admin" /></PaneFrame>}>
+                <ArchiveConfirm name="日次バックアップ通知" />
+              </ModalStage>
+            </DCArtboard>
+          </DCSection>
+
+          {/* 9. 情報設計の提案 */}
+          <DCSection id="rationale" title="⑨ 情報設計の提案" subtitle="履歴の置き場・権限切替・cron の噛み砕き方についての設計判断">
+            <DCArtboard id="recs" label="設計メモ" width={620} height={640}>
+              <InfoCard title="設計判断と提案">
+                <Rec label="実行履歴は「行 → サブビュー」に置く">
+                  独立タブにせず、各 Deployment 行から breadcrumb で潜るサブビューにしました。履歴は常に特定の Deployment に紐づくため、文脈 (対象エージェント・スケジュール) を保ったまま見せられます。失敗トーストからも同じ場所へ誘導。
+                </Rec>
+                <Rec label="権限切替は一覧上部のスコープ pill">
+                  admin だけ「全員 / 自分のみ」を一覧上部に出し、所有者列を各行に追加。別画面を作らず、一般ユーザーと同じ一覧コンポーネントの拡張に留めて「過度に別物に見せない」を実現。
+                </Rec>
+                <Rec label="cron は3層で噛み砕く">
+                  ① プリセット (毎日/毎週/毎月) + 時刻 + tz で入力 → ② 生成された cron 式を可読ラベル付きで提示 → ③ 次回3回の実体時刻をプレビュー。業務ユーザーは cron を書かずに登録でき、上級者はカスタム cron に切替可能。
+                </Rec>
+                <Rec label="DST は時刻依存で出し分け">
+                  夏時間のある地域 × 1〜3 時台のときだけ warn を強調 (それ以外は控えめな注記)。境界での飛び/重複リスクを、該当時のみ目立たせて学習負荷を抑えます。
+                </Rec>
+              </InfoCard>
+            </DCArtboard>
+            <DCArtboard id="states" label="状態バリエーション 一覧" width={420} height={640}>
+              <InfoCard title="網羅した状態">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {[
+                    ['空状態', '②-empty — 作成導線 + ユースケース例'],
+                    ['一般ユーザー視点', '①-user / ②-user-mine — 自分の登録のみ'],
+                    ['admin 視点', '①-admin / ②-admin-all — 全件 + 所有者'],
+                    ['失敗 run あり', '在庫アラート / 日次バックアップ通知の行'],
+                    ['paused', '月次品質チェック — 理由つき一時停止'],
+                    ['手動実行', '⑥-toast — 結果は履歴へ'],
+                    ['DST 警告', '⑤-sched-custom — 海外 tz × 2時台'],
+                  ].map(([k, v]) => (
+                    <div key={k} style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
+                      <span style={{ flex: '0 0 96px', fontSize: 12, fontWeight: 600, color: D.text }}>{k}</span>
+                      <span style={{ fontSize: 11, color: D.muted, lineHeight: 1.5 }}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </InfoCard>
+            </DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

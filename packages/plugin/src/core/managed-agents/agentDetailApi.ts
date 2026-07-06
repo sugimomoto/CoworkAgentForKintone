@@ -10,6 +10,12 @@
 
 import { KINTONE_MCP_SERVER_NAME, buildMcpServers } from '../bootstrap/agentToolDefs';
 import {
+  META_KEY_ALLOWED_GROUPS,
+  META_KEY_ALLOWED_ORGANIZATIONS,
+  META_KEY_ALLOWED_USERS,
+  META_KEY_QUICK_ACTIONS,
+} from '../bootstrap/agentTypes';
+import {
   NOTIFY_AGENT_METADATA_KEYS,
   generateNotifyKey,
   notifyKeyForBuiltIn,
@@ -17,16 +23,16 @@ import {
   resolveNotifyKey,
   unregisterNotifyWebhook,
 } from '../bootstrap/notifyRegistration';
-import {
-  META_KEY_ALLOWED_GROUPS,
-  META_KEY_ALLOWED_ORGANIZATIONS,
-  META_KEY_ALLOWED_USERS,
-  META_KEY_QUICK_ACTIONS,
-} from '../bootstrap/agentTypes';
 import { AGENT_TYPE, METADATA_SOURCE } from '../constants';
+import {
+  META_KEY_MCP_ATTACHMENTS,
+  buildAttachedMcpServers,
+  buildAttachedMcpToolsets,
+  serializeMcpAttachments,
+} from '../mcp/attachSpec';
 
-import { ApiError } from './client';
 import { buildAgentTools } from './buildAgentTools';
+import { ApiError } from './client';
 import {
   archiveAgent as archiveAgentResource,
   createAgent,
@@ -37,6 +43,7 @@ import {
 import type { Agent } from './types';
 import type { AgentColor, AgentGlyph, NotifyPlatform } from '../bootstrap/agentTypes';
 import type { KintoneToolName } from '../bootstrap/builtInAgents';
+import type { McpAttachment, McpServerDef } from '../mcp/registry';
 
 /**
  * AgentDetailModal の編集状態 (form values)。
@@ -71,6 +78,8 @@ export interface AgentEditDraft {
   allowedUsers: readonly string[];
   allowedGroups: readonly string[];
   allowedOrganizations: readonly string[];
+  /** #42 追加 MCP サーバーの attach（serverId × enabledTools）。metadata に JSON で永続化。 */
+  mcpAttachments: readonly McpAttachment[];
 }
 
 /** skill 配列を Anthropic API に渡す形式に変換 */
@@ -102,6 +111,12 @@ function mergeMetadataPatch(
   setOrDeleteJsonArrayKey(merged, META_KEY_ALLOWED_USERS, draft.allowedUsers);
   setOrDeleteJsonArrayKey(merged, META_KEY_ALLOWED_GROUPS, draft.allowedGroups);
   setOrDeleteJsonArrayKey(merged, META_KEY_ALLOWED_ORGANIZATIONS, draft.allowedOrganizations);
+  // #42 attach: 1件以上で JSON 保存 / 0件で key 削除
+  if (draft.mcpAttachments.length > 0) {
+    merged[META_KEY_MCP_ATTACHMENTS] = serializeMcpAttachments(draft.mcpAttachments);
+  } else {
+    delete merged[META_KEY_MCP_ATTACHMENTS];
+  }
   return merged;
 }
 
@@ -134,10 +149,16 @@ function setOrDeleteJsonArrayKey(
 export async function applyAgentEdit(
   agentId: string,
   draft: AgentEditDraft,
+  /** #42 追加 MCP カタログ（attach の serverId→url 解決 + mcp_servers/toolset 構築に使う）。 */
+  mcpCatalog: readonly McpServerDef[] = [],
 ): Promise<Agent> {
   const existing = await retrieveAgent(agentId);
   const meta = (existing.metadata ?? {}) as Record<string, string>;
   const metadata = mergeMetadataPatch(meta, draft);
+
+  // #42 attach: カタログと突合して mcp_servers / mcp_toolset を生成
+  const attachedServers = buildAttachedMcpServers(draft.mcpAttachments, mcpCatalog);
+  const attachedToolsets = buildAttachedMcpToolsets(draft.mcpAttachments, mcpCatalog);
 
   // notify toolset と整合する mcp_servers を組み立てる。
   // workerUrl / kintoneDomain は plugin 製 Agent の metadata に必ず入っている (find filter 列)。
@@ -146,7 +167,9 @@ export async function applyAgentEdit(
     const { notifyKey, generated } = resolveNotifyKey(meta);
     // custom で新規採番した notifyKey は永続化 (次回以降 / Webhook 登録で同じパスを使う)
     if (generated) metadata[NOTIFY_AGENT_METADATA_KEYS.notifyKey] = notifyKey;
-    mcpServers = buildMcpServers(meta.workerUrl, meta.kintoneDomain, notifyKey);
+    mcpServers = [...buildMcpServers(meta.workerUrl, meta.kintoneDomain, notifyKey), ...attachedServers];
+  } else if (attachedServers.length > 0) {
+    mcpServers = [...attachedServers];
   }
 
   return updateAgent(agentId, {
@@ -154,7 +177,7 @@ export async function applyAgentEdit(
     name: draft.name,
     description: draft.description,
     system: draft.systemPrompt,
-    tools: buildAgentTools(draft.enabledTools),
+    tools: [...buildAgentTools(draft.enabledTools), ...attachedToolsets],
     skills: buildAgentSkills(draft),
     ...(mcpServers ? { mcp_servers: mcpServers } : {}),
     metadata,
@@ -175,9 +198,12 @@ export async function applyAgentEdit(
 export async function createCustomAgentFrom(args: {
   baseAgentId: string;
   draft: AgentEditDraft;
+  /** #42 追加 MCP カタログ。 */
+  mcpCatalog?: readonly McpServerDef[];
 }): Promise<Agent> {
   const base = await retrieveAgent(args.baseAgentId);
   const baseMeta = (base.metadata ?? {}) as Record<string, string>;
+  const mcpCatalog = args.mcpCatalog ?? [];
 
   // find filter 列 (再 bootstrap で重複検知させる用) を base から引き継ぎつつ
   // mergeMetadataPatch で UI 補助情報を上書きする (空 quickActions = key 不在)。
@@ -199,19 +225,24 @@ export async function createCustomAgentFrom(args: {
     [NOTIFY_AGENT_METADATA_KEYS.notifyKey]: notifyKey,
   };
 
+  // #42 attach: カタログと突合
+  const attachedServers = buildAttachedMcpServers(args.draft.mcpAttachments, mcpCatalog);
+  const attachedToolsets = buildAttachedMcpToolsets(args.draft.mcpAttachments, mcpCatalog);
+
   // workerUrl/kintoneDomain が揃えば notify サーバー込みで mcp_servers を再構築。
-  // 揃わない (旧 base 等) 場合は従来通り kintone のみ。
-  const mcpServers =
+  // 揃わない (旧 base 等) 場合は従来通り kintone のみ。+ attach 済みサーバーを足す。
+  const baseServers =
     baseMeta.workerUrl && baseMeta.kintoneDomain
       ? buildMcpServers(baseMeta.workerUrl, baseMeta.kintoneDomain, notifyKey)
       : extractMcpServers(base);
+  const mcpServers = [...baseServers, ...attachedServers];
 
   return createAgent({
     model: base.model,
     name: args.draft.name,
     description: args.draft.description,
     system: args.draft.systemPrompt,
-    tools: buildAgentTools(args.draft.enabledTools),
+    tools: [...buildAgentTools(args.draft.enabledTools), ...attachedToolsets],
     skills: buildAgentSkills(args.draft),
     mcp_servers: mcpServers,
     metadata,

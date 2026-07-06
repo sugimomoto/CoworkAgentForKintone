@@ -2,6 +2,7 @@
 
 import { BUILTIN_AGENT_SPECS, KINTONE_TOOL_NAMES } from '../../../core/bootstrap/builtInAgents';
 import { extractEnabledTools } from '../../../core/managed-agents/buildAgentTools';
+import { META_KEY_MCP_ATTACHMENTS, parseMcpAttachments } from '../../../core/mcp/attachSpec';
 
 import type { AvailableSkill } from './types';
 import type { AgentPurpose, AgentRecord } from '../../../core/bootstrap/agentTypes';
@@ -56,6 +57,9 @@ export function buildDraftFromAgent(
     allowedUsers: [...record.allowedUsers],
     allowedGroups: [...record.allowedGroups],
     allowedOrganizations: [...record.allowedOrganizations],
+    mcpAttachments: parseMcpAttachments(
+      (agent.metadata as Record<string, string> | undefined)?.[META_KEY_MCP_ATTACHMENTS],
+    ),
   };
 }
 
@@ -88,5 +92,7 @@ export function buildDraftFromSpec(
     allowedUsers: [],
     allowedGroups: [],
     allowedOrganizations: [],
+    // 「初期値に戻す」では attach もクリア（spec は MCP attach を持たない）
+    mcpAttachments: [],
   };
 }

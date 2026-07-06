@@ -103,6 +103,7 @@ Claude Managed Agents API を活用した「バックグラウンドで自律的
 | F-22 | **アプリ管理系ツール (Phase C)** (kintone のアプリ設定を Agent から操作する 18 ツール。customize/deploy・ビュー/フォームレイアウト/フィールド追加変更削除・アプリ作成・プロセス管理設定・権限(ACL)・プラグイン。取得は live/preview 切替、更新は preview に積み `kintone-deploy-app` で反映。**admin 専用**: built-in Agent には出さず、admin が Custom Agent に必要分を選択＋公開先 ACL で限定。`deploy-app`/`delete-form-fields` は承認カード。OAuth `k:app_settings:write` は付与済みで追加連携不要) | [#24](https://github.com/sugimomoto/CoworkAgentForKintone/issues/24) |
 | F-23 | **アプリデザイナー** (built-in 4th variant — 業務内容や既存資料・PDF を読み解き kintone アプリを設計・構築する Agent。Opus + 資料読解スキル (pdf/docx/xlsx/pptx)。会話で設計提案し、F-22 の管理系ツールを含む全 kintone ツールを直接実行してアプリを作成・改修。admin 振り分けは設けず kintone 側の app-admin 権限で制御 (非管理者は 403)) | [#117](https://github.com/sugimomoto/CoworkAgentForKintone/issues/117) |
 | F-24 | **アプリ構造設計スキル** (`kintone-app-design` Custom Skill — 計算フィールドの式と表示形式 (CONVERT! 回避: DATE_FORMAT は文字列を返すため使わず数値計算+format=DATE)・予約コード・options 形状・filterCond の型別演算子・全置換/preview→deploy の手続きを集約。app-designer に attach し progressive disclosure で参照。設計知識をシステムプロンプト常駐から skill へ移管しトークンを削減。Custom Agent のスキルピッカーでも選択可) | [#117](https://github.com/sugimomoto/CoworkAgentForKintone/issues/117) |
+| F-25 | **追加 MCP サーバー登録** (kintone 以外のリモート MCP サーバーをテナント共有で登録し、Agent に紐付けて使う。3層モデル: ①admin が Plugin Config でカタログ定義 (`McpServerDef`) ②各ユーザーが Chat Panel の設定→MCP から自分のアカウントで接続 (per-user Vault Credential) ③エージェントごとに attach (全ツール/ツール個別)。認証は none / API キー(bearer, per-user) / OAuth (confidential `client_secret_basic` + public PKCE、RFC 8707 `resource` 付与)。ツール一覧は Config でその場取得しカタログにキャッシュ。Notion / CData 等で実機疎通確認済み) | [#42](https://github.com/sugimomoto/CoworkAgentForKintone/issues/42) |
 
 詳細仕様:
 - Customizer Wedge: [.steering/20260517-customizer-wedge-design/](../.steering/20260517-customizer-wedge-design/) + [.steering/20260518-customizer-wedge-actualization/](../.steering/20260518-customizer-wedge-actualization/) (Phase 1 完了 2026-05-30)
@@ -114,12 +115,13 @@ Claude Managed Agents API を活用した「バックグラウンドで自律的
 - 通知拡張 (Slack / Teams Webhook): [.steering/20260620-notification-slack-teams/](../.steering/20260620-notification-slack-teams/) (完了 2026-06-20)
 - アプリデザイナー (built-in 4th variant): [.steering/20260621-app-design-agent/](../.steering/20260621-app-design-agent/) (完了 2026-06-21)
 - アプリ構造設計スキル (kintone-app-design): [.steering/20260621-kintone-app-design-skill/](../.steering/20260621-kintone-app-design-skill/) (完了 2026-06-21)
+- 追加 MCP サーバー登録: [.steering/20260627-issue-42-mcp-registration/](../.steering/20260627-issue-42-mcp-registration/) (完了 2026-07-05・OAuth confidential/public PKCE 実機疎通確認済み。自動発見/DCR は #132、共有APIキーは #134、カスタムヘッダーは #135 に切り出し)
 
 ### 5.3 フェーズ 3 (V2) 以降の候補
 
 - **Customizer Wedge Phase 2** ([#20](https://github.com/sugimomoto/CoworkAgentForKintone/issues/20)): CSS / mobile.js / config.js 解禁、kintone-customize-js skill に該当指針追加 (Phase 1 で desktop.js のみ対応済)
 - **GitHub 連携** ([#17](https://github.com/sugimomoto/CoworkAgentForKintone/issues/17)): commit / PR / 履歴管理 + Customizer の snapshot 永続化 (現状 in-memory)
-- **追加 MCP Server 登録** ([#42](https://github.com/sugimomoto/CoworkAgentForKintone/issues/42)): GitHub MCP / Slack MCP 等を Settings → MCP から登録、Vault Credential 管理
+- **追加 MCP サーバー登録の発展** ([#132](https://github.com/sugimomoto/CoworkAgentForKintone/issues/132) 自動発見+DCR/Client ID Metadata Document / [#134](https://github.com/sugimomoto/CoworkAgentForKintone/issues/134) 共有 APIキー / [#135](https://github.com/sugimomoto/CoworkAgentForKintone/issues/135) カスタムヘッダー): F-25 で基盤実装済み。「MCP URL を入れるだけ」で繋がる自動発見、テナント共有 APIキー、カスタムヘッダー認証を順次追加
 - **Plugin pack ツール** ([#43](https://github.com/sugimomoto/CoworkAgentForKintone/issues/43)): cli-kintone 相当の Plugin パッケージング / アップロードを Agent から呼べる MCP ツール化
 - **Memory ON/OFF トグル** ([#15 縮小](https://github.com/sugimomoto/CoworkAgentForKintone/issues/15)): Conversation View の (user × agent) auto-ensure
 - **kintone MCP 機能拡充** ([#24](https://github.com/sugimomoto/CoworkAgentForKintone/issues/24) / [#22](https://github.com/sugimomoto/CoworkAgentForKintone/issues/22) / [#25](https://github.com/sugimomoto/CoworkAgentForKintone/issues/25)): 管理系 / ワークフロー / クエリ拡充

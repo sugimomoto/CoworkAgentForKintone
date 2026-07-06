@@ -34,7 +34,7 @@ const NAV_ITEMS: readonly NavItemDef[] = [
   { id: 'agents', label: 'エージェント', iconName: 'bot', adminOnly: true },
   { id: 'skills', label: 'スキル', iconName: 'brain', adminOnly: true },
   { id: 'deployments', label: '定期実行', iconName: 'clock' },
-  { id: 'mcp', label: 'MCP サーバー', iconName: 'plug', disabled: true, adminOnly: true },
+  { id: 'mcp', label: 'MCP サーバー', iconName: 'plug', adminOnly: true },
 ];
 
 export function SettingsNav({

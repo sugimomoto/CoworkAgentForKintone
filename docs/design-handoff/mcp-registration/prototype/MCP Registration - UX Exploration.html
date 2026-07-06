@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cowork Agent — 追加 MCP Server 登録 + 接続管理 UI 検討 (#42)</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; background: #f0eee9; }
+    body { font-family: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', sans-serif; }
+    * { box-sizing: border-box; }
+    select { -webkit-appearance: none; appearance: none; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: rgba(35,18,0,0.16); border-radius: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    input::placeholder { color: #a89d85; }
+
+    /* kintone レコード画面ホスト (Chat Panel 文脈) */
+    .kt { width: 100%; height: 100%; display: flex; flex-direction: column; background: #fafbfc; color: #374151; }
+    .kt-top { height: 34px; background: #231200; color: #f5e6b8; display: flex; align-items: center; padding: 0 14px; font-size: 11.5px; gap: 14px; flex: 0 0 auto; }
+    .kt-logo { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #ffbf00; letter-spacing: .3px; }
+    .kt-logo-mark { width: 18px; height: 18px; border-radius: 5px; background: #ffbf00; color: #231200; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; }
+    .kt-crumb { flex: 1; color: #9a8f7a; }
+    .kt-appbar { height: 48px; background: #fff; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; padding: 0 18px; gap: 12px; flex: 0 0 auto; }
+    .kt-app-icon { width: 28px; height: 28px; border-radius: 6px; background: #ffbf00; color: #231200; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
+    .kt-app-title { font-size: 14px; font-weight: 600; color: #111827; }
+    .kt-body { flex: 1; display: flex; min-height: 0; }
+    .kt-list { flex: 1; padding: 16px 22px; overflow: hidden; background: #fafbfc; }
+    .kt-tabs { display: flex; gap: 2px; margin-bottom: 12px; border-bottom: 1px solid #e5e7eb; }
+    .kt-tab { padding: 7px 13px; font-size: 11.5px; color: #6b7280; border-bottom: 2px solid transparent; }
+    .kt-tab.active { color: #231200; border-bottom-color: #ffbf00; font-weight: 600; }
+    .kt-table { width: 100%; border-collapse: collapse; font-size: 11.5px; background: #fff; border: 1px solid #e5e7eb; border-radius: 4px; }
+    .kt-table th { background: #f9fafb; color: #6b7280; font-weight: 500; text-align: left; padding: 9px 11px; border-bottom: 1px solid #e5e7eb; font-size: 10.5px; }
+    .kt-table td { padding: 10px 11px; border-bottom: 1px solid #f3f4f6; color: #374151; }
+
+    /* kintone プラグイン設定ページ ホスト (Plugin Config = Surface A 環境) */
+    .pc { width: 100%; height: 100%; display: flex; flex-direction: column; background: #eef0f3; color: #374151; }
+    .pc-top { height: 34px; background: #231200; color: #f5e6b8; display: flex; align-items: center; padding: 0 14px; font-size: 11.5px; gap: 12px; flex: 0 0 auto; }
+    .pc-logo { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #ffbf00; letter-spacing: .3px; }
+    .pc-logo-mark { width: 18px; height: 18px; border-radius: 5px; background: #ffbf00; color: #231200; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; }
+    .pc-crumb { color: #9a8f7a; }
+    .pc-user { color: #9a8f7a; font-size: 10.5px; }
+    .pc-appbar { background: #fff; border-bottom: 1px solid #e2e5ea; display: flex; align-items: center; padding: 11px 18px; gap: 12px; flex: 0 0 auto; }
+    .pc-app-icon { width: 30px; height: 30px; border-radius: 7px; background: rgba(13,148,136,0.12); color: #0d9488; display: flex; align-items: center; justify-content: center; flex: 0 0 30px; }
+    .pc-app-title { font-size: 13.5px; font-weight: 700; color: #111827; }
+    .pc-app-sub { font-size: 10.5px; color: #8a92a0; margin-top: 1px; }
+    .pc-body { flex: 1; display: flex; min-height: 0; }
+    .pc-steps { width: 176px; flex: 0 0 176px; background: #f6f7f9; border-right: 1px solid #e2e5ea; padding: 14px 10px; display: flex; flex-direction: column; gap: 3px; }
+    .pc-step { display: flex; align-items: center; gap: 9px; padding: 8px 11px; border-radius: 8px; font-size: 12px; color: #6b7280; }
+    .pc-step-n { width: 19px; height: 19px; border-radius: 50%; background: #e2e5ea; color: #6b7280; display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; flex: 0 0 19px; }
+    .pc-step.done .pc-step-n { background: #c7eee8; color: #0d9488; }
+    .pc-step.active { background: #fff; color: #111827; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .pc-step.active .pc-step-n { background: #0d9488; color: #fff; }
+    .pc-detail { flex: 1; min-width: 0; overflow: hidden; position: relative; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <!-- 依存順: header / settings (glyph+badge 共有) → canvas → 基盤 → MCP データ → 各サーフェス → 文脈 → 検討 -->
+  <script type="text/babel" src="wedge-header.jsx"></script>
+  <script type="text/babel" src="wedge-settings.jsx"></script>
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="deployments-data.jsx"></script>
+  <script type="text/babel" src="mcp-data.jsx"></script>
+  <script type="text/babel" src="mcp-servers.jsx"></script>
+  <script type="text/babel" src="mcp-config.jsx"></script>
+  <script type="text/babel" src="mcp-config-screen.jsx"></script>
+  <script type="text/babel" src="mcp-attach.jsx"></script>
+  <script type="text/babel" src="mcp-context.jsx"></script>
+  <script type="text/babel" src="mcp-explore.jsx"></script>
+
+  <script type="text/babel">
+    function PaneFrame({ children }) {
+      return <div style={{ width: '100%', height: '100%', background: D.bg, overflow: 'hidden', position: 'relative' }}>{children}</div>;
+    }
+    // Plugin Config の右 detail に form をオーバーレイで重ねる
+    function ConfigStage({ children }) {
+      return <div style={{ position: 'relative', width: '100%', height: '100%' }}>{children}</div>;
+    }
+
+    function App() {
+      return (
+        <DesignCanvas>
+
+          {/* ───────── Surface B: 接続管理（一番リッチ）───────── */}
+          <DCSection id="surfaceB" title="B · Chat Panel Settings →「MCP サーバー」タブ"
+            subtitle="per-user の接続管理。テナント定義済みサーバーに、各自が自分のアカウントで接続する。各行は実際に操作できます（接続 / 認可 / 解除 / テスト）。">
+            <DCArtboard id="b-full" label="接続管理タブ（全状態が並ぶ）— Settings 2-pane 内" width={620} height={720}>
+              <McpSettingsShell role="admin"><McpServersPane /></McpSettingsShell>
+            </DCArtboard>
+            <DCArtboard id="b-pane" label="ペイン単体（接続済 / 失効 / 未接続）" width={600} height={680}>
+              <PaneFrame><McpServersPane /></PaneFrame>
+            </DCArtboard>
+            <DCArtboard id="b-empty" label="状態 8 · 空状態（admin 未定義）" width={600} height={520}>
+              <PaneFrame><McpServersPane empty /></PaneFrame>
+            </DCArtboard>
+            <DCArtboard id="b-user" label="一般ユーザー視点（nav 限定）" width={620} height={680}>
+              <McpSettingsShell role="user"><McpServersPane /></McpSettingsShell>
+            </DCArtboard>
+          </DCSection>
+
+          {/* ───────── Surface B: 行ごとの状態 ───────── */}
+          <DCSection id="rowstates" title="B · 行ごとの接続状態（§1B の番号）"
+            subtitle="1 サーバー = 1 行。authType で接続フローが変わる。各カードは触って遷移できます。">
+            <DCArtboard id="s-none" label="① 未接続（none）— 即接続" width={560} height={150}>
+              <RowStage><McpServerRow serverId="srv_weather" /></RowStage>
+            </DCArtboard>
+            <DCArtboard id="s-bearer-idle" label="① 未接続（bearer）" width={560} height={150}>
+              <RowStage><McpServerRow serverId="srv_linear" /></RowStage>
+            </DCArtboard>
+            <DCArtboard id="s-bearer-input" label="② 接続中（bearer）— API キー入力" width={560} height={240}>
+              <RowStage><McpServerRow serverId="srv_linear" seedPhase="bearer-input" seedKey="lin_api_8f2a3b" /></RowStage>
+            </DCArtboard>
+            <DCArtboard id="s-bearer-verify" label="② 疎通確認中（tools/list）" width={560} height={240}>
+              <RowStage><McpServerRow serverId="srv_linear" seedPhase="bearer-verifying" seedKey="lin_api_8f2a3b" /></RowStage>
+            </DCArtboard>
+            <DCArtboard id="s-oauth-idle" label="① 未接続（oauth）— 認可ボタン" width={560} height={160}>
+              <RowStage><McpServerRow serverId="srv_sentry" seedStatus="unconnected" /></RowStage>
+            </DCArtboard>
+            <DCArtboard id="s-oauth-popup" label="③ 認可ポップアップ（kintone connect 流用）" width={560} height={430}>
+              <RowStage tall><McpServerRow serverId="srv_github" seedStatus="unconnected" seedPhase="oauth-authorizing" /></RowStage>
+            </DCArtboard>
+            <DCArtboard id="s-oauth-exch" label="③ 交換中（code → token）" width={560} height={190}>
+              <RowStage><McpServerRow serverId="srv_github" seedStatus="unconnected" seedPhase="oauth-exchanging" /></RowStage>
+            </DCArtboard>
+            <DCArtboard id="s-connected" label="④ 接続済（ツール一覧 折りたたみ）" width={560} height={210}>
+              <RowStage><McpServerRow serverId="srv_github" seedStatus="connected" /></RowStage>
+            </DCArtboard>
+            <DCArtboard id="s-tools-open" label="④ ツール一覧 展開" width={560} height={420}>
+              <RowStage tall><McpServerRow serverId="srv_github" seedStatus="connected" defaultToolsOpen /></RowStage>
+            </DCArtboard>
+            <DCArtboard id="s-test" label="⑤ 接続テスト 成功" width={560} height={210}>
+              <RowStage><McpServerRow serverId="srv_github" seedStatus="connected" seedTest="success" /></RowStage>
+            </DCArtboard>
+            <DCArtboard id="s-confirm" label="⑥ 解除確認（インライン warn）" width={560} height={280}>
+              <RowStage tall><McpServerRow serverId="srv_github" seedStatus="connected" seedConfirm /></RowStage>
+            </DCArtboard>
+            <DCArtboard id="s-invalid" label="⑦ 失効 / エラー（再接続導線・#124）" width={560} height={240}>
+              <RowStage><McpServerRow serverId="srv_sentry" seedStatus="invalid" /></RowStage>
+            </DCArtboard>
+          </DCSection>
+
+          {/* ───────── Plugin Config 全体の再設計（IA: セットアップ / MCP の 2 ゾーン）───────── */}
+          <DCSection id="configIA" title="A0 · Plugin Config 再設計 — ライフサイクルで 2 ゾーンに分離"
+            subtitle="左レール: 初回 1 回の「接続セットアップ」と、継続 CRUD の「MCP サーバー」。セットアップは完了後にステータス画面へ切り替わる。kintone プラグイン設定ページ内・admin 専用。">
+            <DCArtboard id="cfg-wizard" label="接続セットアップ — 初回ウィザード（未設定）" width={1140} height={860}>
+              <ConfigShell section="setup" setupDone={false}><ConfigSetupWizard /></ConfigShell>
+            </DCArtboard>
+            <DCArtboard id="cfg-status" label="接続セットアップ — 設定済み（ステータス + 個別編集）" width={1140} height={720}>
+              <ConfigShell section="setup" setupDone><ConfigStatusView /></ConfigShell>
+            </DCArtboard>
+            <DCArtboard id="cfg-status-edit" label="ステータス — 1 項目を編集（再入力）" width={1140} height={720}>
+              <ConfigShell section="setup" setupDone><ConfigStatusViewEdit /></ConfigShell>
+            </DCArtboard>
+            <DCArtboard id="cfg-mcp-zone" label="MCP サーバー ゾーン（同じ画面の別ゾーン）" width={1140} height={720}>
+              <ConfigShell section="mcp" setupDone><McpConfigList /></ConfigShell>
+            </DCArtboard>
+          </DCSection>
+
+          {/* ───────── Surface A: MCP カタログ フォーム詳細 ───────── */}
+          <DCSection id="surfaceA" title="A · MCP サーバー カタログ（追加・編集フォーム詳細）"
+            subtitle="MCP ゾーン内のフォーム。実際に入力でき、authType で OAuth 詳細が展開します。秘匿値は Step 1/3 の API キーと同じ伏字・再入力の作法で統一。">
+            <DCArtboard id="a-list" label="MCP ゾーン — 登録済みサーバー一覧" width={1140} height={720}>
+              <ConfigShell section="mcp" setupDone><McpConfigList /></ConfigShell>
+            </DCArtboard>
+            <DCArtboard id="a-form-none" label="追加フォーム — 認証なし" width={620} height={560}>
+              <PaneFrame><McpServerForm mode="create" seed={{ authType: 'none', name: '社内天気 API', url: 'https://weather.internal.example.jp/mcp' }} /></PaneFrame>
+            </DCArtboard>
+            <DCArtboard id="a-form-bearer" label="追加フォーム — API キー" width={620} height={560}>
+              <PaneFrame><McpServerForm mode="create" seed={{ authType: 'bearer', name: 'Linear', url: 'https://mcp.linear.app/sse' }} /></PaneFrame>
+            </DCArtboard>
+            <DCArtboard id="a-form-pkce" label="追加フォーム — OAuth（PKCE public・secret 不要）" width={620} height={820}>
+              <PaneFrame><McpServerForm mode="create" seed={{ authType: 'oauth', name: 'Sentry', url: 'https://mcp.sentry.dev/mcp', authorizationEndpoint: 'https://sentry.io/oauth/authorize/', tokenEndpoint: 'https://sentry.io/oauth/token/', clientId: 'a1b2c3d4e5f6', scope: 'org:read project:read', tokenEndpointAuthType: 'none' }} /></PaneFrame>
+            </DCArtboard>
+            <DCArtboard id="a-form-secret" label="編集フォーム — OAuth（client_secret 伏字）" width={620} height={900}>
+              <PaneFrame><McpServerForm mode="edit" savedSecret seed={catalogById('srv_github')} /></PaneFrame>
+            </DCArtboard>
+            <DCArtboard id="a-empty" label="MCP ゾーン — 空状態（サーバー未登録）" width={1140} height={620}>
+              <ConfigShell section="mcp" setupDone><McpConfigList empty /></ConfigShell>
+            </DCArtboard>
+          </DCSection>
+
+          {/* ───────── Surface C: Agent 編集の MCP セクション ───────── */}
+          <DCSection id="surfaceC" title="C · Agent 詳細編集の「MCP」セクション（#40 連動）"
+            subtitle="登録済みサーバーの attach ON/OFF と、attach 済みサーバーの tool 単位 ON/OFF。既存の tool/skill チェックリストと同型。接続状態は控えめな参考表示。">
+            <DCArtboard id="c-section" label="MCP セクション単体（attach + tool）" width={580} height={520}>
+              <SectionStage><McpAttachSection /></SectionStage>
+            </DCArtboard>
+            <DCArtboard id="c-modal" label="AgentDetailModal 内での配置" width={620} height={720}>
+              <ModalStage behind={<PaneFrame><McpServersPane /></PaneFrame>}>
+                <AgentMcpModal agentKey="biz" />
+              </ModalStage>
+            </DCArtboard>
+            <DCArtboard id="c-empty" label="空状態（サーバー未登録）" width={580} height={260}>
+              <SectionStage><McpAttachSection empty /></SectionStage>
+            </DCArtboard>
+          </DCSection>
+
+          {/* ───────── kintone 文脈 ───────── */}
+          <DCSection id="context" title="kintone 画面内での見え方"
+            subtitle="左: レコード画面 + 右に Chat Panel の Settings（接続管理）。クリーム×ティールの温かみを維持。">
+            <DCArtboard id="ctx-settings" label="案件管理アプリ + Settings（接続管理タブ）" width={1180} height={720}>
+              <ChatPanelHost><McpSettingsShell role="admin"><McpServersPane /></McpSettingsShell></ChatPanelHost>
+            </DCArtboard>
+            <DCArtboard id="ctx-agent" label="案件管理アプリ + AgentDetailModal（MCP attach）" width={1180} height={720}>
+              <ChatPanelHost>
+                <ModalStage behind={<PaneFrame><McpServersPane /></PaneFrame>}>
+                  <AgentMcpModal agentKey="analytics" />
+                </ModalStage>
+              </ChatPanelHost>
+            </DCArtboard>
+          </DCSection>
+
+          {/* ───────── 設計の根拠・状態・コピー ───────── */}
+          <DCSection id="rationale" title="設計の根拠・状態一覧・UI コピー"
+            subtitle="3 層モデル、authType の出し分け、B/C の責務分担、往復導線と失効、網羅状態、日本語コピー。">
+            <DCArtboard id="r-model" label="3 層モデル（Model A）" width={620} height={680}>
+              <ModelCard />
+            </DCArtboard>
+            <DCArtboard id="r-auth" label="認証方式による接続フローの出し分け" width={600} height={560}>
+              <AuthFlowCard />
+            </DCArtboard>
+            <DCArtboard id="r-resp" label="「接続」と「利用」を混同させない（B / C）" width={560} height={620}>
+              <ResponsibilityCard />
+            </DCArtboard>
+            <DCArtboard id="r-round" label="往復導線と失効（#124）" width={600} height={640}>
+              <RoundtripCard />
+            </DCArtboard>
+            <DCArtboard id="r-states" label="網羅した状態" width={480} height={620}>
+              <StatesCard />
+            </DCArtboard>
+            <DCArtboard id="r-copy" label="UI コピー案（日本語）" width={560} height={760}>
+              <CopyDeckCard />
+            </DCArtboard>
+          </DCSection>
+
+        </DesignCanvas>
+      );
+    }
+
+    // 行 1 つを淡い背景の上に置くステージ（カードの幅を活かす）
+    function RowStage({ children, tall }) {
+      return (
+        <div style={{ position: 'relative', width: '100%', height: '100%', background: D.bg, padding: '16px 18px', overflow: 'hidden' }}>
+          {children}
+        </div>
+      );
+    }
+    function SectionStage({ children }) {
+      return <div style={{ width: '100%', height: '100%', background: D.bg, padding: '18px 20px', overflowY: 'auto' }}>{children}</div>;
+    }
+    function ModalStage({ behind, children }) {
+      return (
+        <div style={{ position: 'relative', width: '100%', height: '100%', background: D.bg, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', opacity: 0.5, pointerEvents: 'none' }}>{behind}</div>
+          {children}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

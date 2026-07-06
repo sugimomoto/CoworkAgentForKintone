@@ -215,10 +215,12 @@ export function SettingsViewBound({
   const handleSaveAgent = useCallback(
     async (draft: AgentEditDraft, sourceAgent: AgentRecord, webhook: WebhookConfig | null) => {
       if (!modalState) return;
+      // #42: 追加 MCP カタログ（attach の serverId→url 解決 + mcp_servers/toolset 構築に使う）。
+      const mcpCatalog = pluginId ? getPluginConfig(pluginId).mcpServers : [];
       const saved =
         modalState.kind === 'edit'
-          ? await applyAgentEdit(sourceAgent.id, draft)
-          : await createCustomAgentFrom({ baseAgentId: sourceAgent.id, draft });
+          ? await applyAgentEdit(sourceAgent.id, draft, mcpCatalog)
+          : await createCustomAgentFrom({ baseAgentId: sourceAgent.id, draft, mcpCatalog });
 
       // 通知 Webhook (#13): 保存後の Agent に対して登録/解除を反映 (metadata 更新を含む)。
       // workerUrl が無い環境 (未接続) では通知登録はスキップ (webhook 変更が無ければ実質 no-op)。
@@ -250,6 +252,7 @@ export function SettingsViewBound({
       <SettingsView
         onClose={onClose}
         isAdmin={isAdmin}
+        pluginId={pluginId}
         {...(onOpenSession ? { onOpenSession } : {})}
         {...(onPluginConfigClick ? { onPluginConfigClick } : {})}
         bundledSkills={bundledSkills}
@@ -269,6 +272,8 @@ export function SettingsViewBound({
           onSave={handleSaveAgent}
           onDelete={handleDeleteAgent}
           availableSkills={availableSkills}
+          mcpServers={pluginId ? getPluginConfig(pluginId).mcpServers : []}
+          pluginId={pluginId}
           onClose={() => setModalState(null)}
         />
       )}

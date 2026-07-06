@@ -70,6 +70,7 @@ const DRAFT: AgentEditDraft = {
   allowedUsers: [],
   allowedGroups: [],
   allowedOrganizations: [],
+  mcpAttachments: [],
 };
 
 describe('applyAgentEdit (#40)', () => {

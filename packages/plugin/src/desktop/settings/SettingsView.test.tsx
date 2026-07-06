@@ -30,14 +30,14 @@ describe('SettingsView', () => {
     expect(screen.queryByTestId('agents-list-pane')).toBeNull();
   });
 
-  it('MCP タブは disabled で click しても切り替わらない', async () => {
+  it('MCP タブを click すると MCP ペインに切り替わる (#42 で有効化)', async () => {
     const user = userEvent.setup();
     render(<SettingsView onClose={vi.fn()} isAdmin />);
     const mcpBtn = screen.getByTestId('settings-nav-mcp');
-    expect(mcpBtn).toBeDisabled();
+    expect(mcpBtn).not.toBeDisabled();
     await user.click(mcpBtn);
-    expect(screen.queryByTestId('mcp-pane-placeholder')).toBeNull();
-    expect(screen.getByTestId('agents-list-pane')).toBeInTheDocument();
+    expect(screen.getByTestId('mcp-pane')).toBeInTheDocument();
+    expect(screen.queryByTestId('agents-list-pane')).toBeNull();
   });
 
   it('Plugin Config リンクが発火する', async () => {

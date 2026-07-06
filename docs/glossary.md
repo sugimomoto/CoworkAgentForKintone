@@ -36,6 +36,9 @@
 | kintone-customize-bundle | `kintone-customize-bundle` (artifact kind) | Customizer wedge が生成する JS バンドルの artifact 種別。FileTree + Monaco エディタ + 5 状態 step bar (ready / previewed / applying / applied / rolled-back) を伴う |
 | Surface 分割 | `surfaceSeparation` | Plugin Config = Bootstrap 専用 / Chat Panel = プロダクト本体 という UI 配置原則 |
 | ユーザーバインディング | `userBinding` | kintone OAuth で発行した access/refresh token を Anthropic Vault Credential に保管し、ユーザーと紐付ける状態 |
+| MCP カタログ / サーバー定義 | `McpServerDef` | 追加 MCP サーバーの**テナント共有定義** (#42/§0.12)。name / url / authType (none/bearer/oauth) / tools キャッシュ / OAuth endpoints を持ち Plugin Config `mcpServers` に保存。secret は含めない |
+| MCP 接続 | `McpConnection` | 追加 MCP サーバーへの **per-user 認証状態**。各ユーザーが Chat Panel の設定→MCP で接続し、`static_bearer` / `mcp_oauth` credential を本人 Vault に upsert する |
+| MCP attach | `McpAttachment` | Agent ごとに「どの追加 MCP サーバーのどのツールを使うか」。`mode: 'all'` (全ツール) / `'subset'` (選択ツールのみ)。Agent metadata に保存 |
 | 実行計画 | `executionPlan` | 破壊的操作 (更新 / 削除) 前に Agent が提示する処理内容のプレビュー |
 | 承認 (HITL) | `approval` | 実行計画に対するユーザーの許可操作 |
 
@@ -101,7 +104,7 @@
 | エージェント (Settings) | `AgentsListPane` | Settings View の 🤖 Agents タブ。Built-in 3 variant 一覧 + 公開トグル |
 | スキル (Settings) | `SkillsPane` | Settings View の 🧠 Skills タブ。Plugin 同梱 skill の同期 + カスタム skill 追加 |
 | カスタムスキル追加 | `SkillAddModal` | Skills タブから開くモーダル。`📤 ファイル` / `📝 直接入力` の 2 タブ切替 |
-| MCP サーバー (Settings) | `MCPPane` | Settings View の 🔌 MCP タブ。追加 MCP server の OAuth 接続 + Tool 一覧 (V2 機能、V1 は disabled 表示) |
+| MCP サーバー (Settings) | `McpServersPane` | Settings View の MCP タブ。admin が登録した追加 MCP サーバー (§0.12) に各ユーザーが自分のアカウントで接続 (none/bearer/OAuth)・Tool 一覧・解除を行う (#42 で実装) |
 | Workflow Footer | `WorkflowFooter` | Customizer Agent 生成の JS Artifact フッターに表示される 5 状態 step bar (ready / previewed / applying / applied / rolled-back) |
 | FileTree | `FileTree` | Customizer Artifact カードの左 200px サイドバー。customize/ 配下のファイル一覧と変更ステータス (M / +) を表示 |
 | Plugin Config | `PluginConfig` | kintone admin 画面に表示される Plugin 設定画面。**Bootstrap 専用に縮小** (Worker URL / Anthropic API Key / OAuth credentials / 追加 MCP Server 接続情報のみ) |
@@ -211,3 +214,6 @@
   - Section 1: エージェントデザイナー / AgentEditDraft / createFromProposal モード / archive / rationale / previewSnapshot / Custom Skill / Skill bundle / skillsVersion / quickActions / agent-draft / propose_agent / kintone-customize-bundle を追加
   - Section 2: Custom Tool の定義を「V1 では `propose_agent` で使用」に更新
   - Built-in Agent の variant 構成を「業務 / カスタマイザー / デザイナー」に再整理 (旧 customizer-opus 枠を Designer に repurpose)
+- 2026-07-05: 追加 MCP サーバー登録 (#42) 反映
+  - Section 1: MCP カタログ (`McpServerDef`) / MCP 接続 (`McpConnection`) / MCP attach (`McpAttachment`) の3層用語を追加
+  - Section 4: MCP サーバー (Settings) を実装済みに更新 (`MCPPane` → `McpServersPane`)

@@ -9,6 +9,7 @@
 import { useMemo, useState } from 'react';
 
 import { CLOUDFLARE_WORKER_SCRIPT_NAME } from '../core/constants';
+import { parseMcpServers } from '../core/kintone/pluginConfig';
 import { setProxyConfigAsync } from '../core/kintone/setProxyConfigAsync';
 // skillsSyncClient は ConfigScreen からは呼ばない (Customizer wedge V1 #41 で Chat Panel
 // SkillsPane に移管)。skillsSyncClient 自体は packages/plugin/src/core/skills/ に残置し、
@@ -18,6 +19,7 @@ import { PasswordInput } from '../desktop/components/ui/PasswordInput';
 
 import { buildProxySteps } from './buildProxySteps';
 import { useCloudflareDeployment } from './hooks/useCloudflareDeployment';
+import { McpServersConfigSection } from './McpServersConfigSection';
 
 export interface ConfigScreenProps {
   pluginId: string;
@@ -28,6 +30,7 @@ const CONFIG_KEY_SAVED = 'saved';
 const CONFIG_KEY_WORKER_URL = 'workerUrl';
 const CONFIG_KEY_OAUTH_CLIENT_ID = 'oauthClientId';
 const CONFIG_KEY_OAUTH_SCOPE = 'oauthScope';
+const CONFIG_KEY_MCP_SERVERS = 'mcpServers';
 // CONFIG_KEY_SKILLS_MAPPING / SKILLS_VERSION は Chat Panel SkillsPane 側で setConfig するので
 // ConfigScreen 側からは触らない (#41 で移管)
 
@@ -381,6 +384,13 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
         />
 
       </section>
+
+      {/* #42: 追加 MCP サーバー カタログ（セットアップとは独立した継続 CRUD） */}
+      <McpServersConfigSection
+        pluginId={pluginId}
+        workerUrl={workerUrlValid ? workerUrlTrimmed : null}
+        initialServers={parseMcpServers(existing[CONFIG_KEY_MCP_SERVERS])}
+      />
 
       {errorMessage && (
         <div role="alert" className="mb-[12px] rounded-[8px] border border-warn/40 bg-warn-soft px-[12px] py-[8px] text-[12px] text-warn">

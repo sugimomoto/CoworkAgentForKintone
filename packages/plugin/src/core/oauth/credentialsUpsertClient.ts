@@ -19,6 +19,12 @@ export interface UpsertKintoneCredentialArgs {
   /** kintone /oauth2/token URL (Anthropic refresh で使われる) */
   tokenEndpoint?: string;
   scope?: string;
+  /**
+   * #42: 追加 MCP の per-server upsert URL `/credentials/upsert/{serverId}` を使う場合に指定。
+   * その URL には buildMcpProxySteps が Anthropic キー + X-Mcp-OAuth-Client-* を注入する。
+   * 省略時は従来の `/credentials/upsert`（kintone OAuth）。
+   */
+  serverId?: string;
 }
 
 export interface UpsertResult {
@@ -44,7 +50,8 @@ export async function upsertKintoneCredential(
     throw new Error('kintone JavaScript API is not available');
   }
 
-  const url = `${args.workerUrl.replace(/\/$/, '')}/credentials/upsert`;
+  const base = `${args.workerUrl.replace(/\/$/, '')}/credentials/upsert`;
+  const url = args.serverId ? `${base}/${args.serverId}` : base;
   const body: Record<string, unknown> = {
     vaultId: args.vaultId,
     mcpServerUrl: args.mcpServerUrl,

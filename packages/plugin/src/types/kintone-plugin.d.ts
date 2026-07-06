@@ -67,6 +67,15 @@ declare global {
       data: Record<string, unknown>,
       successCallback?: () => void,
     ): void;
+    /**
+     * 設定画面専用: 保存済みの proxy 設定 (header/data) を読み出す。
+     * ヘッダー値は**マスクされず**返るため、保存済み Anthropic キー等を読み戻せる
+     * (#42: per-server proxy 登録に流用)。runtime では利用不可。
+     */
+    getProxyConfig?(
+      url: string,
+      method: string,
+    ): { headers: Record<string, string>; data: Record<string, string> } | undefined;
   }
 
   interface KintonePlugin {

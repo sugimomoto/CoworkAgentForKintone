@@ -10,10 +10,12 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { BUILTIN_AGENT_SPECS } from '../../core/bootstrap/builtInAgents';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useMcpConnections } from '../hooks/useMcpConnections';
 
 import { buildDraftFromAgent, buildDraftFromSpec, isBuiltInPurpose } from './agent-detail/buildDraft';
 import { DraftForm } from './agent-detail/DraftForm';
 import { useAgentModalMode } from './agent-detail/useAgentModalMode';
+import { McpAttachSection } from './McpAttachSection';
 import { NotifySection } from './notify/NotifySection';
 
 import type { AgentDetailModalMode, AvailableSkill } from './agent-detail/types';
@@ -21,6 +23,7 @@ import type { WebhookConfig } from './notify/webhookPlatform';
 import type { AgentRecord } from '../../core/bootstrap/agentTypes';
 import type { AgentEditDraft } from '../../core/managed-agents/agentDetailApi';
 import type { Agent } from '../../core/managed-agents/types';
+import type { McpServerDef } from '../../core/mcp/registry';
 
 export type { AvailableSkill, AgentDetailModalMode } from './agent-detail/types';
 export { buildDraftFromAgent, buildDraftFromSpec } from './agent-detail/buildDraft';
@@ -47,6 +50,10 @@ export interface AgentDetailModalProps {
   onDelete?: (agent: AgentRecord) => Promise<void>;
   /** 描画用 skill リスト (Anthropic 製 + Plugin 同梱 + custom 同期済) */
   availableSkills: readonly AvailableSkill[];
+  /** #42 追加 MCP カタログ（attach セクションの選択肢）。 */
+  mcpServers?: readonly McpServerDef[];
+  /** #42 接続状態の参考表示用（admin 自身の per-user 接続）。 */
+  pluginId?: string | null;
   /**
    * create-from-proposal モードで「雛形から作り直す」を押した時の templates ソース。
    * 通常は builtInAgents をそのまま渡す。
@@ -68,6 +75,9 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
     setTemplateId,
     sourceAgent,
   } = useAgentModalMode(props.mode, fallbackTemplates);
+
+  // #42: 接続状態の参考表示（admin 自身の per-user 接続）。attach 自体には影響しない。
+  const { connections: mcpConnections } = useMcpConnections(props.pluginId ?? null);
 
   const [draft, setDraft] = useState<AgentEditDraft | null>(null);
   // 通知先 Webhook の working copy (#13)。既存 Agent が登録済なら伏字 ({platform}) で初期化。
@@ -277,6 +287,15 @@ export function AgentDetailModal(props: AgentDetailModalProps): JSX.Element {
               {/* 通知先 Webhook (#13) — 公開先(ACL)の後・フッタ直前。新規作成時は作成後に登録される。 */}
               <div className="mt-[16px] border-t border-border pt-[14px]">
                 <NotifySection value={webhook} onChange={setWebhook} />
+              </div>
+              {/* #42 追加 MCP サーバーの attach（このエージェントで使うツール選択） */}
+              <div className="mt-[16px] border-t border-border pt-[14px]">
+                <McpAttachSection
+                  servers={[...(props.mcpServers ?? [])]}
+                  connections={mcpConnections}
+                  value={[...draft.mcpAttachments]}
+                  onChange={(next) => setDraft({ ...draft, mcpAttachments: next })}
+                />
               </div>
             </>
           )}
