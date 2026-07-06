@@ -476,6 +476,38 @@ sequenceDiagram
 
 ---
 
+### 0.12 追加 MCP サーバー登録 (#42)
+
+kintone 以外の**リモート MCP サーバー**をテナントに登録し、エージェントに紐付けて使う機能。kintone 自身の MCP (§0.2〜0.3) や通知 MCP (§3.6) とは独立した「第三者 MCP」レイヤー。
+
+**3層モデル (Model A):**
+
+| 層 | 何を持つ | 保存先 | 誰が |
+|----|---------|--------|------|
+| ① `McpServerDef` (カタログ) | サーバー定義 (name/url/authType/tools/OAuth endpoints) | Plugin Config `mcpServers` (JSON) | admin (テナント共有) |
+| ② `McpConnection` (接続) | per-user 認証情報 | Anthropic Vault Credential (`mcp_server_url` で紐付け) | 各ユーザー (Chat Panel 設定→MCP) |
+| ③ `McpAttachment` (attach) | どのツールを使うか (`mode: 'all' \| 'subset'`) | Agent metadata (`mcpAttachments` JSON) | admin (Agent 編集) |
+
+保存時に agent の `mcp_servers` (`{type:'url', name=serverId, url}`) と `tools` (`mcp_toolset`) を組み立てる。session の `vault_ids` は拡張不要 (per-user credential は本人 Vault に同居)。
+
+**認証3種:**
+
+- **none**: 認証不要。常に利用可 (per-user credential を持たない)。
+- **bearer (API キー)**: per-user。各ユーザーがトークン入力 → `static_bearer` credential を本人 Vault に upsert。(テナント共有 APIキーは #134 で別途)
+- **OAuth (Authorization Code + PKCE)**:
+  - **confidential (`client_secret_basic`)**: client_secret は Plugin Config 保存時に **per-server proxy へ注入** (`buildMcpProxySteps`: token_endpoint に Basic、`/credentials/upsert/{serverId}` に Anthropic キー+secret を自己完結で載せる)。JS には secret を持たない。
+  - **public (PKCE, `token_endpoint_auth: none`)**: secret 無し。token 交換は client_id を body に載せる。runtime 用に token_endpoint へ **Content-Type だけの proxyConfig を登録**する (これが無いと `kintone.plugin.app.proxy` で Content-Type が付かず `invalid_grant` になる)。
+  - **RFC 8707 `resource`**: 認可・token 交換の両方に `resource=<MCPサーバーURL>` を付与 (これが無いと Notion 等で 401 `invalid_token`)。サーバーにより必須 (Notion) / 無視でも可 (CData/Auth0)。
+  - `post` (client_secret_post) は kintone proxy 制約で非対応。
+
+**ツールカタログ:** attach でツール単位 ON/OFF するには一覧が要る。admin が Plugin Config で「ツール取得」すると `tools/list` を叩き `McpServerDef.tools` にキャッシュする。none=その場、bearer=トークン入力、OAuth=保存フォーム内で認可 (client_secret はメモリ or getProxyConfig 読戻し)。取得前でも attach は `mode:'all'` (全ツール) で動く。
+
+**transport の使い分け (重要な制約):** 設定画面のツール取得プローブは `kintone.proxy` (明示ヘッダ)、runtime のユーザー接続は `kintone.plugin.app.proxy` (proxyConfig 登録ヘッダのみ確実に付く)。詳細は [[kintone-proxy-transport-rules]] / §7。
+
+**発展 (別 Issue):** エンドポイント自動発見 + 動的クライアント登録(DCR)/Client ID Metadata Document (#132)、共有 APIキー (#134)、カスタムヘッダー認証 (#135・Anthropic の MCP credential が Bearer 固定のため上流待ち)。
+
+---
+
 ## 1. システムアーキテクチャ (Phase 1a/1b-1/1b-2 の歴史記録)
 
 > 以下は旧設計の記述。現行は §0 を参照。
@@ -625,8 +657,9 @@ graph LR
 | フィールド | 保存先 | 必須 | 説明 |
 |-----------|--------|:---:|------|
 | `anthropicApiKey` | kintone Proxy 設定 (固定ヘッダ) | ✓ | Anthropic API Key。ブラウザ JS からは参照不可 |
+| `mcpServers` | `setConfig` (JSON) | | 追加 MCP サーバーのカタログ (`McpServerDef[]`、#42/§0.12)。テナント共有。secret は含めず (OAuth client_secret は proxy 固定ヘッダ側)。ツール一覧 (`tools`) をキャッシュ |
 
-**プラグイン設定 (`kintone.plugin.app.setConfig`) には一切の永続データを保存しない**。
+**方針の補足 (#42)**: リソース ID (Agent/Environment/Vault) は従来どおり setConfig に持たず metadata 動的参照だが、**追加 MCP サーバーのカタログ (`mcpServers`) はテナント共有の静的定義**のため setConfig に保存する (secret は含めない)。setConfig / proxy 設定の変更は**アプリ更新 (運用環境へ反映) まで runtime に反映されない**点に注意。
 
 #### 3.1.2 Managed Agents 側のリソース識別 (metadata ベース動的参照)
 

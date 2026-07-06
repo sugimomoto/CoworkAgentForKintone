@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cowork Agent — 通知先 Webhook 設定 UI 検討</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; background: #f0eee9; }
+    body { font-family: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', sans-serif; }
+    * { box-sizing: border-box; }
+    select { -webkit-appearance: none; appearance: none; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: rgba(35,18,0,0.16); border-radius: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    input::placeholder { color: #a89d85; }
+
+    /* kintone host frame */
+    .kt { width: 100%; height: 100%; display: flex; flex-direction: column; background: #fafbfc; color: #374151; }
+    .kt-top { height: 34px; background: #231200; color: #f5e6b8; display: flex; align-items: center; padding: 0 14px; font-size: 11.5px; gap: 14px; flex: 0 0 auto; }
+    .kt-logo { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #ffbf00; letter-spacing: .3px; }
+    .kt-logo-mark { width: 18px; height: 18px; border-radius: 5px; background: #ffbf00; color: #231200; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; }
+    .kt-crumb { flex: 1; color: #9a8f7a; }
+    .kt-appbar { height: 48px; background: #fff; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; padding: 0 18px; gap: 12px; flex: 0 0 auto; }
+    .kt-app-icon { width: 28px; height: 28px; border-radius: 6px; background: #ffbf00; color: #231200; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
+    .kt-app-title { font-size: 14px; font-weight: 600; color: #111827; }
+    .kt-body { flex: 1; display: flex; min-height: 0; }
+    .kt-list { flex: 1; padding: 16px 22px; overflow: hidden; background: #fafbfc; }
+    .kt-tabs { display: flex; gap: 2px; margin-bottom: 12px; border-bottom: 1px solid #e5e7eb; }
+    .kt-tab { padding: 7px 13px; font-size: 11.5px; color: #6b7280; border-bottom: 2px solid transparent; }
+    .kt-tab.active { color: #231200; border-bottom-color: #ffbf00; font-weight: 600; }
+    .kt-table { width: 100%; border-collapse: collapse; font-size: 11.5px; background: #fff; border: 1px solid #e5e7eb; border-radius: 4px; }
+    .kt-table th { background: #f9fafb; color: #6b7280; font-weight: 500; text-align: left; padding: 9px 11px; border-bottom: 1px solid #e5e7eb; font-size: 10.5px; }
+    .kt-table td { padding: 10px 11px; border-bottom: 1px solid #f3f4f6; color: #374151; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <!-- 依存順: header / settings (glyph+badge 共有) → canvas → 基盤 → 通知 → 文脈 → 検討 -->
+  <script type="text/babel" src="wedge-header.jsx"></script>
+  <script type="text/babel" src="wedge-settings.jsx"></script>
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="deployments-data.jsx"></script>
+  <script type="text/babel" src="webhook-notify.jsx"></script>
+  <script type="text/babel" src="webhook-context.jsx"></script>
+  <script type="text/babel" src="webhook-explore.jsx"></script>
+
+  <script type="text/babel">
+    const SLACK_URL = 'https://hooks.slack.com/services/T024BE7LH/B07XYZ/abcdef1234567890';
+    const TEAMS_URL = 'https://acme.webhook.office.com/webhookb2/0a1b2c3d@tenant/IncomingWebhook/xyz/890';
+    const BAD_URL   = 'https://example.com/api/notify/abc123';
+
+    function PaneFrame({ children, pad }) {
+      return <div style={{ width: '100%', height: '100%', background: D.bg, overflow: 'auto', position: 'relative', padding: pad ? 0 : 0 }}>{children}</div>;
+    }
+    function ModalStage({ behind, children }) {
+      return (
+        <div style={{ position: 'relative', width: '100%', height: '100%', background: D.bg, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', opacity: 0.5, pointerEvents: 'none' }}>{behind}</div>
+          {children}
+        </div>
+      );
+    }
+
+    function App() {
+      return (
+        <DesignCanvas>
+
+          {/* 1. 通知セクションの状態 (states 1-5) */}
+          <DCSection id="states" title="① 通知セクションの状態"
+            subtitle="AgentDetailModal 本文に挿入する『通知』セクション。各カードは実際に入力でき、ホストで Slack / Teams を自動判定します。下部は参考フッタ（保存活性）。">
+            <DCArtboard id="unset" label="未設定 — 空の入力 + 貼り付け案内（バッジ無し）" width={600} height={400}>
+              <NotifySectionDemo title="状態 1 · 未設定" />
+            </DCArtboard>
+            <DCArtboard id="slack" label="入力中（有効）— Slack 自動判定 + 保存活性" width={600} height={400}>
+              <NotifySectionDemo title="状態 2 · 入力中（Slack）" initialUrl={SLACK_URL} />
+            </DCArtboard>
+            <DCArtboard id="teams" label="入力中（有効）— Teams 自動判定 + 保存活性" width={600} height={400}>
+              <NotifySectionDemo title="状態 2 · 入力中（Teams）" initialUrl={TEAMS_URL} />
+            </DCArtboard>
+            <DCArtboard id="bad" label="入力中（判定不能）— 警告 + 保存不可" width={600} height={400}>
+              <NotifySectionDemo title="状態 3 · 判定不能" initialUrl={BAD_URL} />
+            </DCArtboard>
+            <DCArtboard id="saved-slack" label="登録済み（Slack）— 伏字 + ステータス + 解除 + テスト" width={600} height={470}>
+              <NotifySectionDemo title="状態 4 · 登録済み" initialSaved savedPlatform="slack" />
+            </DCArtboard>
+            <DCArtboard id="saved-teams" label="登録済み（Teams）" width={600} height={470}>
+              <NotifySectionDemo title="状態 4 · 登録済み" initialSaved savedPlatform="teams" />
+            </DCArtboard>
+            <DCArtboard id="unlink" label="解除確認 — インライン warn 確認" width={600} height={470}>
+              <NotifySectionDemo title="状態 5 · 解除確認" initialSaved savedPlatform="slack" confirmOpen />
+            </DCArtboard>
+            <DCArtboard id="reenter" label="再入力で更新 — 旧設定を上書き" width={600} height={400}>
+              <NotifySectionDemo title="状態 4b · 再入力（上書き）" initialSaved savedPlatform="slack" editingSeed />
+            </DCArtboard>
+          </DCSection>
+
+          {/* 2. 接続テスト (state 6) */}
+          <DCSection id="test" title="② 接続テスト（任意）"
+            subtitle="登録済み状態の「テスト送信」。送信中 → 成功（success）/ 失敗（danger）をインライン表示。MVP では任意 — 有る版 / 無い版の両案を提示。">
+            <DCArtboard id="test-live" label="テスト送信（押下できます）" width={600} height={470}>
+              <NotifySectionDemo title="接続テスト · 操作可" initialSaved savedPlatform="slack" />
+            </DCArtboard>
+            <DCArtboard id="test-sending" label="送信中" width={600} height={470}>
+              <NotifySectionDemo title="接続テスト · 送信中" initialSaved savedPlatform="slack" forceTest="sending" />
+            </DCArtboard>
+            <DCArtboard id="test-ok" label="成功（success 色）" width={600} height={470}>
+              <NotifySectionDemo title="接続テスト · 成功" initialSaved savedPlatform="slack" forceTest="success" />
+            </DCArtboard>
+            <DCArtboard id="test-fail" label="失敗（danger 色）" width={600} height={470}>
+              <NotifySectionDemo title="接続テスト · 失敗" initialSaved savedPlatform="teams" forceTest="fail" />
+            </DCArtboard>
+            <DCArtboard id="test-prop" label="提案 — 有る版 / 無い版" width={560} height={470}>
+              <TestProposalCard />
+            </DCArtboard>
+          </DCSection>
+
+          {/* 3. AgentDetailModal 内での配置 */}
+          <DCSection id="modal" title="③ AgentDetailModal 内での配置"
+            subtitle="通知セクションは『公開先(ACL)』の直後・フッタ直前に自然挿入。上部は既存セクションの要約で文脈を示す。">
+            <DCArtboard id="modal-unset" label="編集モーダル — 未設定" width={620} height={760}>
+              <ModalStage behind={<PaneFrame><AgentRowsWithIndicator showButton={false} /></PaneFrame>}>
+                <NotifyModal agentKey="doc" notify={{}} />
+              </ModalStage>
+            </DCArtboard>
+            <DCArtboard id="modal-saved" label="編集モーダル — 登録済み（Slack）" width={620} height={760}>
+              <ModalStage behind={<PaneFrame><AgentRowsWithIndicator showButton={false} /></PaneFrame>}>
+                <NotifyModal agentKey="analytics" notify={{ initialSaved: true, savedPlatform: 'slack' }} />
+              </ModalStage>
+            </DCArtboard>
+          </DCSection>
+
+          {/* 4. kintone 文脈 */}
+          <DCSection id="context" title="④ kintone 画面内での見え方"
+            subtitle="レコード画面の右にプラグインが開く。編集モーダルは中央オーバーレイ。クリーム×ティールの温かみは維持。">
+            <DCArtboard id="in-context" label="案件管理アプリ + AgentDetailModal（通知 登録済み）" width={1180} height={760}>
+              <KintoneHost>
+                <ModalStage behind={<PaneFrame><AgentRowsWithIndicator showButton={false} /></PaneFrame>}>
+                  <NotifyModal agentKey="analytics" notify={{ initialSaved: true, savedPlatform: 'teams' }} />
+                </ModalStage>
+              </KintoneHost>
+            </DCArtboard>
+          </DCSection>
+
+          {/* 5. built-in の設定導線 (#7) */}
+          <DCSection id="builtin" title="⑤ built-in エージェントの設定導線（IA 提案 #7）"
+            subtitle="編集モーダルを持たない built-in には、一覧行の「通知」ボタン → 通知セクションだけの軽量ポップオーバーを用意。実装は AgentDetailModal と同一コンポーネント。">
+            <DCArtboard id="popover" label="一覧 + 軽量ポップオーバー（未設定）" width={620} height={560}>
+              <div style={{ position: 'relative', width: '100%', height: '100%', background: D.bg, overflow: 'hidden' }}>
+                <AgentRowsWithIndicator />
+                <BuiltinNotifyPopover agentKey="biz" anchorTop={150} notify={{}} />
+              </div>
+            </DCArtboard>
+            <DCArtboard id="popover-saved" label="ポップオーバー（登録済み + テスト）" width={620} height={560}>
+              <div style={{ position: 'relative', width: '100%', height: '100%', background: D.bg, overflow: 'hidden' }}>
+                <AgentRowsWithIndicator />
+                <BuiltinNotifyPopover agentKey="analytics" anchorTop={150} notify={{ initialSaved: true, savedPlatform: 'teams' }} />
+              </div>
+            </DCArtboard>
+          </DCSection>
+
+          {/* 6. 一覧の既設インジケータ (#8) */}
+          <DCSection id="indicator" title="⑥ 一覧での既設インジケータ（IA 提案 #8）"
+            subtitle="通知先が設定済みの行に、ベル + platform ドットの小バッジ。built-in / custom を問わず、どの Agent が通知を持つか一目で分かる。">
+            <DCArtboard id="rows" label="エージェント一覧 — 設定済み / 未設定の出し分け" width={600} height={560}>
+              <PaneFrame><AgentRowsWithIndicator /></PaneFrame>
+            </DCArtboard>
+          </DCSection>
+
+          {/* 7. 判定 / 伏字 / 解除 の見せ方 */}
+          <DCSection id="show" title="⑦ 自動判定・伏字・解除 の具体案"
+            subtitle="プラットフォーム バッジの見せ方、秘匿情報の伏字、解除の作法。">
+            <DCArtboard id="detect" label="プラットフォーム自動判定" width={560} height={560}>
+              <DetectionCard />
+            </DCArtboard>
+            <DCArtboard id="secret" label="伏字 / 解除 の見せ方" width={560} height={620}>
+              <SecretCard />
+            </DCArtboard>
+          </DCSection>
+
+          {/* 8. 情報設計 + 状態一覧 + コピー */}
+          <DCSection id="rationale" title="⑧ 情報設計の提案・状態一覧・UI コピー"
+            subtitle="配置判断と、網羅した状態、そのまま使える日本語コピー。">
+            <DCArtboard id="recs" label="情報設計の提案" width={640} height={620}>
+              <RationaleCard />
+            </DCArtboard>
+            <DCArtboard id="states-list" label="網羅した状態" width={460} height={560}>
+              <StatesCard />
+            </DCArtboard>
+            <DCArtboard id="copy" label="UI コピー案（日本語）" width={560} height={760}>
+              <CopyDeckCard />
+            </DCArtboard>
+          </DCSection>
+
+        </DesignCanvas>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
