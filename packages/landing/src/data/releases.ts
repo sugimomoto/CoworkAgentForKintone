@@ -31,6 +31,33 @@ export interface Release {
 
 export const releases: Release[] = [
   {
+    version: 'v0.4.0',
+    date: '2026-07-06',
+    tag: 'plugin-v0.4.0',
+    title: 'kintone の外部サービスも、エージェントの道具にする。',
+    summary:
+      'kintone 以外のリモート MCP サーバー（Notion・GitHub など）を登録して、エージェントの道具として使えるようになりました。管理者がテナントに登録し、各ユーザーは自分のアカウントで接続（認証なし / API キー / OAuth）。エージェントごとに使えるツールを選べます。あわせて操作性の改善・修正も入っています。',
+    highlights: [
+      {
+        icon: 'grid',
+        title: '追加 MCP サーバー登録（外部サービス連携）',
+        isNew: true,
+        desc: 'kintone 以外のリモート MCP サーバー（Notion・GitHub など）を登録し、エージェントの道具として使えます。管理者がテナントに登録、各ユーザーは自分のアカウントで接続し、エージェントごとに使えるツールを選択できます。',
+      },
+      {
+        icon: 'shield',
+        title: '認証なし / API キー / OAuth に対応',
+        isNew: true,
+        desc: 'サーバーに合わせて、認証なし・API キー・OAuth（PKCE、client_secret 方式の両対応）で接続できます。認証情報は各ユーザーごとに安全に保管し、ブラウザ側の JavaScript には露出しません。',
+      },
+      {
+        icon: 'wrench',
+        title: '操作性の改善・修正',
+        desc: 'クイックアクションでの添付ファイル送信、会話履歴ビューの戻るボタン、チャット起動アイコン（FAB）の視認性改善など、細かな使い勝手を整えました。',
+      },
+    ],
+  },
+  {
     version: 'v0.3.0',
     date: '2026-06-21',
     tag: 'plugin-v0.3.0',
