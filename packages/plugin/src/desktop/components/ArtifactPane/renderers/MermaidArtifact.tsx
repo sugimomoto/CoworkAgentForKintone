@@ -80,21 +80,27 @@ document.getElementById('zfit').addEventListener('click', () => { interacted = f
 // iframe のサイズが確定/変化した時に自動フィット（ユーザーが操作するまで）。
 // 初回描画時にペインがまだ 0/過渡サイズだと fit が効かず図が原点固定で見切れるため。
 try { new ResizeObserver(() => { if (!interacted) fit(); }).observe(viewport); } catch { /* ResizeObserver 非対応環境は初回 fit のみ */ }
-// mermaid は依存が多く esm.sh から個別 import すると芋づるのどれかが落ちて
-// "Importing a module script failed" になりやすい。?bundle で全依存を1ファイルに集約し、
-// 失敗時はキャッシュ回避しつつ数回リトライする（間欠的な CDN/ネットワーク障害対策）。
+// mermaid は依存が多く、単一 CDN からの import はネットワーク環境（社内プロキシ等）で
+// 芋づるのどれかが落ちて "Importing a module script failed" になることがある。
+// ?bundle / +esm で全依存を1ファイルに集約しつつ、複数 CDN（esm.sh→jsdelivr）を順に試し、
+// 最後にキャッシュ回避で esm.sh を再試行する。どれかが通れば描画できる。
 async function loadMermaid(){
+  const sources = [
+    'https://esm.sh/mermaid@${MERMAID_VERSION}?bundle',
+    'https://cdn.jsdelivr.net/npm/mermaid@${MERMAID_VERSION}/+esm',
+    'https://esm.sh/mermaid@${MERMAID_VERSION}?bundle&_r=1',
+  ];
   let err;
-  for (let i = 0; i < 3; i++) {
+  for (const url of sources) {
     try {
-      const url = 'https://esm.sh/mermaid@${MERMAID_VERSION}?bundle' + (i ? '&_r=' + i : '');
-      return (await import(url)).default;
+      const mod = await import(url);
+      return mod.default || mod;
     } catch (e) {
       err = e;
-      await new Promise((res) => setTimeout(res, 500 * (i + 1)));
+      await new Promise((res) => setTimeout(res, 400));
     }
   }
-  throw new Error('mermaid の読み込みに失敗しました（CDN/ネットワーク）。再試行してください: ' + ((err && err.message) || err));
+  throw new Error('mermaid の読み込みに失敗しました（CDN/ネットワーク）。時間をおいて再生成してください: ' + ((err && err.message) || err));
 }
 try {
   post('boot', null);
