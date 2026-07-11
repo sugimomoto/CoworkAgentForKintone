@@ -467,7 +467,7 @@ describe('ChatPanel', () => {
     expect(onSettingsClick).not.toHaveBeenCalled();
   });
 
-  it('非 admin では Header の Gear ボタンが表示されない', async () => {
+  it('非 admin でも Header の Gear ボタンが表示される (#15/#81: 設定は全ユーザー開放)', async () => {
     setBootstrapOk();
     setBindingStatus('bound');
     setAdmin(false);
@@ -475,9 +475,7 @@ describe('ChatPanel', () => {
     render(<ChatPanel onSettingsClick={vi.fn()} />);
     await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
 
-    // admin 判定は async。少し待ってから DOM に Gear が無いことを確認
-    await new Promise((r) => setTimeout(r, 20));
-    expect(screen.queryByTestId('header-gear')).toBeNull();
+    expect(await screen.findByTestId('header-gear')).toBeInTheDocument();
   });
 
   it('ConversationUtilityBar の新規会話ボタンで sessionId と messages がクリアされる', async () => {

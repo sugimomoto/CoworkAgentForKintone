@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { AgentsListPane } from './AgentsListPane';
 import { DeploymentsPaneBound } from './DeploymentsPaneBound';
 import { McpServersPane } from './McpServersPane';
+import { MemorySectionBound } from './MemorySectionBound';
 import { SettingsNav } from './SettingsNav';
 import { SkillsPane } from './SkillsPane';
 
@@ -82,7 +83,7 @@ export function SettingsView({
         <div className="flex-1">
           <div className="text-[13px] font-semibold text-text">設定</div>
           <div className="text-[10.5px] text-muted">
-            {isAdmin ? '管理者 · 全ユーザーの設定を管理' : '自分の定期実行を管理'}
+            {isAdmin ? '管理者 · 全ユーザーの設定を管理' : '自分のメモリ・定期実行を管理'}
           </div>
         </div>
         <button
@@ -109,6 +110,8 @@ export function SettingsView({
           {section === 'deployments' && (
             <DeploymentsPaneBound {...(onOpenSession ? { onOpenSession } : {})} />
           )}
+          {/* #15: メモリは per-user (非 admin も可)。自前でデータ解決する Bound を描画。 */}
+          {section === 'memory' && <MemorySectionBound />}
           {section === 'agents' && isAdmin && (
             <AgentsListPane
               {...(onToggleVisibility ? { onToggleVisibility } : {})}
