@@ -12,6 +12,13 @@ export const ANTHROPIC_VERSION = '2023-06-01' as const;
 /** Managed Agents Beta ヘッダ値 */
 export const MANAGED_AGENTS_BETA = 'managed-agents-2026-04-01' as const;
 
+/**
+ * Memory Store 系エンドポイント (`/v1/memory_stores/**`) 専用の Beta ヘッダ (#15)。
+ * session attach は従来の MANAGED_AGENTS_BETA のまま。両者を同一リクエストに混在させると 400。
+ * kintone proxy が comma 区切り beta を壊すため、memory 呼出は単独でこの値に置換して送る。
+ */
+export const MEMORY_AGENTS_BETA = 'agent-memory-2026-07-22' as const;
+
 /** ポーリング間隔 (ms) */
 export const POLLING_INTERVAL_MS = {
   initial: 2000,

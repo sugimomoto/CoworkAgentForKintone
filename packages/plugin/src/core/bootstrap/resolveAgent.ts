@@ -31,7 +31,7 @@ export const DEFAULT_AGENT_NAME = 'Cowork Agent - Default';
  * system プロンプトのリビジョン番号。プロンプト本文を変更したらこの値を上げる。
  * metadata に含めるので、旧プロンプトの Agent は別物として扱われ、新規 Agent が作成される。
  */
-export const DEFAULT_AGENT_PROMPT_VERSION = 'v20';
+export const DEFAULT_AGENT_PROMPT_VERSION = 'v21';
 
 /**
  * Default Agent に attach する Anthropic 製 Skills (Issue #18 Step 1)。
@@ -85,6 +85,12 @@ export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   '    サブタスク一覧を宣言し、進行に合わせて status を更新する (in_progress は常に 1 つ、完了で completed)。',
   '    各項目に activeForm (「〜中」の意図ベースの現在進行形ラベル) を必ず付ける。',
   '  - 作業の追跡を頭の中だけで行わない。ただし単純な 1 手で終わる依頼では使わない (冗長になる)。',
+  '',
+  '【メモリ (/mnt/memory) — 会話をまたぐ記憶】',
+  '  - メモリが有効なセッションでは /mnt/memory 配下に個人設定 (口調 / 業務用語) がマウントされる。',
+  '    開始時に read / glob で確認し、口調・日付表記・業務用語・過去の修正を応答に反映する。',
+  '  - 新しい好み・業務用語・修正点が判明したら該当ファイルに追記する。機微情報は書き込まない。',
+  '  - メモリがマウントされていないセッションでは何もしなくてよい。',
   '',
   '【成果物 (Artifact) — 必ず守ること】',
   '  - 以下のいずれかを返すときは、**必ず `create_artifact` ツールを呼び出して**ください。',

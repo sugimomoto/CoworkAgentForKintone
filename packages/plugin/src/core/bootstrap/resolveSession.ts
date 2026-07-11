@@ -24,6 +24,16 @@ export interface SessionContext {
    * Session タイトルを生成する (#52 プランA)。空 / 未指定なら従来の「新規会話 - 日時」。
    */
   firstMessage?: string;
+  /**
+   * Memory Store の attach 指定 (#15)。Memory トグル ON のときだけ渡される。
+   * attach は session 作成時のみ可能なので resources[] で一括指定する。
+   */
+  memoryResources?: Array<{
+    type: 'memory_store';
+    memory_store_id: string;
+    access: 'read_write' | 'read_only';
+    instructions?: string;
+  }>;
 }
 
 export type ListUserSessionsContext = Pick<
@@ -64,6 +74,10 @@ export async function createUserSession(ctx: SessionContext): Promise<Session> {
     agent: ctx.agentId,
     environment_id: ctx.environmentId,
     ...(vaultIds.length > 0 ? { vault_ids: vaultIds } : {}),
+    // #15: Memory Store は session 作成時のみ attach 可。トグル ON 時だけ渡る。
+    ...(ctx.memoryResources && ctx.memoryResources.length > 0
+      ? { resources: ctx.memoryResources }
+      : {}),
     // 初回メッセージがあればそれを元にタイトル生成、無ければ「新規会話 - 日時」
     title: makeTitleFromMessage(ctx.firstMessage ?? ''),
     metadata: {

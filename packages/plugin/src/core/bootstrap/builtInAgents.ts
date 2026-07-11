@@ -142,6 +142,14 @@ const COMMON_GUARDRAILS = [
   '  - 作業の追跡を頭の中だけで行わない。ただし単純な 1 手で終わる依頼では使わない (冗長になる)。',
   '  - 破壊的操作は実行時に承認カードが出る。計画自体に承認は要らない。',
   '',
+  '【メモリ (/mnt/memory) — 会話をまたぐ記憶】',
+  '  - メモリが有効なセッションでは /mnt/memory 配下に個人設定 (口調 / 業務用語) と',
+  '    このエージェント固有の記憶がマウントされる。開始時に read / glob で確認し、',
+  '    口調・日付表記・業務用語・過去の修正を応答に反映する。',
+  '  - 新しい好み・業務用語・修正点が判明したら該当ファイルに追記する (小さく分割)。',
+  '  - パスワード / API キー / 個人情報などの機微情報は絶対に書き込まない。',
+  '  - メモリがマウントされていないセッションでは何もしなくてよい。',
+  '',
   '【成果物 (Artifact) — 必ず守ること】',
   '  - 以下のいずれかを返すときは、**必ず `create_artifact` ツールを呼び出して**ください。',
   '    会話本文にコード・SVG タグ・図・表・長文を書かないこと:',
@@ -595,7 +603,7 @@ export const BUILTIN_AGENT_SPECS: Record<
     model: 'claude-sonnet-4-6',
     modelLabel: 'SONNET',
     modelKind: 'sonnet',
-    promptVersion: 'v20-business',
+    promptVersion: 'v21-business-memory',
     systemPrompt: BUSINESS_SYSTEM_PROMPT,
     anthropicSkillIds: ['xlsx', 'docx', 'pdf', 'pptx'],
     customSkillFilter: () => false, // Customizer 専用 skill は attach しない
@@ -620,7 +628,7 @@ export const BUILTIN_AGENT_SPECS: Record<
     model: 'claude-opus-4-7',
     modelLabel: 'OPUS',
     modelKind: 'opus',
-    promptVersion: 'v23-agent-designer',
+    promptVersion: 'v24-agent-designer-memory',
     systemPrompt: AGENT_DESIGNER_SYSTEM_PROMPT,
     anthropicSkillIds: [],
     customSkillFilter: () => false, // カスタム skill 不要 (アーティファクト出力中心)
@@ -637,7 +645,7 @@ export const BUILTIN_AGENT_SPECS: Record<
     model: 'claude-sonnet-4-6',
     modelLabel: 'SONNET',
     modelKind: 'sonnet',
-    promptVersion: 'v22-customizer',
+    promptVersion: 'v23-customizer-memory',
     systemPrompt: CUSTOMIZER_SYSTEM_PROMPT,
     anthropicSkillIds: [],
     // JS/plugin 開発 skill + admin 追加分は attach するが、アプリ構造設計 skill は app-designer 専用なので除外。
@@ -659,7 +667,7 @@ export const BUILTIN_AGENT_SPECS: Record<
     modelLabel: 'OPUS',
     modelKind: 'opus',
     // v2: ドメイン知識を kintone-app-design skill に集約 (プロンプト薄化 + skill attach) するため bump。
-    promptVersion: 'v2-app-designer',
+    promptVersion: 'v3-app-designer-memory',
     systemPrompt: APP_DESIGNER_SYSTEM_PROMPT,
     anthropicSkillIds: ['pdf', 'docx', 'xlsx', 'pptx'],
     // アプリ構造設計 skill のみ attach (資料読解の Anthropic 製 skill は anthropicSkillIds 側)。

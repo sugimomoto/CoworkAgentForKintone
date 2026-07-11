@@ -137,6 +137,42 @@ export interface ListResponse<T> {
   next_page: string | null;
 }
 
+// ----- Memory Stores (#15) --------------------------------------------------
+
+/** Memory Store (`memstore_...`)。workspace スコープのテキストファイル集合。 */
+export interface MemoryStore {
+  id: string;
+  name: string;
+  description?: string | null;
+  metadata?: ManagedAgentsMetadata;
+  created_at: string;
+  updated_at: string;
+  archived_at?: string | null;
+  type: 'memory_store';
+}
+
+/** Memory (`mem_...`)。store 配下の 1 ファイル (path で識別、≤100kB)。 */
+export interface Memory {
+  id: string;
+  type: 'memory';
+  path: string;
+  /** view=full のときのみ返る。list(view=basic) では未取得。 */
+  content?: string;
+  content_sha256: string;
+  content_size_bytes: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** memories list で depth により返る「サブプレフィックス」エントリ。 */
+export interface MemoryPrefix {
+  type: 'memory_prefix';
+  path: string;
+}
+
+/** memories list の 1 要素は Memory か MemoryPrefix。 */
+export type MemoryListItem = Memory | MemoryPrefix;
+
 // ----- Deployments (Scheduled Deployments / cron) ---------------------------
 
 /** Deployment の初回イベント (起動時にエージェントへ送る user.message) */
