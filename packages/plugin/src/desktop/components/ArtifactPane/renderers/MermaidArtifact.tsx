@@ -9,7 +9,9 @@ import { POST_HELPER_SCRIPT, SandboxFrame, safeStringLiteral } from '../SandboxF
 
 import type { Artifact } from '../../../../core/artifacts/types';
 
-const MERMAID_VERSION = '10.9.1';
+// v11 系。v10.9.1 の erDiagram パーサは CJK(日本語) のエンティティ名/属性名を弾き parseError に
+// なる (#137)。11.16.0 で CJK 識別子が parse できることを確認済み。render/initialize API は v10.9+ と互換。
+const MERMAID_VERSION = '11.16.0';
 
 function buildSrcdoc(graph: string): string {
   const safeGraph = safeStringLiteral(graph);
