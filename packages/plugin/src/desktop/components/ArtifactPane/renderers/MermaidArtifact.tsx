@@ -15,29 +15,90 @@ const MERMAID_VERSION = '11.16.0';
 
 function buildSrcdoc(graph: string): string {
   const safeGraph = safeStringLiteral(graph);
+  // ズーム/パンは iframe 内で自己完結（外部ライブラリ不要）。SVG をラッパー(#layer)に入れ transform で
+  // scale+translate する。ホイール=カーソル中心ズーム / ドラッグ=パン / ボタン=＋・−・全体表示(フィット)。
+  // iframe 内 JS はテンプレートリテラルを使わず文字列連結で書く（外側テンプレートの ${} 衝突回避）。
   return `<!doctype html><html><head><meta charset="utf-8" />
 <style>
-  html,body{margin:0;padding:12px;height:100%;box-sizing:border-box;background:#fff;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,'Hiragino Sans','Noto Sans JP',sans-serif}
-  #out{max-width:100%;max-height:100%;overflow:auto}
-  #out svg{max-width:100%;height:auto}
+  html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:system-ui,-apple-system,'Hiragino Sans','Noto Sans JP',sans-serif}
+  #viewport{position:absolute;inset:0;overflow:hidden;cursor:grab;touch-action:none}
+  #viewport.grabbing{cursor:grabbing}
+  #layer{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+  #layer svg{display:block}
+  #controls{position:absolute;right:10px;bottom:10px;display:none;gap:6px;z-index:10}
+  #controls button{width:30px;height:30px;padding:0;border:1px solid #d1d5db;background:#fff;color:#374151;border-radius:8px;cursor:pointer;font-size:16px;line-height:1;box-shadow:0 1px 2px rgba(0,0,0,.08);display:flex;align-items:center;justify-content:center;user-select:none}
+  #controls button:hover{background:#f3f4f6}
   .err{padding:12px;background:#fef2f2;color:#991b1b;font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap}
 </style>
 </head><body>
-<div id="out"></div>
+<div id="viewport"><div id="layer"></div></div>
+<div id="controls">
+  <button id="zin" title="拡大" aria-label="拡大">+</button>
+  <button id="zout" title="縮小" aria-label="縮小">−</button>
+  <button id="zfit" title="全体表示" aria-label="全体表示">⤢</button>
+</div>
 <script type="module">
 ${POST_HELPER_SCRIPT}
+const layer = document.getElementById('layer');
+const viewport = document.getElementById('viewport');
+const controls = document.getElementById('controls');
+let scale = 1, tx = 0, ty = 0, natW = 0, natH = 0;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+function apply(){ layer.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; }
+function fit(){
+  const r = viewport.getBoundingClientRect();
+  if (!natW || !natH || !r.width || !r.height) return;
+  const pad = 24;
+  scale = Math.min((r.width - pad) / natW, (r.height - pad) / natH, 1);
+  if (!isFinite(scale) || scale <= 0) scale = 1;
+  tx = (r.width - natW * scale) / 2;
+  ty = (r.height - natH * scale) / 2;
+  apply();
+}
+function zoomAt(cx, cy, factor){
+  const ns = clamp(scale * factor, 0.05, 12);
+  tx = cx - (cx - tx) * (ns / scale);
+  ty = cy - (cy - ty) * (ns / scale);
+  scale = ns; apply();
+}
+function zoomCenter(factor){ const r = viewport.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, factor); }
+viewport.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const r = viewport.getBoundingClientRect();
+  zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.1 : 1 / 1.1);
+}, { passive: false });
+let drag = false, ox = 0, oy = 0;
+viewport.addEventListener('pointerdown', (e) => { drag = true; ox = e.clientX - tx; oy = e.clientY - ty; viewport.setPointerCapture(e.pointerId); viewport.classList.add('grabbing'); });
+viewport.addEventListener('pointermove', (e) => { if (!drag) return; tx = e.clientX - ox; ty = e.clientY - oy; apply(); });
+const endDrag = () => { drag = false; viewport.classList.remove('grabbing'); };
+viewport.addEventListener('pointerup', endDrag);
+viewport.addEventListener('pointercancel', endDrag);
+document.getElementById('zin').addEventListener('click', () => zoomCenter(1.25));
+document.getElementById('zout').addEventListener('click', () => zoomCenter(0.8));
+document.getElementById('zfit').addEventListener('click', fit);
 try {
   post('boot', null);
   const m = (await import('https://esm.sh/mermaid@${MERMAID_VERSION}')).default;
   m.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default' });
   const graph = ${safeGraph};
   const { svg } = await m.render('mmd-' + Date.now(), graph);
-  document.getElementById('out').innerHTML = svg;
+  layer.innerHTML = svg;
+  const el = layer.querySelector('svg');
+  if (el) {
+    el.removeAttribute('style'); // max-width 制約を外して自然サイズで描き、transform で拡縮する
+    const vb = el.viewBox && el.viewBox.baseVal;
+    natW = (vb && vb.width) || el.getBoundingClientRect().width || 800;
+    natH = (vb && vb.height) || el.getBoundingClientRect().height || 600;
+    el.setAttribute('width', String(natW));
+    el.setAttribute('height', String(natH));
+  }
+  controls.style.display = 'flex';
+  requestAnimationFrame(fit);
   post('rendered', null);
 } catch (err) {
   const msg = fmtErr(err, 'mermaid render failed');
-  document.getElementById('out').innerHTML = '<div class="err"></div>';
-  document.querySelector('.err').textContent = msg;
+  layer.innerHTML = '<div class="err"></div>';
+  layer.querySelector('.err').textContent = msg;
   post('error', msg);
 }
 </script>
