@@ -382,7 +382,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
             )}
             {/* #128: 進捗チェックリスト帯。会話スクロールの外側 (flex-none) に兄弟配置し、
                 スクロール追従 (#133) と干渉させない。plan が null/空なら自動で非表示。 */}
-            {plan && <PlanPanel todos={plan} />}
+            {plan && <PlanPanel todos={plan} running={isAgentRunning} />}
             {showConnectButton ? (
               <ConnectKintoneButton
                 status={bindingStatus}

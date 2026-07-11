@@ -15,12 +15,24 @@ import type { PlanTodo } from '../../core/chat/planTodos';
 
 interface Props {
   todos: PlanTodo[];
+  /**
+   * エージェントが実際に稼働中か (isAgentRunning)。false のときは in_progress の
+   * スピナー/…/実行中バッジを止め、静止表示にする (停止・中断・ターン終了で回り続けないように)。
+   * 既定 true (表示専用のデモ/テストは従来どおりアニメーション)。
+   */
+  running?: boolean;
   /** 初期の開閉状態。既定は「全完了なら畳む / それ以外は開く」。 */
   defaultCollapsed?: boolean;
 }
 
 // ── 行の状態アイコン (18px スロット) ──────────────────
-function StatusIcon({ status }: { status: PlanTodo['status'] }): JSX.Element {
+function StatusIcon({
+  status,
+  running,
+}: {
+  status: PlanTodo['status'];
+  running: boolean;
+}): JSX.Element {
   if (status === 'completed') {
     return (
       <span className="flex h-[18px] w-[18px] flex-none items-center justify-center">
@@ -31,9 +43,14 @@ function StatusIcon({ status }: { status: PlanTodo['status'] }): JSX.Element {
     );
   }
   if (status === 'in_progress') {
+    // 稼働中はスピナー、停止中は回転を止めた静止リング (accent の中抜き丸)。
     return (
       <span className="flex h-[18px] w-[18px] flex-none items-center justify-center">
-        <span className="h-[15px] w-[15px] animate-spin rounded-full border-2 border-[var(--cw-accent)]/20 border-t-[var(--cw-accent)]" />
+        {running ? (
+          <span className="h-[15px] w-[15px] animate-spin rounded-full border-2 border-[var(--cw-accent)]/20 border-t-[var(--cw-accent)]" />
+        ) : (
+          <span className="h-[15px] w-[15px] rounded-full border-2 border-[var(--cw-accent)]/45" />
+        )}
       </span>
     );
   }
@@ -46,7 +63,7 @@ function StatusIcon({ status }: { status: PlanTodo['status'] }): JSX.Element {
 }
 
 // ── サブタスク 1 行 ─────────────────────────────────
-function PlanRow({ todo }: { todo: PlanTodo }): JSX.Element {
+function PlanRow({ todo, running }: { todo: PlanTodo; running: boolean }): JSX.Element {
   const active = todo.status === 'in_progress';
   const done = todo.status === 'completed';
   return (
@@ -60,14 +77,14 @@ function PlanRow({ todo }: { todo: PlanTodo }): JSX.Element {
             : 'text-[var(--cw-subtle)]',
       ].join(' ')}
     >
-      <StatusIcon status={todo.status} />
+      <StatusIcon status={todo.status} running={running} />
       <span className="min-w-0 flex-1 truncate">
         {todoLabel(todo)}
-        {active && <span className="text-[var(--cw-accent)]">…</span>}
+        {active && running && <span className="text-[var(--cw-accent)]">…</span>}
       </span>
       {active && (
         <span className="flex-none rounded-full border border-[var(--cw-accent)]/20 bg-[var(--cw-card)] px-1.5 py-px font-mono text-[9.5px] font-semibold text-[var(--cw-accent)]">
-          実行中
+          {running ? '実行中' : '中断'}
         </span>
       )}
     </div>
@@ -94,7 +111,7 @@ function CompletedGroup({ count, onOpen }: { count: number; onOpen: () => void }
 }
 
 // ── PlanPanel 本体 ──────────────────────────────────
-export function PlanPanel({ todos, defaultCollapsed }: Props): JSX.Element | null {
+export function PlanPanel({ todos, running = true, defaultCollapsed }: Props): JSX.Element | null {
   const s = planSummary(todos);
   const [collapsed, setCollapsed] = useState(defaultCollapsed ?? s.allDone);
   const [completedOpen, setCompletedOpen] = useState(false);
@@ -104,11 +121,15 @@ export function PlanPanel({ todos, defaultCollapsed }: Props): JSX.Element | nul
   const groupCompleted = shouldGroupCompleted(s) && !completedOpen;
   const rows = groupCompleted ? todos.filter((t) => t.status !== 'completed') : todos;
 
+  // 稼働停止中に in_progress が残っている = 停止/中断/ターン終了で途中終了した状態。
+  const stalled = !running && !s.allDone;
   const headTitle = s.allDone
     ? '作業が完了しました'
-    : collapsed && s.active
-      ? s.active.activeForm
-      : '作業を実行中';
+    : stalled
+      ? '作業を中断しました'
+      : collapsed && s.active
+        ? s.active.activeForm
+        : '作業を実行中';
 
   return (
     <div
@@ -128,12 +149,14 @@ export function PlanPanel({ todos, defaultCollapsed }: Props): JSX.Element | nul
           <span className="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full bg-[var(--cw-accent)] text-[var(--cw-on-accent)]">
             <CheckIcon className="h-2.5 w-2.5" thin />
           </span>
+        ) : stalled ? (
+          <span className="h-4 w-4 flex-none rounded-full border-2 border-[var(--cw-accent)]/45" />
         ) : (
           <span className="h-4 w-4 flex-none animate-spin rounded-full border-2 border-[var(--cw-accent)]/20 border-t-[var(--cw-accent)]" />
         )}
         <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-[var(--cw-text)]">
           {headTitle}
-          {collapsed && s.active && <span className="text-[var(--cw-accent)]">…</span>}
+          {collapsed && s.active && running && <span className="text-[var(--cw-accent)]">…</span>}
         </span>
         <span className="flex-none font-mono text-[11px] font-semibold tabular-nums text-[var(--cw-muted)]">
           {s.completed} / {s.total}
@@ -153,7 +176,7 @@ export function PlanPanel({ todos, defaultCollapsed }: Props): JSX.Element | nul
             <CompletedGroup count={s.completed} onOpen={() => setCompletedOpen(true)} />
           )}
           {rows.map((t, i) => (
-            <PlanRow key={i} todo={t} />
+            <PlanRow key={i} todo={t} running={running} />
           ))}
           {shouldGroupCompleted(s) && completedOpen && (
             <button
