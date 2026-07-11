@@ -6,6 +6,7 @@
 import type { AccessContext } from '../core/access/filterAgentsByAccess';
 import type { Artifact, CreateArtifactInput } from '../core/artifacts/types';
 import type { AgentRecord } from '../core/bootstrap/agentTypes';
+import type { PlanTodo } from '../core/chat/planTodos';
 import type { ChatMessage, ToolMessage } from '../core/chat/types';
 import type { AttachedFile } from '../core/files/types';
 import type { AgentEditDraft } from '../core/managed-agents/agentDetailApi';
@@ -109,6 +110,12 @@ export interface ChatState {
    * 送信完了 / 新規セッション開始 / reset でクリア。
    */
   attachedFiles: AttachedFile[];
+  /**
+   * #128 タスク機構: Agent が `update_plan` で宣言した現在のサブタスク一覧。
+   * session スコープ (履歴選択・新規会話・reset でクリア)。null = 計画なし (PlanPanel 非表示)。
+   * 呼ぶたびに全リストで置き換わる (TodoWrite 正典準拠 / full-replace)。
+   */
+  plan: PlanTodo[] | null;
 
   // ─── Customizer wedge V1 で追加 (Section 2.3) ─────────────────────────
   /**
@@ -218,6 +225,12 @@ export interface ChatState {
   /** 未応答 custom_tool_use を追跡 (responder hook が POST / リトライする) */
   addPendingCustomToolUse: (toolUseId: string, artifactId: string) => void;
   removePendingCustomToolUse: (toolUseId: string) => void;
+
+  // ─── planSlice (#128 タスク機構) ──────────────────────────────────────
+  /** `update_plan` 受信時に現在のサブタスク一覧を全置換 (空配列は null に正規化)。 */
+  setPlan: (todos: PlanTodo[]) => void;
+  /** 計画をクリア (PlanPanel 非表示に戻す)。 */
+  clearPlan: () => void;
 
   // ─── fileSlice ────────────────────────────────────────────────────────
   /** 添付ファイルを追加 (末尾) */

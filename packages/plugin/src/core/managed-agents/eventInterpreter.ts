@@ -8,8 +8,9 @@
 //   - 表示に関係しないイベントは空配列を返す
 
 import { parseCreateArtifactInput } from '../artifacts/types';
-import { PROPOSE_AGENT_TOOL_NAME } from '../bootstrap/agentToolDefs';
+import { PROPOSE_AGENT_TOOL_NAME, UPDATE_PLAN_TOOL_NAME } from '../bootstrap/agentToolDefs';
 import { KINTONE_TOOL_NAMES } from '../bootstrap/builtInAgents';
+import { parseUpdatePlanInput } from '../chat/planTodos';
 import { HIDDEN_BLOCK_MARKER } from '../files/messageContent';
 
 import type { AgentEditDraft } from './agentDetailApi';
@@ -17,6 +18,7 @@ import type { SessionEvent } from './types';
 import type { ArtifactKind, CreateArtifactInput } from '../artifacts/types';
 import type { AgentColor, AgentGlyph } from '../bootstrap/agentTypes';
 import type { KintoneToolName } from '../bootstrap/builtInAgents';
+import type { PlanTodo } from '../chat/planTodos';
 import type { ChatMessage, ToolMessage } from '../chat/types';
 
 export type InterpretedEffect =
@@ -40,6 +42,14 @@ export type InterpretedEffect =
       rationale: string;
       /** 提案された model。createCustomAgentFrom の base 選定に使う (AgentEditDraft には載せない)。 */
       model: 'opus' | 'sonnet';
+    }
+  | {
+      // #128 タスク機構: update_plan 受信。useEventPoller がこの effect を見たら:
+      //  1. chatStore.setPlan(plan) で PlanPanel を更新 (全置換 / 空なら非表示)
+      //  2. pendingCustomToolUseIds に toolUseId を積む (responder が { ok: true } を返す)
+      kind: 'set-plan';
+      toolUseId: string;
+      plan: PlanTodo[];
     };
 
 export function interpretEvent(event: SessionEvent): InterpretedEffect[] {
@@ -126,6 +136,15 @@ export function interpretEvent(event: SessionEvent): InterpretedEffect[] {
             },
           },
         ];
+      }
+      if (e.name === UPDATE_PLAN_TOOL_NAME) {
+        const plan = parseUpdatePlanInput(e.input);
+        if (!plan) {
+          // 入力不正: 計画は更新せず tool を継続させるためだけに pending に積む。
+          // (set-plan effect は返さないので既存 plan は保持される)
+          return [{ kind: 'set-plan', toolUseId, plan: [] }];
+        }
+        return [{ kind: 'set-plan', toolUseId, plan }];
       }
       if (e.name === PROPOSE_AGENT_TOOL_NAME) {
         const parsed = parseProposeAgentInput(e.input);

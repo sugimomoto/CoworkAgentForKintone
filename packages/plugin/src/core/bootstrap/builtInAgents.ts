@@ -135,6 +135,13 @@ export const MANAGEMENT_TOOL_NAMES = new Set<string>([
  * resolveAgent.ts の DEFAULT_AGENT_SYSTEM_PROMPT 後半 (L101-184) を切り出したもの。
  */
 const COMMON_GUARDRAILS = [
+  '【計画 (update_plan) — 作業の外部化】',
+  '  - 多段の依頼 (複数ファイル / 複数ツール / 破壊的操作を含む) は、着手前に `update_plan` で',
+  '    サブタスク一覧を宣言し、進行に合わせて status を更新する (in_progress は常に 1 つ、完了で completed)。',
+  '    各項目に activeForm (「〜中」の意図ベースの現在進行形ラベル) を必ず付ける。',
+  '  - 作業の追跡を頭の中だけで行わない。ただし単純な 1 手で終わる依頼では使わない (冗長になる)。',
+  '  - 破壊的操作は実行時に承認カードが出る。計画自体に承認は要らない。',
+  '',
   '【成果物 (Artifact) — 必ず守ること】',
   '  - 以下のいずれかを返すときは、**必ず `create_artifact` ツールを呼び出して**ください。',
   '    会話本文にコード・SVG タグ・図・表・長文を書かないこと:',

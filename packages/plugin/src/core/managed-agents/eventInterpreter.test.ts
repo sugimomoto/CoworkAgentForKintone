@@ -327,6 +327,59 @@ describe('interpretEvent', () => {
       expect(interpretEvent(evt)).toEqual([]);
     });
   });
+
+  describe('agent.custom_tool_use (update_plan, #128)', () => {
+    it('正常な input で set-plan effect (toolUseId = event.id) を返す', () => {
+      const evt = {
+        id: 'evt_plan_1',
+        type: 'agent.custom_tool_use',
+        name: 'update_plan',
+        input: {
+          todos: [
+            { content: '取得', status: 'completed', activeForm: '取得中' },
+            { content: '集計', status: 'in_progress', activeForm: '集計中' },
+          ],
+        },
+        processed_at: '...',
+      } as unknown as SessionEvent;
+      expect(interpretEvent(evt)).toEqual([
+        {
+          kind: 'set-plan',
+          toolUseId: 'evt_plan_1',
+          plan: [
+            { content: '取得', status: 'completed', activeForm: '取得中' },
+            { content: '集計', status: 'in_progress', activeForm: '集計中' },
+          ],
+        },
+      ]);
+    });
+
+    it('空 todos は set-plan (plan=[]) を返し PlanPanel を消せる', () => {
+      const evt = {
+        id: 'evt_plan_2',
+        type: 'agent.custom_tool_use',
+        name: 'update_plan',
+        input: { todos: [] },
+        processed_at: '...',
+      } as unknown as SessionEvent;
+      expect(interpretEvent(evt)).toEqual([
+        { kind: 'set-plan', toolUseId: 'evt_plan_2', plan: [] },
+      ]);
+    });
+
+    it('入力不正 (todos が配列でない) でも set-plan (plan=[]) を返し tool を継続させる', () => {
+      const evt = {
+        id: 'evt_plan_3',
+        type: 'agent.custom_tool_use',
+        name: 'update_plan',
+        input: { todos: 'oops' },
+        processed_at: '...',
+      } as unknown as SessionEvent;
+      expect(interpretEvent(evt)).toEqual([
+        { kind: 'set-plan', toolUseId: 'evt_plan_3', plan: [] },
+      ]);
+    });
+  });
 });
 
 describe('isTerminalEvent', () => {

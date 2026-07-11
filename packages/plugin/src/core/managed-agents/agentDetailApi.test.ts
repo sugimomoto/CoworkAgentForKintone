@@ -106,10 +106,11 @@ describe('applyAgentEdit (#40)', () => {
       { type: 'anthropic', skill_id: 'docx' },
       { type: 'custom', skill_id: 'sk_custom_1' },
     ]);
-    // tools: agent_toolset + create_artifact + mcp_toolset(kintone) + mcp_toolset(notify, #13)
-    expect(body.tools).toHaveLength(4);
-    expect(body.tools[2].type).toBe('mcp_toolset');
-    expect(body.tools[3]).toMatchObject({ type: 'mcp_toolset', mcp_server_name: 'notify' });
+    // tools: agent_toolset + create_artifact + update_plan(#128) + mcp_toolset(kintone) + mcp_toolset(notify, #13)
+    expect(body.tools).toHaveLength(5);
+    expect(body.tools[2]).toMatchObject({ type: 'custom', name: 'update_plan' });
+    expect(body.tools[3].type).toBe('mcp_toolset');
+    expect(body.tools[4]).toMatchObject({ type: 'mcp_toolset', mcp_server_name: 'notify' });
     // mcp_servers を notify toolset と整合させて必ず送る (kintone + notify)。
     // 送らないと「mcp_toolset references [notify] but no matching entry in mcp_servers」で 400。
     const servers = body.mcp_servers as Array<{ name: string }>;

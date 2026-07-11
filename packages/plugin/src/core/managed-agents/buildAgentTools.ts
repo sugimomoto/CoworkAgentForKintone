@@ -7,6 +7,7 @@
 import {
   CREATE_ARTIFACT_TOOL,
   KINTONE_MCP_SERVER_NAME,
+  UPDATE_PLAN_TOOL,
   buildNotifyToolset,
 } from '../bootstrap/agentToolDefs';
 import {
@@ -44,6 +45,7 @@ export function buildAgentTools(
       },
     },
     CREATE_ARTIFACT_TOOL as unknown as Record<string, unknown>,
+    UPDATE_PLAN_TOOL as unknown as Record<string, unknown>,
     {
       type: 'mcp_toolset',
       mcp_server_name: KINTONE_MCP_SERVER_NAME,

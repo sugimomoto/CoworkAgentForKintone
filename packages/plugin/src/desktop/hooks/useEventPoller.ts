@@ -52,12 +52,20 @@ export interface UseEventPollerProps {
   enabled: boolean;
 }
 
+/**
+ * #128: update_plan は artifact を持たない custom tool。pendingCustomToolUseIds は
+ * `toolUseId → artifactId` 型なので、plan 用にこの sentinel を artifactId に積む。
+ * responder はこれを tool_result body に載せるが、plan にとっては無害な余剰フィールド。
+ */
+const PLAN_TOOL_RESULT_SENTINEL = '__plan__';
+
 export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): void {
   const mergeMessage = useChatStore((s) => s.mergeMessage);
   const removeMessage = useChatStore((s) => s.removeMessage);
   const updateTool = useChatStore((s) => s.updateTool);
   const upsertArtifact = useChatStore((s) => s.upsertArtifact);
   const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
+  const setPlan = useChatStore((s) => s.setPlan);
   const addPendingCustomToolUse = useChatStore((s) => s.addPendingCustomToolUse);
   const removePendingCustomToolUse = useChatStore((s) => s.removePendingCustomToolUse);
   const setAgentRunning = useChatStore((s) => s.setAgentRunning);
@@ -225,6 +233,18 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
             if (!respondedIdsThisBatch.has(r.toolUseId)) {
               addPendingCustomToolUse(r.toolUseId, artifact.id);
             }
+          } else if (r.kind === 'set-plan') {
+            // #128: update_plan 受信 → PlanPanel を全置換 (空なら非表示に戻る)。
+            setPlan(r.plan);
+            debug('CustomTool', 'update_plan observed', {
+              toolUseId: r.toolUseId,
+              todos: r.plan.length,
+            });
+            // artifact を持たない custom tool なので sentinel を artifactId に積む
+            // (responder は { ok: true, artifactId } を返す。plan には無害な余剰フィールド)。
+            if (!respondedIdsThisBatch.has(r.toolUseId)) {
+              addPendingCustomToolUse(r.toolUseId, PLAN_TOOL_RESULT_SENTINEL);
+            }
           }
         }
         // Agent ターン進行状態の追従
@@ -306,5 +326,6 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
     setSessionTerminated,
     setBindingStatus,
     setActiveArtifact,
+    setPlan,
   ]);
 }

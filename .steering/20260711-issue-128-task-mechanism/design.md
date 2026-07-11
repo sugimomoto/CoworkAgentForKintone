@@ -158,9 +158,11 @@ if (e.name === UPDATE_PLAN_TOOL_NAME) {
 | **実行中セッション / 過去会話** | エージェントは version 参照。既存セッションは旧構成のまま、新規セッションから新ツール。過去会話の再生も `update_plan` イベントが無いだけ | 影響なし |
 | **Anthropic API** | custom tool は標準機能。beta ヘッダ変更なし（`managed-agents-2026-04-01`） | リスクなし |
 
-**決めたいこと（後方互換）**: 既存 custom エージェントに `update_plan` を**自動 reconcile で付与するか**、それとも**次回保存時に付く（それまでは非表示）で許容するか**。
-- 推奨: **軽量 reconcile で既存 custom にも付与**（tools に `update_plan` が無ければ追加する非破壊パッチ）。built-in の reconcile と同じ枠組みで実現でき、ユーザーが再保存しなくても機能が行き渡る。
-- ただし「ユーザー所有の custom を勝手に書き換える」懸念があるなら、**追加のみ・削除しない**方針を明示する（既存 tools/skills は保持し `update_plan` を足すだけ）。
+**決定（2026-07-11）: 既存 custom エージェントは "次回保存まで待つ（遅延）"。** 自動 reconcile は行わない。
+- built-in は toolsVersion bump → reconcile で自動付与。
+- custom（新規）は作成時に付与。
+- **custom（既存）は付与しない**。ユーザーがそのエージェントを編集保存したときに（`applyAgentEdit` の tools 再構築で）自然に付く。それまでは PlanPanel が出ないだけ（graceful degradation）。
+- ＝ ユーザー所有の custom を自動で書き換えない方針を優先。将来ニーズが出たら追加のみの reconcile を検討。
 
 **ロールバック安全性**: 将来 `update_plan` を外しても、エージェントが呼ばなくなるだけ。データ移行不要。
 
