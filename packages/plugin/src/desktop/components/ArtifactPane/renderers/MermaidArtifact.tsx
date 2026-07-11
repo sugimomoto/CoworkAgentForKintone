@@ -80,9 +80,25 @@ document.getElementById('zfit').addEventListener('click', () => { interacted = f
 // iframe のサイズが確定/変化した時に自動フィット（ユーザーが操作するまで）。
 // 初回描画時にペインがまだ 0/過渡サイズだと fit が効かず図が原点固定で見切れるため。
 try { new ResizeObserver(() => { if (!interacted) fit(); }).observe(viewport); } catch { /* ResizeObserver 非対応環境は初回 fit のみ */ }
+// mermaid は依存が多く esm.sh から個別 import すると芋づるのどれかが落ちて
+// "Importing a module script failed" になりやすい。?bundle で全依存を1ファイルに集約し、
+// 失敗時はキャッシュ回避しつつ数回リトライする（間欠的な CDN/ネットワーク障害対策）。
+async function loadMermaid(){
+  let err;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const url = 'https://esm.sh/mermaid@${MERMAID_VERSION}?bundle' + (i ? '&_r=' + i : '');
+      return (await import(url)).default;
+    } catch (e) {
+      err = e;
+      await new Promise((res) => setTimeout(res, 500 * (i + 1)));
+    }
+  }
+  throw new Error('mermaid の読み込みに失敗しました（CDN/ネットワーク）。再試行してください: ' + ((err && err.message) || err));
+}
 try {
   post('boot', null);
-  const m = (await import('https://esm.sh/mermaid@${MERMAID_VERSION}')).default;
+  const m = await loadMermaid();
   m.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default' });
   const graph = ${safeGraph};
   const { svg } = await m.render('mmd-' + Date.now(), graph);
