@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, it, expect } from 'vitest';
 
 import { PlanPanel } from './PlanPanel';
@@ -87,5 +88,28 @@ describe('PlanPanel (#128)', () => {
     // サマリをクリックすると完了行が展開される
     fireEvent.click(screen.getByText('3 件完了'));
     expect(screen.getByText('a')).toBeInTheDocument();
+  });
+
+  it('完了済み plan が新しい未完了 plan に置き換わると畳み込みがリセットされ展開表示になる', () => {
+    // allDone な plan は既定で畳まれる (行非表示)。同一マウントで新 plan に置換すると開く。
+    function Harness(): JSX.Element {
+      const [todos, setTodos] = useState<PlanTodo[]>([t('A', 'completed'), t('B', 'completed')]);
+      return (
+        <>
+          <button onClick={() => setTodos([t('新規1', 'in_progress', '新規1中'), t('新規2', 'pending')])}>
+            next
+          </button>
+          <PlanPanel todos={todos} />
+        </>
+      );
+    }
+    render(<Harness />);
+    // 初期 (全完了) は畳まれていて行が見えない
+    expect(screen.getByText('作業が完了しました')).toBeInTheDocument();
+    expect(screen.queryByText('新規1中')).not.toBeInTheDocument();
+    // 新しい未完了 plan に置換 → 自動で開き、行が見える
+    fireEvent.click(screen.getByText('next'));
+    expect(screen.getByText('新規1中')).toBeInTheDocument();
+    expect(screen.getByText('新規2')).toBeInTheDocument();
   });
 });

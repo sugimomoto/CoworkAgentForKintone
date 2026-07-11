@@ -367,7 +367,7 @@ describe('interpretEvent', () => {
       ]);
     });
 
-    it('入力不正 (todos が配列でない) でも set-plan (plan=[]) を返し tool を継続させる', () => {
+    it('入力不正 (todos が配列でない) は ack-plan を返し、既存 plan を消さず tool を継続させる', () => {
       const evt = {
         id: 'evt_plan_3',
         type: 'agent.custom_tool_use',
@@ -375,9 +375,8 @@ describe('interpretEvent', () => {
         input: { todos: 'oops' },
         processed_at: '...',
       } as unknown as SessionEvent;
-      expect(interpretEvent(evt)).toEqual([
-        { kind: 'set-plan', toolUseId: 'evt_plan_3', plan: [] },
-      ]);
+      // set-plan (plan=[]) を返すと setPlan([]) → null で既存 plan が消えてしまうため ack-plan。
+      expect(interpretEvent(evt)).toEqual([{ kind: 'ack-plan', toolUseId: 'evt_plan_3' }]);
     });
   });
 });

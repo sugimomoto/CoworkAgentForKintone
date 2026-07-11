@@ -7,7 +7,7 @@
 // 配色は CSS 変数トークン (--cw-*) を Tailwind arbitrary value で参照 (styles/tokens.css)。
 // 出所: docs/design-handoff/task-mechanism/PlanPanel.tsx (Claude Design ハンドオフ)。
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { planSummary, shouldGroupCompleted, todoLabel } from '../../core/chat/planTodos';
 
@@ -115,6 +115,19 @@ export function PlanPanel({ todos, running = true, defaultCollapsed }: Props): J
   const s = planSummary(todos);
   const [collapsed, setCollapsed] = useState(defaultCollapsed ?? s.allDone);
   const [completedOpen, setCompletedOpen] = useState(false);
+
+  // 完了済み plan (allDone) が新しい未完了 plan に置き換わったら開閉状態をリセットする。
+  // 同一 session で update_plan が「完了 → 別の新規計画」を出したとき、前 plan の
+  // 畳み込み (collapsed=true / completedOpen=true) が残って新 plan が畳まれたまま出るのを防ぐ。
+  // 進行中の通常更新 (allDone のまま変わらない) では発火しないのでユーザーの手動開閉は尊重する。
+  const prevAllDoneRef = useRef(s.allDone);
+  useEffect(() => {
+    if (prevAllDoneRef.current && !s.allDone) {
+      setCollapsed(false);
+      setCompletedOpen(false);
+    }
+    prevAllDoneRef.current = s.allDone;
+  }, [s.allDone]);
 
   if (!todos || todos.length === 0) return null; // plan 無し → 帯ごと非表示
 

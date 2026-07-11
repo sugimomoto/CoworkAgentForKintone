@@ -50,6 +50,12 @@ export type InterpretedEffect =
       kind: 'set-plan';
       toolUseId: string;
       plan: PlanTodo[];
+    }
+  | {
+      // #128: update_plan の入力が不正だったケース。plan は更新せず (既存を保持)、
+      // ツールを継続させるため responder に応答だけ返させる。
+      kind: 'ack-plan';
+      toolUseId: string;
     };
 
 export function interpretEvent(event: SessionEvent): InterpretedEffect[] {
@@ -140,9 +146,8 @@ export function interpretEvent(event: SessionEvent): InterpretedEffect[] {
       if (e.name === UPDATE_PLAN_TOOL_NAME) {
         const plan = parseUpdatePlanInput(e.input);
         if (!plan) {
-          // 入力不正: 計画は更新せず tool を継続させるためだけに pending に積む。
-          // (set-plan effect は返さないので既存 plan は保持される)
-          return [{ kind: 'set-plan', toolUseId, plan: [] }];
+          // 入力不正: 既存 plan は消さず、ツール継続のため応答だけ返す (ack-plan)。
+          return [{ kind: 'ack-plan', toolUseId }];
         }
         return [{ kind: 'set-plan', toolUseId, plan }];
       }

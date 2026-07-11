@@ -245,6 +245,12 @@ export function useEventPoller({ sessionId, enabled }: UseEventPollerProps): voi
             if (!respondedIdsThisBatch.has(r.toolUseId)) {
               addPendingCustomToolUse(r.toolUseId, PLAN_TOOL_RESULT_SENTINEL);
             }
+          } else if (r.kind === 'ack-plan') {
+            // #128: 入力不正な update_plan。plan は変更せず (既存保持)、応答だけ返す。
+            debug('CustomTool', 'update_plan invalid input — ack only', { toolUseId: r.toolUseId });
+            if (!respondedIdsThisBatch.has(r.toolUseId)) {
+              addPendingCustomToolUse(r.toolUseId, PLAN_TOOL_RESULT_SENTINEL);
+            }
           }
         }
         // Agent ターン進行状態の追従
