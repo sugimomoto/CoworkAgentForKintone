@@ -14,6 +14,7 @@ import { createArtifactSlice } from './slices/artifactSlice';
 import { createBindingSlice } from './slices/bindingSlice';
 import { createFileSlice } from './slices/fileSlice';
 import { createMessageSlice } from './slices/messageSlice';
+import { createPlanSlice } from './slices/planSlice';
 import { createSessionSlice } from './slices/sessionSlice';
 
 import type { BindingStatus, ChatState, ChatStatus, ChatView } from './types';
@@ -51,6 +52,7 @@ const INITIAL_STATE = {
   activeArtifactId: null as string | null,
   pendingCustomToolUseIds: new Map<string, string>(),
   attachedFiles: [] as AttachedFile[],
+  plan: null as ChatState['plan'],
   // Customizer wedge V1
   currentAgentId: null as string | null,
   builtInAgents: [] as AgentRecord[],
@@ -72,6 +74,7 @@ export const useChatStore = create<ChatState>()((...a) => {
     ...createAgentSlice(...a),
     ...createArtifactSlice(...a),
     ...createFileSlice(...a),
+    ...createPlanSlice(...a),
 
     // ─── 跨りオペレーション ──────────────────────────────────────────────
     reset: () =>
@@ -84,7 +87,8 @@ export const useChatStore = create<ChatState>()((...a) => {
         workflowHistory: new Map(),
       }),
 
-    resetConversation: () => set({ messages: [] }),
+    // #128: 履歴選択 (selectSession) はこれを呼ぶ。前セッションの計画を残さない。
+    resetConversation: () => set({ messages: [], plan: null }),
 
     startNewConversation: () =>
       // #121: 会話リセットと添付クリアは分離する。添付は送信時 (handleSubmit の
@@ -101,6 +105,7 @@ export const useChatStore = create<ChatState>()((...a) => {
         activeArtifactId: null,
         pendingCustomToolUseIds: new Map(),
         pendingAgentProposal: null,
+        plan: null,
       }),
   };
 });

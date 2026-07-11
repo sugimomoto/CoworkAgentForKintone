@@ -146,6 +146,51 @@ export const CREATE_ARTIFACT_TOOL = {
   },
 } as const;
 
+/**
+ * `update_plan` Custom Tool 定義 (#128 タスク機構 / TodoWrite 正典準拠)。
+ * 多段の作業でエージェントがサブタスクの計画と進捗を宣言・更新する。呼ぶたびに現在の全リストで
+ * 置き換わる。Plugin 側で `agent.custom_tool_use` を観測したら chatStore の plan を差し替え、
+ * `user.custom_tool_result` を `{ ok: true }` で返してターンを継続させる。非破壊・自動実行 (承認なし)。
+ */
+export const UPDATE_PLAN_TOOL_NAME = 'update_plan';
+
+export const UPDATE_PLAN_TOOL = {
+  type: 'custom',
+  name: UPDATE_PLAN_TOOL_NAME,
+  description:
+    '多段の作業 (複数ファイル / 複数ツール / 破壊的操作を含む依頼) に着手する前と進行中に、' +
+    'サブタスクの計画と進捗を宣言・更新する (TodoWrite 相当)。呼ぶたびに現在の全リストで置き換わる。' +
+    '作業の追跡は頭の中で行わず必ずこのツールで外部化すること。' +
+    '単純な 1 手で終わる依頼では使わない (冗長になる)。',
+  input_schema: {
+    type: 'object',
+    properties: {
+      todos: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            content: {
+              type: 'string',
+              description: 'サブタスク (命令形・簡潔)。例:「案件データを取得する」',
+            },
+            status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] },
+            activeForm: {
+              type: 'string',
+              description:
+                '実行中に表示する現在進行形ラベル。例:「案件データを取得中」。' +
+                '内部処理名でなく意図ベースで書く。',
+            },
+          },
+          required: ['content', 'status', 'activeForm'],
+        },
+        description: '現在のサブタスク一覧 (先頭から実行順)。in_progress は同時に 1 つが目安。',
+      },
+    },
+    required: ['todos'],
+  },
+} as const;
+
 /** 通知 MCP server の name (mcp_servers と mcp_toolset で参照される識別子, #13) */
 export const NOTIFY_MCP_SERVER_NAME = 'notify';
 

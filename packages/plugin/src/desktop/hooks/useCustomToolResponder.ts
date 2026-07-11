@@ -57,7 +57,7 @@ export function useCustomToolResponder({ sessionId, enabled }: UseCustomToolResp
       store.addMessage({
         id: `custom-tool-error-${toolUseId}`,
         kind: 'agent',
-        text: '⚠ アーティファクトの結果送信に失敗しました。もう一度お試しください。',
+        text: '⚠ ツール結果の送信に失敗しました。もう一度お試しください。',
       });
       warn('CustomTool', `responder: give up ${toolUseId} (${reason})`);
     };

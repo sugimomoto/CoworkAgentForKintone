@@ -8,8 +8,9 @@
 //   - 表示に関係しないイベントは空配列を返す
 
 import { parseCreateArtifactInput } from '../artifacts/types';
-import { PROPOSE_AGENT_TOOL_NAME } from '../bootstrap/agentToolDefs';
+import { PROPOSE_AGENT_TOOL_NAME, UPDATE_PLAN_TOOL_NAME } from '../bootstrap/agentToolDefs';
 import { KINTONE_TOOL_NAMES } from '../bootstrap/builtInAgents';
+import { parseUpdatePlanInput } from '../chat/planTodos';
 import { HIDDEN_BLOCK_MARKER } from '../files/messageContent';
 
 import type { AgentEditDraft } from './agentDetailApi';
@@ -17,6 +18,7 @@ import type { SessionEvent } from './types';
 import type { ArtifactKind, CreateArtifactInput } from '../artifacts/types';
 import type { AgentColor, AgentGlyph } from '../bootstrap/agentTypes';
 import type { KintoneToolName } from '../bootstrap/builtInAgents';
+import type { PlanTodo } from '../chat/planTodos';
 import type { ChatMessage, ToolMessage } from '../chat/types';
 
 export type InterpretedEffect =
@@ -40,6 +42,20 @@ export type InterpretedEffect =
       rationale: string;
       /** 提案された model。createCustomAgentFrom の base 選定に使う (AgentEditDraft には載せない)。 */
       model: 'opus' | 'sonnet';
+    }
+  | {
+      // #128 タスク機構: update_plan 受信。useEventPoller がこの effect を見たら:
+      //  1. chatStore.setPlan(plan) で PlanPanel を更新 (全置換 / 空なら非表示)
+      //  2. pendingCustomToolUseIds に toolUseId を積む (responder が { ok: true } を返す)
+      kind: 'set-plan';
+      toolUseId: string;
+      plan: PlanTodo[];
+    }
+  | {
+      // #128: update_plan の入力が不正だったケース。plan は更新せず (既存を保持)、
+      // ツールを継続させるため responder に応答だけ返させる。
+      kind: 'ack-plan';
+      toolUseId: string;
     };
 
 export function interpretEvent(event: SessionEvent): InterpretedEffect[] {
@@ -126,6 +142,14 @@ export function interpretEvent(event: SessionEvent): InterpretedEffect[] {
             },
           },
         ];
+      }
+      if (e.name === UPDATE_PLAN_TOOL_NAME) {
+        const plan = parseUpdatePlanInput(e.input);
+        if (!plan) {
+          // 入力不正: 既存 plan は消さず、ツール継続のため応答だけ返す (ack-plan)。
+          return [{ kind: 'ack-plan', toolUseId }];
+        }
+        return [{ kind: 'set-plan', toolUseId, plan }];
       }
       if (e.name === PROPOSE_AGENT_TOOL_NAME) {
         const parsed = parseProposeAgentInput(e.input);

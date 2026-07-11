@@ -18,6 +18,7 @@ import {
   DESTRUCTIVE_TOOL_NAMES,
   KINTONE_MCP_SERVER_NAME,
   KINTONE_TOOL_NAMES,
+  UPDATE_PLAN_TOOL,
   buildMcpServers,
 } from './agentToolDefs';
 
@@ -30,7 +31,7 @@ export const DEFAULT_AGENT_NAME = 'Cowork Agent - Default';
  * system プロンプトのリビジョン番号。プロンプト本文を変更したらこの値を上げる。
  * metadata に含めるので、旧プロンプトの Agent は別物として扱われ、新規 Agent が作成される。
  */
-export const DEFAULT_AGENT_PROMPT_VERSION = 'v19';
+export const DEFAULT_AGENT_PROMPT_VERSION = 'v20';
 
 /**
  * Default Agent に attach する Anthropic 製 Skills (Issue #18 Step 1)。
@@ -78,6 +79,12 @@ export const DEFAULT_AGENT_SYSTEM_PROMPT = [
   '  - 「全件削除」「全部更新」のような曖昧な指示は範囲を確認してから進めてください。',
   '  - フィールドコードや値型を間違えやすいので、迷ったら kintone-get-form-fields で型を確認してから書き込みツールを呼んでください。',
   '  - ツール呼出でエラーが返ったら、ユーザに分かりやすく状況を説明してください (例: 「レコードが見つかりません」「フィールド X は必須です」など)。',
+  '',
+  '【計画 (update_plan) — 作業の外部化】',
+  '  - 多段の依頼 (複数ファイル / 複数ツール / 破壊的操作を含む) は、着手前に `update_plan` で',
+  '    サブタスク一覧を宣言し、進行に合わせて status を更新する (in_progress は常に 1 つ、完了で completed)。',
+  '    各項目に activeForm (「〜中」の意図ベースの現在進行形ラベル) を必ず付ける。',
+  '  - 作業の追跡を頭の中だけで行わない。ただし単純な 1 手で終わる依頼では使わない (冗長になる)。',
   '',
   '【成果物 (Artifact) — 必ず守ること】',
   '  - 以下のいずれかを返すときは、**必ず `create_artifact` ツールを呼び出して**ください。',
@@ -180,6 +187,7 @@ function buildAgentTools(includeMcp: boolean): Array<Record<string, unknown>> {
     },
     // Plugin 側で処理する Custom Tool (Anthropic 側の実行ではない)
     CREATE_ARTIFACT_TOOL as unknown as Record<string, unknown>,
+    UPDATE_PLAN_TOOL as unknown as Record<string, unknown>, // #128
   ];
   if (includeMcp) {
     // Anthropic 側で MCP の write 系ツールが default_config の always_allow を伝播しない

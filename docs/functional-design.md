@@ -24,6 +24,7 @@
 > - §0.9 **エージェントデザイナー** (built-in 3rd variant + `propose_agent` Custom Tool + `agent-draft` artifact)
 > - §0.10 **定期実行 (Deployments / cron)** (Scheduled Deployments で Agent を cron 自律起動)
 > - §0.11 **アプリデザイナー** (built-in 4th variant — 資料/PDF からアプリ設計・構築、管理系ツール直実行)
+> - §0.13 **タスク機構** (`update_plan` Custom Tool + PlanPanel 進捗帯 — 1 セッションのゴール到達を計画/進捗で外部化)
 >
 > §0.1〜§0.4 (OAuth + MCP) は変更なし。これら V1 機能はすべて §0.1〜§0.4 の通信経路の上に乗っています。
 
@@ -505,6 +506,20 @@ kintone 以外の**リモート MCP サーバー**をテナントに登録し、
 **transport の使い分け (重要な制約):** 設定画面のツール取得プローブは `kintone.proxy` (明示ヘッダ)、runtime のユーザー接続は `kintone.plugin.app.proxy` (proxyConfig 登録ヘッダのみ確実に付く)。詳細は [[kintone-proxy-transport-rules]] / §7。
 
 **発展 (別 Issue):** エンドポイント自動発見 + 動的クライアント登録(DCR)/Client ID Metadata Document (#132)、共有 APIキー (#134)、カスタムヘッダー認証 (#135・Anthropic の MCP credential が Bearer 固定のため上流待ち)。
+
+---
+
+### 0.13 タスク機構 (update_plan + PlanPanel) — #128
+
+**1 セッションがゴールに到達するまでの「計画 → 進捗 → 完了」を外部化する仕組み**。永続台帳やスケジュール実行 (§0.10 Deployments は別軸) ではなく、**session スコープの進行管理**に限定する。エージェントが多段作業を頭の中だけで追わず、可視のチェックリストとして宣言・更新する。
+
+**設計上の要点:**
+
+- **`update_plan` Custom Tool (TodoWrite 正典準拠)**: Managed Agents の native toolset (`agent_toolset_20260401`) には task/todo ツールが無いため、`create_artifact` / `propose_agent` と同じ Custom Tool パターンで実装。入力は `{ todos: [{ content, status: pending|in_progress|completed, activeForm }] }` で、呼ぶたびに**現在の全リストで置換** (full-replace)。`activeForm` は「〜中」の意図ベース現在進行形ラベル。**全エージェントに常設** (built-in 4 variant + Default Agent + Custom Agent)。非破壊・自動実行 (承認カード無し)。
+- **イベント経路**: `agent.custom_tool_use(update_plan)` → `eventInterpreter` が `parseUpdatePlanInput` で検証し `{kind:'set-plan'}` effect を返す → `useEventPoller` が `chatStore.setPlan()` で `plan` を差し替え、`useCustomToolResponder` が `user.custom_tool_result {ok:true}` を返してターン継続。plan は artifact を持たないため responder には sentinel を積む。
+- **PlanPanel (進捗帯)**: メッセージスクロールの**外側** (flex-none) に兄弟配置し、Composer の上にピン留め。stick-to-bottom (#133) と干渉しない。計画無し (`plan === null` / 空) で帯ごと非表示。全完了で teal 終端 (emerald「応答完了」divider とは色・レイヤで棲み分け)。長い plan は完了行を「N 件完了」に畳む。表示専用 — 更新は必ず `update_plan` 経由。
+- **session スコープ**: `plan` は `chatStore` に持ち、履歴選択 (`resetConversation`) / 新規会話 (`startNewConversation`) / reset でクリア。localStorage・Memory Store・kintone アプリには保存しない (ステートレス原則 §3.2)。
+- **後方互換**: 追加のみ + graceful degradation。既存 Custom Agent は次回保存時に `buildAgentTools` 再構築で `update_plan` を取得 (遅延反映)。Default Agent は `DEFAULT_AGENT_PROMPT_VERSION` bump (v19→v20)、built-in は `computeToolsVersion` ドリフトで reconcile。update_plan を持たないエージェントは PlanPanel が出ないだけで無害。
 
 ---
 

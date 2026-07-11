@@ -20,6 +20,7 @@ import { Composer, type ComposerHandle } from './components/Composer';
 import { ConnectKintoneButton } from './components/ConnectKintoneButton';
 import { ConversationUtilityBar } from './components/ConversationUtilityBar';
 import { MessageList } from './components/MessageList';
+import { PlanPanel } from './components/PlanPanel';
 import { PresetAgentLanding } from './components/PresetAgentLanding';
 import { WelcomeMessage } from './components/WelcomeMessage';
 import { Header } from './Header';
@@ -55,6 +56,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   const activeArtifactId = useChatStore((s) => s.activeArtifactId);
   const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
   const attachedFiles = useChatStore((s) => s.attachedFiles);
+  const plan = useChatStore((s) => s.plan);
   const removeAttachedFile = useChatStore((s) => s.removeAttachedFile);
   const clearAttachedFiles = useChatStore((s) => s.clearAttachedFiles);
   const { attach } = useFileAttacher();
@@ -378,6 +380,9 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
                 agentPhase={agentPhase}
               />
             )}
+            {/* #128: 進捗チェックリスト帯。会話スクロールの外側 (flex-none) に兄弟配置し、
+                スクロール追従 (#133) と干渉させない。plan が null/空なら自動で非表示。 */}
+            {plan && <PlanPanel todos={plan} running={isAgentRunning} />}
             {showConnectButton ? (
               <ConnectKintoneButton
                 status={bindingStatus}

@@ -24,6 +24,7 @@ import {
   CREATE_ARTIFACT_TOOL,
   KINTONE_MCP_SERVER_NAME,
   PROPOSE_AGENT_TOOL,
+  UPDATE_PLAN_TOOL,
   buildMcpServers,
   buildNotifyToolset,
 } from './agentToolDefs';
@@ -208,6 +209,8 @@ function buildBuiltInAgentTools(
       },
     },
     CREATE_ARTIFACT_TOOL as unknown as Record<string, unknown>,
+    // #128: 全エージェントにタスク計画/進捗ツールを付与。
+    UPDATE_PLAN_TOOL as unknown as Record<string, unknown>,
   ];
   if (purpose === 'customizer-opus') {
     baseTools.push(PROPOSE_AGENT_TOOL as unknown as Record<string, unknown>);
@@ -334,6 +337,7 @@ function computeToolsVersion(purpose: BuiltInPurpose, spec: BuiltInAgentSpec): s
   const parts = [
     'agent_toolset_20260401',
     'create_artifact',
+    'update_plan', // #128: タスク計画/進捗ツール → 既存 Agent を reconcile で追従させる
     ...(purpose === 'customizer-opus' ? ['propose_agent'] : []),
     `mcp:${mcpSig}`,
     'notify', // #13: send_notification 常設 → 既存 Agent を reconcile で追従させる
