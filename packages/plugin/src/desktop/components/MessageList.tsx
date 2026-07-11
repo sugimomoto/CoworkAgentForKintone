@@ -1,6 +1,10 @@
 // Cowork Agent for kintone — メッセージ一覧
 //
 // kind 別に対応するコンポーネントへ振り分ける。
+// stick-to-bottom (#133): 最下部にいる限りエージェント応答/ストリーミングに追従し、
+// ユーザーが上にスクロールしたら追従を解除、「最新へ」ボタンで復帰する。
+
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { AgentMessage } from './MessageItem/AgentMessage';
 import { ArtifactRefMessage } from './MessageItem/ArtifactRefMessage';
@@ -70,12 +74,74 @@ export function MessageList({
     isIdle &&
     messages.some((m) => m.kind === 'agent' || m.kind === 'tool' || m.kind === 'artifact-ref');
 
+  // ── stick-to-bottom (#133) ──
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true); // 追従中か（最下部付近にいるか）
+  const [showJump, setShowJump] = useState(false);
+  const NEAR_BOTTOM_PX = 60; // この距離以内なら「最下部にいる」とみなす
+
+  const scrollToBottom = useCallback((smooth = false): void => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // scrollTo は一部環境(jsdom 等)で未実装のため scrollTop へフォールバック。
+    if (typeof el.scrollTo === 'function') {
+      el.scrollTo({ top: el.scrollHeight, ...(smooth ? { behavior: 'smooth' } : {}) });
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, []);
+
+  const handleScroll = useCallback((): void => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottom = dist <= NEAR_BOTTOM_PX;
+    stickRef.current = atBottom;
+    setShowJump(!atBottom);
+  }, []);
+
+  // 初回表示は最下部から（履歴復元時も最新が見える）
+  useLayoutEffect(() => {
+    scrollToBottom();
+    // 初回のみ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 新規メッセージ（配列参照変化）で追従
+  useEffect(() => {
+    if (stickRef.current) scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  // ストリーミング等で単一メッセージの本文が伸びる（配列参照が変わらない）ケースにも追従。
+  // 内容ラッパの高さ変化を ResizeObserver で拾う。
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      if (stickRef.current) scrollToBottom();
+    });
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, [scrollToBottom]);
+
+  const jumpToBottom = useCallback((): void => {
+    stickRef.current = true;
+    setShowJump(false);
+    scrollToBottom(true);
+  }, [scrollToBottom]);
+
   return (
     // min-h-0: 親 (ChatPanel) の flex 列内で本要素が flex-1 だけだとコンテンツの自然高さに
     // 押し負けて Composer を画面外へ追いやってしまう。min-h-0 で「親より小さくなれる」状態に
     // して、内側の overflow-y-auto を効かせる (flex+overflow ネストの定石)。
     <div className="relative flex flex-1 flex-col min-h-0">
-      <div className="flex flex-1 flex-col gap-[14px] overflow-y-auto overscroll-contain px-[16px] py-[18px]">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex flex-1 flex-col overflow-y-auto overscroll-contain px-[16px] py-[18px]"
+      >
+      <div ref={contentRef} className="flex flex-col gap-[14px]">
       {messages.map((m) => {
         const showRetry = m.kind === 'tool' && m.id === lastErrorToolId;
         const rendered = renderMessage(
@@ -115,6 +181,27 @@ export function MessageList({
         </div>
       )}
       </div>
+      </div>
+      {showJump && (
+        <button
+          type="button"
+          data-testid="scroll-to-bottom"
+          aria-label="最新のメッセージへ"
+          onClick={jumpToBottom}
+          className="absolute bottom-[10px] left-1/2 z-10 flex -translate-x-1/2 items-center gap-[4px] rounded-full border border-card-border bg-card px-[11px] py-[5px] text-[11px] font-medium text-muted shadow-md hover:text-accent"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
+            <path
+              d="M3 5l3 3 3-3"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          最新へ
+        </button>
+      )}
       <ProgressIndicator />
     </div>
   );

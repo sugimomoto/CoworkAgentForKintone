@@ -1,7 +1,14 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 
 import { MessageList, type ChatMessage } from './MessageList';
+
+/** jsdom はレイアウトしないので scroll 指標を注入して位置を模擬する。 */
+function setScrollMetrics(el: HTMLElement, scrollTop: number, clientHeight: number, scrollHeight: number): void {
+  Object.defineProperty(el, 'clientHeight', { configurable: true, value: clientHeight });
+  Object.defineProperty(el, 'scrollHeight', { configurable: true, value: scrollHeight });
+  el.scrollTop = scrollTop;
+}
 
 describe('MessageList', () => {
   it('空配列のとき何もレンダリングしない (エラーにもならない)', () => {
@@ -93,6 +100,39 @@ describe('MessageList', () => {
       ];
       render(<MessageList messages={messages} onRetryTool={() => undefined} />);
       expect(screen.queryAllByRole('button', { name: 'もう一度試す' })).toHaveLength(0);
+    });
+  });
+
+  describe('stick-to-bottom (#133)', () => {
+    const messages: ChatMessage[] = [{ id: 'm1', kind: 'agent', text: 'A' }];
+
+    function scroller(container: HTMLElement): HTMLElement {
+      return container.querySelector('.overflow-y-auto') as HTMLElement;
+    }
+
+    it('最下部にいる間は「最新へ」ボタンを出さない', () => {
+      const { container } = render(<MessageList messages={messages} />);
+      setScrollMetrics(scroller(container), 700, 300, 1000); // dist = 0
+      fireEvent.scroll(scroller(container));
+      expect(screen.queryByTestId('scroll-to-bottom')).toBeNull();
+    });
+
+    it('上にスクロールすると「最新へ」ボタンが出る', () => {
+      const { container } = render(<MessageList messages={messages} />);
+      setScrollMetrics(scroller(container), 0, 300, 1000); // dist = 700 > 60
+      fireEvent.scroll(scroller(container));
+      expect(screen.getByTestId('scroll-to-bottom')).toBeInTheDocument();
+    });
+
+    it('「最新へ」を押すと追従に復帰しボタンが消える', () => {
+      const { container } = render(<MessageList messages={messages} />);
+      const el = scroller(container);
+      setScrollMetrics(el, 0, 300, 1000);
+      fireEvent.scroll(el);
+      expect(screen.getByTestId('scroll-to-bottom')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('scroll-to-bottom'));
+      expect(screen.queryByTestId('scroll-to-bottom')).toBeNull();
+      expect(el.scrollTop).toBe(el.scrollHeight); // 最下部へスクロール
     });
   });
 });
