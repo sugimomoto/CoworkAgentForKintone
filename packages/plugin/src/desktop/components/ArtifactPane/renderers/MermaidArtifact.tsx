@@ -42,7 +42,7 @@ ${POST_HELPER_SCRIPT}
 const layer = document.getElementById('layer');
 const viewport = document.getElementById('viewport');
 const controls = document.getElementById('controls');
-let scale = 1, tx = 0, ty = 0, natW = 0, natH = 0;
+let scale = 1, tx = 0, ty = 0, natW = 0, natH = 0, interacted = false;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 function apply(){ layer.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; }
 function fit(){
@@ -56,6 +56,7 @@ function fit(){
   apply();
 }
 function zoomAt(cx, cy, factor){
+  interacted = true;
   const ns = clamp(scale * factor, 0.05, 12);
   tx = cx - (cx - tx) * (ns / scale);
   ty = cy - (cy - ty) * (ns / scale);
@@ -68,14 +69,17 @@ viewport.addEventListener('wheel', (e) => {
   zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.1 : 1 / 1.1);
 }, { passive: false });
 let drag = false, ox = 0, oy = 0;
-viewport.addEventListener('pointerdown', (e) => { drag = true; ox = e.clientX - tx; oy = e.clientY - ty; viewport.setPointerCapture(e.pointerId); viewport.classList.add('grabbing'); });
+viewport.addEventListener('pointerdown', (e) => { drag = true; interacted = true; ox = e.clientX - tx; oy = e.clientY - ty; viewport.setPointerCapture(e.pointerId); viewport.classList.add('grabbing'); });
 viewport.addEventListener('pointermove', (e) => { if (!drag) return; tx = e.clientX - ox; ty = e.clientY - oy; apply(); });
 const endDrag = () => { drag = false; viewport.classList.remove('grabbing'); };
 viewport.addEventListener('pointerup', endDrag);
 viewport.addEventListener('pointercancel', endDrag);
 document.getElementById('zin').addEventListener('click', () => zoomCenter(1.25));
 document.getElementById('zout').addEventListener('click', () => zoomCenter(0.8));
-document.getElementById('zfit').addEventListener('click', fit);
+document.getElementById('zfit').addEventListener('click', () => { interacted = false; fit(); });
+// iframe のサイズが確定/変化した時に自動フィット（ユーザーが操作するまで）。
+// 初回描画時にペインがまだ 0/過渡サイズだと fit が効かず図が原点固定で見切れるため。
+try { new ResizeObserver(() => { if (!interacted) fit(); }).observe(viewport); } catch { /* ResizeObserver 非対応環境は初回 fit のみ */ }
 try {
   post('boot', null);
   const m = (await import('https://esm.sh/mermaid@${MERMAID_VERSION}')).default;
