@@ -51,7 +51,7 @@ describe('PlanPanel (#128)', () => {
     expect(screen.getAllByText('集計中').length).toBeGreaterThan(0);
   });
 
-  it('停止中 (running=false) に in_progress が残ると「作業を中断しました」+ 中断バッジ表示', () => {
+  it('停止中 (running=false) に in_progress が残ると「作業を一時停止中」+ 中断バッジ表示', () => {
     render(
       <PlanPanel
         todos={[t('取得する', 'completed'), t('集計する', 'in_progress', '集計中')]}
@@ -59,7 +59,7 @@ describe('PlanPanel (#128)', () => {
         defaultCollapsed={false}
       />,
     );
-    expect(screen.getByText('作業を中断しました')).toBeInTheDocument();
+    expect(screen.getByText('作業を一時停止中')).toBeInTheDocument();
     expect(screen.getByText('中断')).toBeInTheDocument(); // 実行中バッジが中断に変わる
     expect(screen.queryByText('実行中')).not.toBeInTheDocument();
   });
@@ -67,7 +67,7 @@ describe('PlanPanel (#128)', () => {
   it('全完了なら running=false でも「中断」ではなく「作業が完了しました」', () => {
     render(<PlanPanel todos={[t('A', 'completed'), t('B', 'completed')]} running={false} />);
     expect(screen.getByText('作業が完了しました')).toBeInTheDocument();
-    expect(screen.queryByText('作業を中断しました')).not.toBeInTheDocument();
+    expect(screen.queryByText('作業を一時停止中')).not.toBeInTheDocument();
   });
 
   it('長い plan: 完了行を「N 件完了」に畳み、開くと展開できる', () => {

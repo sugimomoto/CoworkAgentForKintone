@@ -139,7 +139,7 @@ export function PlanPanel({ todos, running = true, defaultCollapsed }: Props): J
   const headTitle = s.allDone
     ? '作業が完了しました'
     : stalled
-      ? '作業を中断しました'
+      ? '作業を一時停止中'
       : collapsed && s.active
         ? s.active.activeForm
         : '作業を実行中';
