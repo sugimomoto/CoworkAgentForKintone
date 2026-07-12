@@ -107,6 +107,19 @@ describe('resolveAgentContextStore', () => {
     const s2 = await resolveAgentContextStore({ kintoneDomain: 'acme.cybozu.com', kintoneUserCode: 'tanaka', agentId: 'agent_biz' });
     expect(s1.name).not.toBe(s2.name);
   });
+
+  it('デリミタ (:) を含む userCode/agentId でも別ユーザーと衝突しない (encode で分離)', async () => {
+    // 素の連結だと ('a:b','c') と ('a','b:c') が同名になりうる → encode で回避
+    const s1 = await resolveAgentContextStore({ kintoneDomain: 'd.cybozu.com', kintoneUserCode: 'a:b', agentId: 'c' });
+    _resetResolveMemoryStoreCache();
+    const s2 = await resolveAgentContextStore({ kintoneDomain: 'd.cybozu.com', kintoneUserCode: 'a', agentId: 'b:c' });
+    expect(s1.name).not.toBe(s2.name);
+  });
+
+  it('通常の英数 userCode は encode 後も従来名のまま (既存 store 互換)', async () => {
+    const s = await resolveUserPreferencesStore(ctx);
+    expect(s.name).toBe('cowork:pref:acme.cybozu.com:sato');
+  });
 });
 
 describe('resolveMemoryResources', () => {

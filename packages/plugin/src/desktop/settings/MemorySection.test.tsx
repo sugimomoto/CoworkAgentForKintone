@@ -94,6 +94,35 @@ describe('MemorySection (#15 Step 2)', () => {
     expect(props.onDelete).toHaveBeenCalledWith({ storeKind: 'preferences', fileId: 'm1' });
   });
 
+  it('削除確認を開いた後に対象ファイルが一覧から消えたらダイアログを閉じる (stale 回避)', () => {
+    const onSelect = vi.fn();
+    const base: React.ComponentProps<typeof MemorySection> = {
+      stores: STORES,
+      selection: null,
+      onSelect,
+      mode: 'view',
+      onModeChange: vi.fn(),
+      asyncState: 'idle',
+      draft: '',
+      onDraftChange: vi.fn(),
+      onSave: vi.fn(),
+      onReload: vi.fn(),
+      onDelete: vi.fn(),
+    };
+    const { rerender } = render(<MemorySection {...base} />);
+    const row = screen.getByTestId('memory-file-general.md');
+    fireEvent.click(row.querySelector('button[aria-label="削除"]')!);
+    expect(screen.getByTestId('memory-delete-confirm')).toBeInTheDocument();
+
+    // general.md が消えた stores で再描画 → ダイアログは消える (空ファイル名で出さない)
+    const withoutGeneral: MemoryStoreView[] = [
+      { ...STORES[0]!, files: STORES[0]!.files.filter((f) => f.id !== 'm1') },
+      STORES[1]!,
+    ];
+    rerender(<MemorySection {...base} stores={withoutGeneral} />);
+    expect(screen.queryByTestId('memory-delete-confirm')).toBeNull();
+  });
+
   it('loading では選択ファイル領域にスケルトンを出す', () => {
     setup({ asyncState: 'loading', selection: { storeKind: 'preferences', fileId: 'm1' } });
     // Markdown 本文は出ない (スケルトン表示)

@@ -58,12 +58,22 @@ const AGENT_CONTEXT_SEED: SeedFile[] = [
   },
 ];
 
-/** identity を兼ねる store 名。find のキー・mount slug 元。 */
+/**
+ * identity を兼ねる store 名。find のキー・mount slug 元。
+ *
+ * セキュリティ: 各要素を encodeURIComponent する。素の `:` 連結だと、`:` を含む
+ * kintoneUserCode 等でセグメント境界が曖昧になり、別ユーザーの store 名と衝突して
+ * per-user 分離が破れる恐れがある (例: user='a:b' + agent='c' と user='a' + agent='b:c')。
+ * encode で `:` → `%3A` となり境界が一意に定まる (通常の英数コードは不変なので既存 store とも互換)。
+ */
+function seg(v: string): string {
+  return encodeURIComponent(v);
+}
 function preferencesStoreName(ctx: PreferencesStoreContext): string {
-  return `cowork:pref:${ctx.kintoneDomain}:${ctx.kintoneUserCode}`;
+  return `cowork:pref:${seg(ctx.kintoneDomain)}:${seg(ctx.kintoneUserCode)}`;
 }
 function agentContextStoreName(ctx: AgentContextStoreContext): string {
-  return `cowork:agentctx:${ctx.kintoneDomain}:${ctx.kintoneUserCode}:${ctx.agentId}`;
+  return `cowork:agentctx:${seg(ctx.kintoneDomain)}:${seg(ctx.kintoneUserCode)}:${seg(ctx.agentId)}`;
 }
 
 // name → 解決中 Promise。連投時の重複作成を防ぐ。

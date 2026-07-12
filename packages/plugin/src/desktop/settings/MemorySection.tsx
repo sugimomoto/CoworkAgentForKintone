@@ -112,13 +112,15 @@ export function MemorySection({
       )}
 
       {/* ── 削除確認 ── */}
-      {pendingDelete && (
+      {/* pendingFile が無い = 対象ファイルが一覧から消えた (別処理で削除/再読込) →
+          ファイル名が空のダイアログを出さず、そのまま閉じる。 */}
+      {pendingDelete && pendingFile && (
         <ConfirmDialog
           testId="memory-delete-confirm"
           title="メモリファイルを削除"
           message={
             <>
-              <code className="font-mono text-text">{basename(pendingFile?.path ?? '')}</code>{' '}
+              <code className="font-mono text-text">{basename(pendingFile.path)}</code>{' '}
               を削除します。エージェントはこの記憶を参照できなくなります。
             </>
           }
@@ -201,7 +203,15 @@ function FileRow({
   const empty = file.sizeBytes <= 0;
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       data-testid={`memory-file-${basename(file.path)}`}
       className={[
         'group flex cursor-pointer items-center gap-[11px] px-3.5 py-2.5',
