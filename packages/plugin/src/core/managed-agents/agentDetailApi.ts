@@ -23,7 +23,7 @@ import {
   resolveNotifyKey,
   unregisterNotifyWebhook,
 } from '../bootstrap/notifyRegistration';
-import { invalidateCustomPersona } from '../bootstrap/resolveCustomPersona';
+import { invalidateStoredPersona } from '../bootstrap/resolveStoredPersona';
 import { AGENT_TYPE, METADATA_SOURCE } from '../constants';
 import {
   META_KEY_MCP_ATTACHMENTS,
@@ -174,7 +174,7 @@ export async function applyAgentEdit(
   }
 
   // #141: 焼き込み system (= persona) が変わるので、session override 用の persona キャッシュを破棄。
-  invalidateCustomPersona(agentId);
+  invalidateStoredPersona(agentId);
 
   return updateAgent(agentId, {
     version: existing.version,

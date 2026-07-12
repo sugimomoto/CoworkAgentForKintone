@@ -114,8 +114,9 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
     clientIdTrimmed.length > 0 &&
     clientSecretTrimmed.length > 0;
   // #141: base override を編集しただけでも保存可能にする (再保存時は secret 未入力でも可)。
+  // 比較は trim 正規化 (空白だけの差分では有効化しない)。
   const savedBaseOverride = existing[CONFIG_KEY_BASE_SYSTEM_PROMPT] ?? '';
-  const baseDirty = baseOverride !== savedBaseOverride;
+  const baseDirty = baseOverride.trim() !== savedBaseOverride.trim();
   const canSave =
     !saving &&
     workerUrlValid &&
@@ -165,8 +166,10 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
       };
       // 旧バージョンが書き込んだ scope 値が残っていれば掃除する
       delete config[CONFIG_KEY_OAUTH_SCOPE];
-      // #141: base override は非空なら保存、空なら key 削除 (= 既定を使用)
-      if (baseOverride.trim().length > 0) {
+      // #141: base override の保存。空、または「コード既定と同一」なら key 削除 (= 既定を追従)。
+      // これで「既定を読み込んで編集」→ 未編集のまま保存してもスナップショット固定されず、
+      // 以後のコード側 base 更新が届く (レビュー指摘)。
+      if (baseOverride.trim().length > 0 && baseOverride.trim() !== DEFAULT_BASE_SYSTEM_PROMPT.trim()) {
         config[CONFIG_KEY_BASE_SYSTEM_PROMPT] = baseOverride;
       } else {
         delete config[CONFIG_KEY_BASE_SYSTEM_PROMPT];

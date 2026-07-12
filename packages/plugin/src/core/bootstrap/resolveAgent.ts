@@ -36,7 +36,7 @@ export const DEFAULT_AGENT_NAME = 'Cowork Agent - Default';
  * system プロンプトのリビジョン番号。プロンプト本文を変更したらこの値を上げる。
  * metadata に含めるので、旧プロンプトの Agent は別物として扱われ、新規 Agent が作成される。
  */
-export const DEFAULT_AGENT_PROMPT_VERSION = 'v22';
+export const DEFAULT_AGENT_PROMPT_VERSION = 'v23';
 
 /**
  * Default Agent に attach する Anthropic 製 Skills (Issue #18 Step 1)。
@@ -195,7 +195,9 @@ async function doResolve(options: ResolveDefaultAgentOptions): Promise<Agent> {
   const createParams: Record<string, unknown> = {
     model: 'claude-sonnet-4-6',
     name: DEFAULT_AGENT_NAME,
-    system: DEFAULT_AGENT_SYSTEM_PROMPT,
+    // #141: persona のみ焼き込む (base は session override で注入)。二重 base 回避 +
+    // 編集済み persona を session 側が焼き込み system から読めるようにするため。
+    system: DEFAULT_AGENT_PERSONA,
     tools: buildAgentTools(includeMcp),
     skills,
     metadata: filter,

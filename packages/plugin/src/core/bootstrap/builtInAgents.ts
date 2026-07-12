@@ -500,8 +500,8 @@ export const BUILTIN_AGENT_SPECS: Record<
     model: 'claude-sonnet-4-6',
     modelLabel: 'SONNET',
     modelKind: 'sonnet',
-    promptVersion: 'v22-business-behavior',
-    systemPrompt: BUSINESS_SYSTEM_PROMPT,
+    promptVersion: 'v23-business-persona',
+    systemPrompt: BUSINESS_PERSONA,
     anthropicSkillIds: ['xlsx', 'docx', 'pdf', 'pptx'],
     customSkillFilter: () => false, // Customizer 専用 skill は attach しない
     mcpToolFilter: (name) => !MANAGEMENT_TOOL_NAMES.has(name), // 管理系 (V3) は除外
@@ -525,8 +525,8 @@ export const BUILTIN_AGENT_SPECS: Record<
     model: 'claude-opus-4-7',
     modelLabel: 'OPUS',
     modelKind: 'opus',
-    promptVersion: 'v25-agent-designer-behavior',
-    systemPrompt: AGENT_DESIGNER_SYSTEM_PROMPT,
+    promptVersion: 'v26-agent-designer-persona',
+    systemPrompt: AGENT_DESIGNER_PERSONA,
     anthropicSkillIds: [],
     customSkillFilter: () => false, // カスタム skill 不要 (アーティファクト出力中心)
     mcpToolFilter: (name) => READONLY_KINTONE_TOOL_NAMES.has(name), // 参照系のみ (書込禁止)
@@ -542,8 +542,8 @@ export const BUILTIN_AGENT_SPECS: Record<
     model: 'claude-sonnet-4-6',
     modelLabel: 'SONNET',
     modelKind: 'sonnet',
-    promptVersion: 'v24-customizer-behavior',
-    systemPrompt: CUSTOMIZER_SYSTEM_PROMPT,
+    promptVersion: 'v25-customizer-persona',
+    systemPrompt: CUSTOMIZER_PERSONA,
     anthropicSkillIds: [],
     // JS/plugin 開発 skill + admin 追加分は attach するが、アプリ構造設計 skill は app-designer 専用なので除外。
     customSkillFilter: (name) => name !== APP_DESIGN_SKILL_NAME,
@@ -564,8 +564,8 @@ export const BUILTIN_AGENT_SPECS: Record<
     modelLabel: 'OPUS',
     modelKind: 'opus',
     // v2: ドメイン知識を kintone-app-design skill に集約 (プロンプト薄化 + skill attach) するため bump。
-    promptVersion: 'v4-app-designer-behavior',
-    systemPrompt: APP_DESIGNER_SYSTEM_PROMPT,
+    promptVersion: 'v5-app-designer-persona',
+    systemPrompt: APP_DESIGNER_PERSONA,
     anthropicSkillIds: ['pdf', 'docx', 'xlsx', 'pptx'],
     // アプリ構造設計 skill のみ attach (資料読解の Anthropic 製 skill は anthropicSkillIds 側)。
     customSkillFilter: (name) => name === APP_DESIGN_SKILL_NAME,

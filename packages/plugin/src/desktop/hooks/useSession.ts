@@ -14,9 +14,9 @@ import { personaForPurpose } from '../../core/bootstrap/builtInAgents';
 import { composeSystemPrompt, effectiveBase } from '../../core/bootstrap/commonPrompts';
 import { initializeSession } from '../../core/bootstrap/initializeSession';
 import { DEFAULT_AGENT_PERSONA } from '../../core/bootstrap/resolveAgent';
-import { resolveCustomPersona } from '../../core/bootstrap/resolveCustomPersona';
 import { resolveMemoryResources } from '../../core/bootstrap/resolveMemoryStore';
 import { createUserSession } from '../../core/bootstrap/resolveSession';
+import { resolveStoredPersona } from '../../core/bootstrap/resolveStoredPersona';
 import { debug } from '../../core/debug';
 import { getPluginConfig } from '../../core/kintone/pluginConfig';
 import { getCurrentSessionContext } from '../../core/kintone/user';
@@ -53,8 +53,10 @@ function currentAgentStorageKey(kintoneDomain: string, kintoneUserCode: string):
 
 /**
  * #141: session override 用の `system = effectiveBase(config) + persona` を組み立てる。
- * persona は built-in/DEFAULT を code から解決 (fetch 不要)。custom は M3 で retrieve するまで
- * null (= override せず焼き込み persona で動く)。失敗しても会話は継続 (undefined を返す)。
+ * persona は **全エージェント (built-in / custom) の焼き込み system をキャッシュ取得**する。
+ * 焼き込みは persona-only なので二重 base にならず、モーダルでの編集も反映される。
+ * 取得失敗時は built-in なら code persona へフォールバック、custom は override せず継続。
+ * 素の Default Agent (built-in 解決なし経路) は store に無いので code persona を使う。
  */
 async function buildSystemOverride(
   activeAgent: AgentRecord | undefined,
@@ -63,28 +65,29 @@ async function buildSystemOverride(
   try {
     let persona: string | null;
     if (!activeAgent) {
-      persona = DEFAULT_AGENT_PERSONA; // 素の Default Agent (built-in 解決なし経路)
-    } else if (activeAgent.purpose === 'custom') {
-      persona = await resolveCustomPersona(activeAgent.id); // 焼き込み system をキャッシュ取得
+      persona = DEFAULT_AGENT_PERSONA; // 素の Default Agent (store に無い / 編集不可)
     } else {
-      persona = personaForPurpose(activeAgent.purpose);
+      persona = await resolveStoredPersona(activeAgent.id); // 焼き込み persona を取得 (キャッシュ)
+      if (persona === null && activeAgent.purpose !== 'custom') {
+        persona = personaForPurpose(activeAgent.purpose); // 取得失敗時の built-in フォールバック
+      }
     }
     if (!persona) return undefined;
     const override = pluginId ? getPluginConfig(pluginId).baseSystemPromptOverride : null;
     const base = effectiveBase(override);
     const systemOverride = composeSystemPrompt(base, persona);
-    // 反映確認用: debug ログ + window への常時記録 (フラグ不要)。
-    // 新規会話の初回送信時に更新される。usingCustomBase=true なら Config の base override を使用中。
-    const info = {
+    // 反映確認用。usingCustomBase=true なら Config の base override を使用中。
+    // 全文 (systemOverride) は debug ログ (window.__coworkDebug=true) のみに出し、window には
+    // サマリだけ常時記録する (同一ページの他スクリプトへ prompt 全文を晒さない — レビュー指摘)。
+    const summary = {
       usingCustomBase: Boolean(override && override.trim().length > 0),
       baseLen: base.length,
       personaLen: persona.length,
       totalLen: systemOverride.length,
-      systemOverride, // 実際に注入する system 全文 (base + persona)
     };
-    debug('Session', 'system override applied', info);
+    debug('Session', 'system override applied', { ...summary, systemOverride });
     if (typeof window !== 'undefined') {
-      (window as unknown as { __coworkLastSystemOverride?: unknown }).__coworkLastSystemOverride = info;
+      (window as unknown as { __coworkLastSystemOverride?: unknown }).__coworkLastSystemOverride = summary;
     }
     return systemOverride;
   } catch {

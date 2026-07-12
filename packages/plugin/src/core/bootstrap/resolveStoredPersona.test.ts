@@ -3,10 +3,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { resetTransport, setTransport } from '../managed-agents/client';
 
 import {
-  _resetCustomPersonaCache,
-  invalidateCustomPersona,
-  resolveCustomPersona,
-} from './resolveCustomPersona';
+  _resetStoredPersonaCache,
+  invalidateStoredPersona,
+  resolveStoredPersona,
+} from './resolveStoredPersona';
 
 let calls: number;
 
@@ -23,39 +23,39 @@ function mockAgentSystem(system: string | undefined): void {
 
 beforeEach(() => {
   calls = 0;
-  _resetCustomPersonaCache();
+  _resetStoredPersonaCache();
 });
 afterEach(() => {
   resetTransport();
-  _resetCustomPersonaCache();
+  _resetStoredPersonaCache();
 });
 
-describe('resolveCustomPersona (#141)', () => {
+describe('resolveStoredPersona (#141)', () => {
   it('焼き込み system を返し、2 回目はキャッシュから (fetch 1 回)', async () => {
     mockAgentSystem('CUSTOM PERSONA');
-    expect(await resolveCustomPersona('agent_c')).toBe('CUSTOM PERSONA');
-    expect(await resolveCustomPersona('agent_c')).toBe('CUSTOM PERSONA');
+    expect(await resolveStoredPersona('agent_c')).toBe('CUSTOM PERSONA');
+    expect(await resolveStoredPersona('agent_c')).toBe('CUSTOM PERSONA');
     expect(calls).toBe(1);
   });
 
   it('invalidate すると再 fetch する', async () => {
     mockAgentSystem('P1');
-    await resolveCustomPersona('agent_c');
-    invalidateCustomPersona('agent_c');
-    await resolveCustomPersona('agent_c');
+    await resolveStoredPersona('agent_c');
+    invalidateStoredPersona('agent_c');
+    await resolveStoredPersona('agent_c');
     expect(calls).toBe(2);
   });
 
   it('system 未設定は空文字を返す', async () => {
     mockAgentSystem(undefined);
-    expect(await resolveCustomPersona('agent_c')).toBe('');
+    expect(await resolveStoredPersona('agent_c')).toBe('');
   });
 
   it('取得失敗は null (override せず継続) + キャッシュしない', async () => {
     setTransport(() => Promise.resolve(json({ error: { message: 'boom' } }, 500)));
-    expect(await resolveCustomPersona('agent_x')).toBeNull();
+    expect(await resolveStoredPersona('agent_x')).toBeNull();
     // 失敗はキャッシュされないので次回も試行する
     mockAgentSystem('RECOVERED');
-    expect(await resolveCustomPersona('agent_x')).toBe('RECOVERED');
+    expect(await resolveStoredPersona('agent_x')).toBe('RECOVERED');
   });
 });

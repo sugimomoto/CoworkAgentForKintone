@@ -13,7 +13,7 @@ const cache = new Map<string, Promise<string>>();
 /**
  * Custom Agent の persona (焼き込み system) を返す。取得失敗時は null (override せず継続)。
  */
-export async function resolveCustomPersona(agentId: string): Promise<string | null> {
+export async function resolveStoredPersona(agentId: string): Promise<string | null> {
   let p = cache.get(agentId);
   if (!p) {
     p = retrieveAgent(agentId).then((a) => a.system ?? '');
@@ -28,11 +28,11 @@ export async function resolveCustomPersona(agentId: string): Promise<string | nu
 }
 
 /** Custom Agent 編集後に呼び、キャッシュを破棄する。 */
-export function invalidateCustomPersona(agentId: string): void {
+export function invalidateStoredPersona(agentId: string): void {
   cache.delete(agentId);
 }
 
 /** テスト用: 全キャッシュを reset する。 */
-export function _resetCustomPersonaCache(): void {
+export function _resetStoredPersonaCache(): void {
   cache.clear();
 }
