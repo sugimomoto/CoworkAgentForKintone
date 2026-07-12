@@ -176,3 +176,11 @@ export const KINTONE_TOOLS_PROMPT = [
  * = COMMON_BEHAVIOR + COMMON_GUARDRAILS。session override で persona の前に置く。
  */
 export const DEFAULT_BASE_SYSTEM_PROMPT = composeSystemPrompt(COMMON_BEHAVIOR, COMMON_GUARDRAILS);
+
+/**
+ * 実効 base を返す (#141)。Plugin Config の override が非空ならそれ、空/未設定なら既定。
+ * session override の `system = effectiveBase() + persona` に使う。
+ */
+export function effectiveBase(override?: string | null): string {
+  return override && override.trim().length > 0 ? override : DEFAULT_BASE_SYSTEM_PROMPT;
+}

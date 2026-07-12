@@ -476,6 +476,20 @@ export const APP_DESIGNER_SYSTEM_PROMPT = composeSystemPrompt(
 /**
  * V1 で auto-ensure される built-in variant の spec カタログ。
  */
+// #141: purpose → persona (エージェント固有部)。session override の
+// `system = base + persona` を code から解決するために使う (built-in は fetch 不要)。
+const PERSONA_BY_PURPOSE: Record<Exclude<AgentPurpose, 'custom'>, string> = {
+  business: BUSINESS_PERSONA,
+  'customizer-opus': AGENT_DESIGNER_PERSONA, // #48 で repurpose
+  'customizer-sonnet': CUSTOMIZER_PERSONA,
+  'app-designer': APP_DESIGNER_PERSONA,
+};
+
+/** built-in purpose の persona を返す。custom は code に無いので null。 */
+export function personaForPurpose(purpose: AgentPurpose): string | null {
+  return purpose === 'custom' ? null : PERSONA_BY_PURPOSE[purpose];
+}
+
 export const BUILTIN_AGENT_SPECS: Record<
   Exclude<AgentPurpose, 'custom'>,
   BuiltInAgentSpec

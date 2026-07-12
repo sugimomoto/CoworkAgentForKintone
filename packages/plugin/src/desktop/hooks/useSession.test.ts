@@ -106,12 +106,15 @@ describe('useSession.ensureSession', () => {
     expect(id).toBe('sess_new');
     expect(useChatStore.getState().sessionId).toBe('sess_new');
     expect(mockCreateSession).toHaveBeenCalledTimes(1);
-    expect(mockCreateSession).toHaveBeenCalledWith({
-      agentId: 'agent_1',
-      environmentId: 'env_1',
-      kintoneDomain: 'example.cybozu.com',
-      kintoneUserCode: 'sato',
-    });
+    // #141: systemOverride も渡るため objectContaining で必須項目のみ検証
+    expect(mockCreateSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'agent_1',
+        environmentId: 'env_1',
+        kintoneDomain: 'example.cybozu.com',
+        kintoneUserCode: 'sato',
+      }),
+    );
   });
 
   it('連続で 2 回呼んでも createUserSession は 1 回しか走らない (in-flight 保護)', async () => {

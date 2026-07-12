@@ -34,6 +34,11 @@ export interface SessionContext {
     access: 'read_write' | 'read_only';
     instructions?: string;
   }>;
+  /**
+   * #141/#138: session 単位の system override (= base + persona)。指定時は
+   * `agent_with_overrides` でこの session だけ system を差し替える (base 編集の即時反映用)。
+   */
+  systemOverride?: string;
 }
 
 export type ListUserSessionsContext = Pick<
@@ -71,7 +76,11 @@ export function makeTitleFromMessage(text: string, now: Date = new Date()): stri
 export async function createUserSession(ctx: SessionContext): Promise<Session> {
   const vaultIds = [ctx.vaultId, ctx.notifyVaultId].filter((v): v is string => Boolean(v));
   return await createSession({
-    agent: ctx.agentId,
+    // #141: systemOverride 指定時は agent_with_overrides で system (= base + persona) を差し替え。
+    // system 以外 (tools/mcp/skills/model) は省略 = エージェント版から継承。
+    agent: ctx.systemOverride
+      ? { type: 'agent_with_overrides', id: ctx.agentId, system: ctx.systemOverride }
+      : ctx.agentId,
     environment_id: ctx.environmentId,
     ...(vaultIds.length > 0 ? { vault_ids: vaultIds } : {}),
     // #15: Memory Store は session 作成時のみ attach 可。トグル ON 時だけ渡る。

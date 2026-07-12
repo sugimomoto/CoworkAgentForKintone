@@ -10,14 +10,20 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 
+import { personaForPurpose } from '../../core/bootstrap/builtInAgents';
+import { composeSystemPrompt, effectiveBase } from '../../core/bootstrap/commonPrompts';
 import { initializeSession } from '../../core/bootstrap/initializeSession';
+import { DEFAULT_AGENT_PERSONA } from '../../core/bootstrap/resolveAgent';
 import { resolveMemoryResources } from '../../core/bootstrap/resolveMemoryStore';
 import { createUserSession } from '../../core/bootstrap/resolveSession';
+import { getPluginConfig } from '../../core/kintone/pluginConfig';
 import { getCurrentSessionContext } from '../../core/kintone/user';
 import { toErrorMessage } from '../../core/utils';
 import { useChatStore } from '../../store/chatStore';
 
 import { readMemoryEnabled } from './memoryEnabledStorage';
+
+import type { AgentRecord } from '../../core/bootstrap/agentTypes';
 
 export interface UseSessionResult {
   /** 既存 sessionId があれば返す。無ければ新規作成して store に保存し、その id を返す。 */
@@ -41,6 +47,32 @@ interface ResolvedContext {
  */
 function currentAgentStorageKey(kintoneDomain: string, kintoneUserCode: string): string {
   return `cowork-agent:current-agent:${kintoneDomain}:${kintoneUserCode}`;
+}
+
+/**
+ * #141: session override 用の `system = effectiveBase(config) + persona` を組み立てる。
+ * persona は built-in/DEFAULT を code から解決 (fetch 不要)。custom は M3 で retrieve するまで
+ * null (= override せず焼き込み persona で動く)。失敗しても会話は継続 (undefined を返す)。
+ */
+async function buildSystemOverride(
+  activeAgent: AgentRecord | undefined,
+  pluginId: string | null,
+): Promise<string | undefined> {
+  try {
+    let persona: string | null;
+    if (!activeAgent) {
+      persona = DEFAULT_AGENT_PERSONA; // 素の Default Agent (built-in 解決なし経路)
+    } else if (activeAgent.purpose === 'custom') {
+      persona = null; // M3: retrieveAgent().system をキャッシュして解決
+    } else {
+      persona = personaForPurpose(activeAgent.purpose);
+    }
+    if (!persona) return undefined;
+    const override = pluginId ? getPluginConfig(pluginId).baseSystemPromptOverride : null;
+    return composeSystemPrompt(effectiveBase(override), persona);
+  } catch {
+    return undefined;
+  }
 }
 
 export function useSession(): UseSessionResult {
@@ -147,6 +179,11 @@ export function useSession(): UseSessionResult {
             })
           : undefined;
 
+        // #141: session override で system = effectiveBase(config) + persona を注入。
+        // base は Plugin Config で編集可 (未設定=既定)。built-in/DEFAULT の persona は code から
+        // 解決 (fetch 不要)。custom は M3 まで override せず焼き込み persona で動く。失敗は握りつぶす。
+        const systemOverride = await buildSystemOverride(activeAgent, state.pluginId);
+
         const session = await createUserSession({
           agentId: activeAgentId,
           environmentId,
@@ -156,6 +193,7 @@ export function useSession(): UseSessionResult {
           ...(notifyVaultId ? { notifyVaultId } : {}),
           ...(firstMessage ? { firstMessage } : {}),
           ...(memoryResources && memoryResources.length > 0 ? { memoryResources } : {}),
+          ...(systemOverride ? { systemOverride } : {}),
         });
         setSessionId(session.id);
         return session.id;

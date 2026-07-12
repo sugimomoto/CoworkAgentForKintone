@@ -16,18 +16,23 @@ const CONFIG_KEY_OAUTH_CLIENT_ID = 'oauthClientId';
 // #42: 追加 MCP Server のカタログ（テナント共有）。JSON 文字列で保存。
 // client_secret は含まない（setProxyConfig 側に保管）。
 const CONFIG_KEY_MCP_SERVERS = 'mcpServers';
+// #141: 全エージェント共通 base システムプロンプトの override。空 = コード既定を使用。
+export const CONFIG_KEY_BASE_SYSTEM_PROMPT = 'baseSystemPromptOverride';
 
 export interface PluginConfig {
   workerUrl: string | null;
   oauthClientId: string | null;
   /** #42 追加 MCP Server 定義。未設定 / 不正 JSON なら空配列。 */
   mcpServers: McpServerDef[];
+  /** #141 base システムプロンプト override。null / 空 / 未設定 = コード既定 (DEFAULT_BASE_SYSTEM_PROMPT)。 */
+  baseSystemPromptOverride?: string | null;
 }
 
 const EMPTY_CONFIG: PluginConfig = {
   workerUrl: null,
   oauthClientId: null,
   mcpServers: [],
+  baseSystemPromptOverride: null,
 };
 
 /** mcpServers の JSON 文字列を安全にパースする。不正・型不一致なら空配列。 */
@@ -67,6 +72,7 @@ export function getPluginConfig(pluginId: string): PluginConfig {
     workerUrl: pickStr(CONFIG_KEY_WORKER_URL),
     oauthClientId: pickStr(CONFIG_KEY_OAUTH_CLIENT_ID),
     mcpServers: parseMcpServers(raw[CONFIG_KEY_MCP_SERVERS]),
+    baseSystemPromptOverride: pickStr(CONFIG_KEY_BASE_SYSTEM_PROMPT),
   };
 }
 

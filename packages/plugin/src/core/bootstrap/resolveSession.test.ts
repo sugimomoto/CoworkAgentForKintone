@@ -133,6 +133,28 @@ describe('createUserSession (memoryResources, #15)', () => {
   });
 });
 
+describe('createUserSession (systemOverride, #141)', () => {
+  it('systemOverride 指定時は agent を agent_with_overrides で送る (system のみ上書き)', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(makeSession({ id: 'sess_o' }), 201));
+    await createUserSession({ ...CTX, systemOverride: 'BASE\n\nPERSONA' });
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.agent).toEqual({
+      type: 'agent_with_overrides',
+      id: CTX.agentId,
+      system: 'BASE\n\nPERSONA',
+    });
+  });
+
+  it('systemOverride 未指定なら agent は文字列 id のまま (継承)', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(makeSession(), 201));
+    await createUserSession(CTX);
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.agent).toBe(CTX.agentId);
+  });
+});
+
 describe('listUserSessions', () => {
   it('agent_id + order=desc + limit=100 で listSessions を呼ぶ', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ data: [], next_page: null }));
