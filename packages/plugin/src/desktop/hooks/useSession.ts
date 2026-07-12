@@ -51,6 +51,9 @@ function currentAgentStorageKey(kintoneDomain: string, kintoneUserCode: string):
   return `cowork-agent:current-agent:${kintoneDomain}:${kintoneUserCode}`;
 }
 
+/** COMMON_BEHAVIOR (コード既定 base) 先頭の見出し。二重 base 検出 (E2E) 用のマーカー。 */
+const BASE_MARKER = '【基本姿勢】';
+
 /**
  * #141: session override 用の `system = effectiveBase(config) + persona` を組み立てる。
  * persona は **全エージェント (built-in / custom) の焼き込み system をキャッシュ取得**する。
@@ -84,6 +87,8 @@ async function buildSystemOverride(
       baseLen: base.length,
       personaLen: persona.length,
       totalLen: systemOverride.length,
+      // コード既定 base の見出し出現回数。既定 base 使用時は 1 が正常 (2 なら二重 base)。
+      baseMarkerCount: systemOverride.split(BASE_MARKER).length - 1,
     };
     debug('Session', 'system override applied', { ...summary, systemOverride });
     if (typeof window !== 'undefined') {
