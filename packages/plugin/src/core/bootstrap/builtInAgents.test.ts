@@ -39,8 +39,8 @@ describe('BUILTIN_AGENT_SPECS — 4 variant', () => {
       expect(spec.modelLabel).toBe('SONNET');
     });
 
-    it('promptVersion v21-business-memory / systemPrompt は BUSINESS_SYSTEM_PROMPT', () => {
-      expect(spec.promptVersion).toBe('v21-business-memory');
+    it('promptVersion v22-business-behavior / systemPrompt は BUSINESS_SYSTEM_PROMPT', () => {
+      expect(spec.promptVersion).toBe('v22-business-behavior');
       expect(spec.systemPrompt).toBe(BUSINESS_SYSTEM_PROMPT);
     });
 
@@ -83,9 +83,9 @@ describe('BUILTIN_AGENT_SPECS — 4 variant', () => {
       expect(spec.modelKind).toBe('opus');
     });
 
-    it('name は エージェントデザイナー / promptVersion は v24-agent-designer-memory', () => {
+    it('name は エージェントデザイナー / promptVersion は v25-agent-designer-behavior', () => {
       expect(spec.name).toBe('エージェントデザイナー');
-      expect(spec.promptVersion).toBe('v24-agent-designer-memory');
+      expect(spec.promptVersion).toBe('v25-agent-designer-behavior');
     });
 
     it('Anthropic 製 skill は付けない (アーティファクト出力中心)', () => {
@@ -128,7 +128,7 @@ describe('BUILTIN_AGENT_SPECS — 4 variant', () => {
 
     it('systemPrompt は CUSTOMIZER_SYSTEM_PROMPT (JS カスタマイズ専用ペルソナを維持)', () => {
       expect(spec.systemPrompt).toBe(CUSTOMIZER_SYSTEM_PROMPT);
-      expect(spec.promptVersion).toBe('v23-customizer-memory');
+      expect(spec.promptVersion).toBe('v24-customizer-behavior');
     });
 
     it('variantGroup=customizer / isDefault=false', () => {
@@ -155,9 +155,9 @@ describe('BUILTIN_AGENT_SPECS — 4 variant', () => {
       expect(spec.modelKind).toBe('opus');
     });
 
-    it('name は アプリデザイナー / promptVersion は v3-app-designer-memory', () => {
+    it('name は アプリデザイナー / promptVersion は v4-app-designer-behavior', () => {
       expect(spec.name).toBe('アプリデザイナー');
-      expect(spec.promptVersion).toBe('v3-app-designer-memory');
+      expect(spec.promptVersion).toBe('v4-app-designer-behavior');
     });
 
     it('資料読解スキル (pdf / docx / xlsx / pptx) を attach', () => {

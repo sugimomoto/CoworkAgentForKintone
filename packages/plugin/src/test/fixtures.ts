@@ -23,7 +23,7 @@ export function makeAgent(overrides: Partial<Agent> = {}): Agent {
     id: 'agent_default',
     name: 'Cowork Agent - Default',
     model: { id: 'claude-sonnet-4-6' },
-    metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v21' },
+    metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v22' },
     created_at: '2026-04-25T00:00:00Z',
     updated_at: '2026-04-25T00:00:00Z',
     version: 1,

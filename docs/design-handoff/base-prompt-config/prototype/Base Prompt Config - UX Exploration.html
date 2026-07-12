@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cowork Agent — 共通システムプロンプト (base) 編集 UI 検討</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; background: #f0eee9; }
+    body { font-family: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', sans-serif; }
+    * { box-sizing: border-box; }
+    a { color: #0d9488; }
+    a:hover { color: #0a7a70; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: rgba(35,18,0,0.16); border-radius: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    /* config detail 単体フレーム（isolated セクション表示用） */
+    .cfg-frame { width: 100%; height: 100%; background: #faf8f3; overflow: auto; }
+    .cfg-inner { max-width: 720px; margin: 0 auto; padding: 28px 26px; }
+    /* solo config screen フレーム（chrome 込み） */
+    .solo-cfg { width: 100%; height: 100%; overflow: hidden; display: flex; background: #fff; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="base-prompt-data.jsx"></script>
+  <script type="text/babel" src="base-prompt-section.jsx"></script>
+
+  <script type="text/babel">
+    // 部分入力（編集中）用のカスタム冒頭
+    const CUSTOM_PARTIAL = `# 基本の作法（当社カスタム）
+あなたは「アクメ商事」の社内エージェントです。以下の作法を最優先で守ってください。
+
+## トーン・書式
+- ですます調。社内では敬称は「さん」で統一。
+- 金額は税抜を基本とし、税込を併記するときは「（税込 ¥…）」を添える。`;
+    // 上限超過用（MAXLEN 超え）
+    const OVER_TEXT = DEFAULT_BASE + '\n\n' + ('# 追加ルール（貼り付けすぎ）\n- ' + 'とても長い社内規定の本文をそのまま貼り付けてしまった状態。'.repeat(60)).repeat(12);
+
+    function StateTag({ children }) {
+      return <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 5, fontSize: 10.5, fontFamily: '"JetBrains Mono", monospace', background: '#231200', color: '#ffbf00', padding: '3px 8px', borderRadius: 5 }}>{children}</div>;
+    }
+
+    // isolated セクション（config detail bg + 720 幅 + 高度な設定ラベル）
+    function SectionFrame({ children, tag }) {
+      return (
+        <div className="cfg-frame" style={{ position: 'relative' }}>
+          {tag && <StateTag>{tag}</StateTag>}
+          <div className="cfg-inner">
+            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6, color: '#6b5f4a', textTransform: 'uppercase', margin: '0 0 9px 2px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <SparkleIco size={12} />高度な設定
+            </div>
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    // ── 仕様まとめ ──
+    function SpecCard() {
+      const wrap = { width: '100%', height: '100%', background: '#faf8f3', padding: '30px 34px', overflow: 'auto', boxSizing: 'border-box', color: '#231200', fontSize: 12.5, lineHeight: 1.7 };
+      const sec = { marginBottom: 20 };
+      const h = { fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: '#6b5f4a', marginBottom: 8 };
+      const row = { display: 'flex', gap: 10, padding: '5px 0', borderBottom: '1px dashed rgba(35,18,0,0.10)' };
+      const k = { flex: '0 0 118px', color: '#6b5f4a', fontFamily: '"JetBrains Mono", monospace', fontSize: 11 };
+      const v = { flex: 1, color: '#231200' };
+      return (
+        <div style={wrap}>
+          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, letterSpacing: -0.3 }}>BasePromptSection · 仕様</div>
+          <div style={{ fontSize: 12, color: '#6b5f4a', marginBottom: 22 }}>Plugin Config の 1 セクション（Step 群の後 · 画面下「保存」の前）</div>
+
+          <div style={sec}>
+            <div style={h}>配置</div>
+            <div style={row}><span style={k}>場所</span><span style={v}>接続セットアップ末尾「高度な設定」。max-width 720px カード群の 1 枚</span></div>
+            <div style={row}><span style={k}>既定</span><span style={v}>アコーディオンで畳む（上級者向け・ノイズ回避）</span></div>
+            <div style={row}><span style={k}>保存</span><span style={v}>画面下の一括「保存」に集約（セクション専用ボタンは持たない）</span></div>
+          </div>
+
+          <div style={sec}>
+            <div style={h}>要素</div>
+            <div style={row}><span style={k}>見出し</span><span style={v}>「共通システムプロンプト」+「上級者向け」バッジ + 状態チップ</span></div>
+            <div style={row}><span style={k}>補足</span><span style={v}>persona は含まない / 次の新規会話から反映</span></div>
+            <div style={row}><span style={k}>エディタ</span><span style={v}>等幅・リサイズ可・文字数カウンタ（上限 20,000 目安）</span></div>
+            <div style={row}><span style={k}>チップ</span><span style={v}>既定を使用中（グレー）/ カスタム（teal）— value の空判定</span></div>
+          </div>
+
+          <div style={sec}>
+            <div style={h}>フッタ導線</div>
+            <div style={row}><span style={k}>既定使用中</span><span style={v}>「既定を読み込んで編集」（既定を差し込み override の起点に）</span></div>
+            <div style={row}><span style={k}>カスタム時</span><span style={v}>「デフォルトに戻す」（warn）→ ConfirmDialog</span></div>
+            <div style={row}><span style={k}>注記</span><span style={v}>空欄保存 = 既定 / 変更は画面下「保存」で確定</span></div>
+          </div>
+
+          <div style={sec}>
+            <div style={h}>状態</div>
+            <div style={row}><span style={k}>1</span><span style={v}>既定使用中・畳んだ状態（主）</span></div>
+            <div style={row}><span style={k}>2</span><span style={v}>既定使用中・展開（空 + placeholder）</span></div>
+            <div style={row}><span style={k}>3</span><span style={v}>編集中（override 入力・カスタム チップ）</span></div>
+            <div style={row}><span style={k}>4</span><span style={v}>override 保存済み（デフォルトに戻す 有効）</span></div>
+            <div style={row}><span style={k}>5</span><span style={v}>リセット確認（ConfirmDialog）</span></div>
+            <div style={row}><span style={k}>6</span><span style={v}>文字数超過 警告バナー</span></div>
+          </div>
+
+          <div style={sec}>
+            <div style={h}>トークン</div>
+            <div style={row}><span style={k}>card</span><span style={v}><code>--cw-card #fff</code> / border <code>--cw-card-border</code></span></div>
+            <div style={row}><span style={k}>accent</span><span style={v}><code>--cw-accent #0d9488</code>（teal · カスタム チップ / 導線）</span></div>
+            <div style={row}><span style={k}>warn</span><span style={v}><code>#b45309</code> / soft <code>#fef3c7</code>（超過・リセット）</span></div>
+            <div style={row}><span style={k}>mono</span><span style={v}>JetBrains Mono（エディタ・カウンタ）</span></div>
+          </div>
+
+          <div style={sec}>
+            <div style={h}>スコープ外</div>
+            <div style={row}><span style={k}>persona</span><span style={v}>各エージェント固有指示（別途エージェント編集）</span></div>
+            <div style={row}><span style={k}>履歴</span><span style={v}>バージョン履歴 / 差分 / プレビュー実行</span></div>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      return (
+        <DesignCanvas>
+          {/* ─── 配置コンテキスト ─── */}
+          <DCSection id="context" title="配置コンテキスト"
+            subtitle="Plugin Config（admin 専用）の接続セットアップ末尾「高度な設定」に 1 枚。上級者向けなので既定は畳む · #141">
+
+            <DCArtboard id="inhost" label="ホスト統合 · プラグイン設定（既定を使用中・畳んだ状態）" width={1180} height={760}>
+              <div className="solo-cfg"><ConfigShell><ConfigBody seedValue="" open={false} /></ConfigShell></div>
+            </DCArtboard>
+
+            <DCArtboard id="inhost-open" label="ホスト統合 · 展開（カスタム override 保存済み）" width={1180} height={760}>
+              <div className="solo-cfg"><ConfigShell><ConfigBody seedValue={CUSTOM_BASE} open={true} /></ConfigShell></div>
+            </DCArtboard>
+
+            <DCPostIt top={30} left={-200} rotate={-3} width={182}>
+              左レールは既存 2 ゾーン（接続セットアップ / MCP）のまま。base はセットアップ末尾の「高度な設定」に同居させ、専用 nav は増やさない。
+            </DCPostIt>
+          </DCSection>
+
+          {/* ─── 状態バリエーション ─── */}
+          <DCSection id="states" title="状態バリエーション"
+            subtitle="1 畳んだ既定 / 2 展開・空 / 3 編集中 / 4 保存済み / 5 リセット確認 / 6 文字数超過（すべてセクション単体）">
+
+            <DCArtboard id="s1-collapsed" label="1 · 既定を使用中（畳んだ状態・主）" width={800} height={360}>
+              <SectionFrame tag="value = '' · collapsed"><BasePromptSection seedValue="" open={false} /></SectionFrame>
+            </DCArtboard>
+
+            <DCArtboard id="s2-empty-open" label="2 · 既定を使用中・展開（空 + placeholder）" width={800} height={560}>
+              <SectionFrame tag="value = '' · open"><BasePromptSection seedValue="" open={true} /></SectionFrame>
+            </DCArtboard>
+
+            <DCArtboard id="s3-editing" label="3 · 編集中（override 入力・カスタム）" width={800} height={620}>
+              <SectionFrame tag="custom · editing"><BasePromptSection seedValue={CUSTOM_PARTIAL} open={true} /></SectionFrame>
+            </DCArtboard>
+
+            <DCArtboard id="s4-saved" label="4 · override 保存済み（デフォルトに戻す 有効）" width={800} height={700}>
+              <SectionFrame tag="custom · saved"><BasePromptSection seedValue={CUSTOM_BASE} open={true} /></SectionFrame>
+            </DCArtboard>
+
+            <DCArtboard id="s6-over" label="6 · 文字数超過 警告（保存不可）" width={800} height={620}>
+              <SectionFrame tag="over limit"><BasePromptSection seedValue={OVER_TEXT} open={true} /></SectionFrame>
+            </DCArtboard>
+
+            <DCPostIt top={30} left={-206} rotate={-2} width={188}>
+              畳んだ状態でも状態チップは常に見える。展開すると補足 → カウンタ付きエディタ → フッタ導線。空なら「読み込んで編集」、カスタムなら「デフォルトに戻す」。
+            </DCPostIt>
+          </DCSection>
+
+          {/* ─── リセット確認 / 仕様 ─── */}
+          <DCSection id="reset-spec" title="リセット確認 / 仕様まとめ"
+            subtitle="「デフォルトに戻す」→ 既存 ConfirmDialog（warn）→ override をクリアして既定へ">
+
+            <DCArtboard id="s5-confirm" label="5 · リセット確認ダイアログ" width={800} height={700}>
+              <SectionFrame tag="ConfirmDialog"><BasePromptSection seedValue={CUSTOM_BASE} open={true} seedConfirm={true} /></SectionFrame>
+            </DCArtboard>
+
+            <DCArtboard id="s7-loaded" label="（任意）既定を読み込んだ直後" width={800} height={700}>
+              <SectionFrame tag="defaultBase loaded"><BasePromptSection seedValue={DEFAULT_BASE} open={true} /></SectionFrame>
+            </DCArtboard>
+
+            <DCArtboard id="spec" label="仕様まとめ" width={600} height={700}>
+              <SpecCard />
+            </DCArtboard>
+
+            <DCPostIt top={30} left={-206} rotate={2} width={188}>
+              破壊的ではないが影響が広い（全エージェント）ため確認を挟む。確定で override を空にし、次の新規会話から既定に戻る。
+            </DCPostIt>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
