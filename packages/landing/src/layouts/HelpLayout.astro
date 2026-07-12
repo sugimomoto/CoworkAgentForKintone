@@ -17,17 +17,30 @@ interface Props {
   tocLabel: string;
   /** TOC entries (anchor links + labels) */
   toc: TocEntry[];
+  /**
+   * OGP 画像のパス (site root 起点)。既定は常設ブランドカード /images/ogp-brand.png。
+   * リリース告知カード /images/ogp.png を出したいページ (/releases/) は明示的に渡す。
+   */
+  ogImage?: string;
 }
 
-const { title, description, canonical, crumb, tocLabel, toc } = Astro.props;
+const {
+  title,
+  description,
+  canonical,
+  crumb,
+  tocLabel,
+  toc,
+  ogImage = '/images/ogp-brand.png',
+} = Astro.props;
 const baseHref = import.meta.env.BASE_URL.replace(/\/$/, '');
 const canonicalSuffix = canonical.replace(/^\//, '');
 const ogUrl = Astro.site
   ? new URL(`${baseHref}/${canonicalSuffix}`, Astro.site).toString()
   : undefined;
-// og:image は全ページ共通のブランドカード (/images/ogp.png, release-kit で生成) を絶対 URL で。
+// og:image は SNS が絶対 URL を要求するため site + base で絶対化する。
 const ogImageUrl = Astro.site
-  ? new URL(`${baseHref}/images/ogp.png`, Astro.site).toString()
+  ? new URL(`${baseHref}${ogImage}`, Astro.site).toString()
   : undefined;
 // path back to LP root: with base `/CoworkAgentForKintone/`, the LP is at base + '/'
 const homeHref = `${baseHref}/`;

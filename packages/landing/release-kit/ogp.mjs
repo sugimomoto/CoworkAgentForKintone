@@ -2,7 +2,7 @@
 // ogp.mjs — リリース告知 OGP カードを PNG 生成する (release-kit)
 //
 // 使い方:
-//   node packages/landing/release-kit/ogp.mjs <spec.json> [--out <basePath>] [--no-2x] [--no-archive]
+//   node packages/landing/release-kit/ogp.mjs <spec.json> [--out <basePath>] [--no-2x] [--no-archive] [--brand]
 //
 //   <spec.json>  : 統合スペック (README.md / examples 参照)。OGP は version / ogp.headline /
 //                  ogp.sub / repo / features[] を使う（features は ogpTitle/ogpDesc を優先）。
@@ -11,6 +11,8 @@
 //                  → <base>.png (1200x630) と <base>@2x.png (2400x1260) を書き出す
 //   --no-2x      : 1x のみ生成
 //   --no-archive : バージョン別アーカイブを作らない (canonical の <base>.png のみ更新)
+//   --brand      : TOP 用の常設カード。version / "What's New" バッジを非表示にし、
+//                  archive も作らない (陳腐化しない evergreen 用)。spec.brand:true でも可。
 //
 // 出力は 2 種:
 //   (1) canonical  : <base>.png (+@2x)。これが live の og:image。毎回上書き = 常に最新。
@@ -44,16 +46,21 @@ const outIdx = args.indexOf('--out');
 const outBase =
   outIdx >= 0 ? resolve(args[outIdx + 1]) : resolve(repoRoot, 'packages/landing/public/images/ogp');
 const skip2x = args.includes('--no-2x');
-const skipArchive = args.includes('--no-archive');
+// brand モード: TOP 用の常設カード。version / "What's New" バッジを出さない
+// (リリースごとに陳腐化しないよう)。spec.brand:true でも有効。archive は自動で抑止。
+const brand = args.includes('--brand') || false;
 
 const spec = JSON.parse(readFileSync(resolve(specPath), 'utf-8'));
+const isBrand = brand || spec.brand === true;
+const skipArchive = args.includes('--no-archive') || isBrand;
 // 統合スペック対応: ogp.* を優先し、無ければトップレベル (旧 OGP 専用スペックと互換)。
 const ogp = spec.ogp ?? {};
 const headline = ogp.headline ?? spec.headline;
 const sub = ogp.sub ?? spec.sub;
 const repo = ogp.repo ?? spec.repo;
-if (!spec.version || !headline || !Array.isArray(spec.features) || spec.features.length < 2) {
-  console.error('[ogp] spec に version / (ogp.)headline / features(2〜3) が必要です');
+// version は release カードのみ必須 (brand カードは版数を表示しない)。
+if ((!isBrand && !spec.version) || !headline || !Array.isArray(spec.features) || spec.features.length < 2) {
+  console.error('[ogp] spec に version(release時) / (ogp.)headline / features(2〜3) が必要です');
   process.exit(1);
 }
 
@@ -239,10 +246,14 @@ const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
           <span class="mk">CA</span>
           <div class="wm">Cowork <span class="ag">Agent</span> <span class="for">for kintone</span></div>
         </div>
-        <div class="rel">
+        ${
+          isBrand
+            ? ''
+            : `<div class="rel">
           <span class="whats"><span class="dot"></span>What's New</span>
           <span class="ver">${esc(spec.version)}</span>
-        </div>
+        </div>`
+        }
         <h1 class="headline">${rich(headline)}</h1>
         ${sub ? `<p class="sub">${rich(sub)}</p>` : ''}
         <div class="foot">

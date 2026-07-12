@@ -1,0 +1,27 @@
+{
+  "brand": true,
+  "repo": "github.com/sugimomoto/CoworkAgentForKintone",
+
+  "ogp": {
+    "headline": "kintone の隣に、\n<span class=\"hl\">AI コワーカー</span>を。",
+    "sub": "kintone の<b>プラグイン</b>として動く AI エージェント。\nレコード操作から<b>アプリ設計</b>まで、会話でこなす。"
+  },
+
+  "features": [
+    {
+      "icon": "doc",
+      "title": "会話で kintone を操作",
+      "desc": "レコードの検索・登録・更新から、プロセス管理の操作まで。自然な会話でエージェントに任せられます。"
+    },
+    {
+      "icon": "grid",
+      "title": "専門エージェントを使い分け",
+      "desc": "業務サポート・アプリデザイナー・カスタマイズ支援など、役割の違うエージェントを目的に応じて切り替え。"
+    },
+    {
+      "icon": "shield",
+      "title": "自分のテナントで動く OSS",
+      "desc": "MIT ライセンスで公開。API キーや認証情報は各ユーザーが自分で管理し、ブラウザ側には露出しません。"
+    }
+  ]
+}
