@@ -8,8 +8,10 @@
 
 import { useMemo, useState } from 'react';
 
+import { DEFAULT_BASE_SYSTEM_PROMPT } from '../core/bootstrap/commonPrompts';
 import { CLOUDFLARE_WORKER_SCRIPT_NAME } from '../core/constants';
 import { parseMcpServers } from '../core/kintone/pluginConfig';
+import { CONFIG_KEY_BASE_SYSTEM_PROMPT } from '../core/kintone/pluginConfig';
 import { setProxyConfigAsync } from '../core/kintone/setProxyConfigAsync';
 // skillsSyncClient は ConfigScreen からは呼ばない (Customizer wedge V1 #41 で Chat Panel
 // SkillsPane に移管)。skillsSyncClient 自体は packages/plugin/src/core/skills/ に残置し、
@@ -17,6 +19,9 @@ import { setProxyConfigAsync } from '../core/kintone/setProxyConfigAsync';
 import { joinUrl, sleep, toErrorMessage } from '../core/utils';
 import { PasswordInput } from '../desktop/components/ui/PasswordInput';
 
+
+import { canSave as canSaveBasePrompt } from './basePrompt';
+import { BasePromptSection } from './BasePromptSection';
 import { buildProxySteps } from './buildProxySteps';
 import { useCloudflareDeployment } from './hooks/useCloudflareDeployment';
 import { McpServersConfigSection } from './McpServersConfigSection';
@@ -61,6 +66,10 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
   const [clientSecret, setClientSecret] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // #141: 共通 base システムプロンプト override (空 = 既定を使用)
+  const [baseOverride, setBaseOverride] = useState<string>(
+    existing[CONFIG_KEY_BASE_SYSTEM_PROMPT] ?? '',
+  );
 
   // ----- Step 0: Cloudflare Workers デプロイ -----
   const [cfApiToken, setCfApiToken] = useState<string>('');
@@ -105,7 +114,10 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
     clientIdTrimmed.length > 0 &&
     clientSecretTrimmed.length > 0;
   const canSave =
-    !saving && workerUrlValid && (isSaved ? hasAnyNewSecret : hasAllSecrets);
+    !saving &&
+    workerUrlValid &&
+    (isSaved ? hasAnyNewSecret : hasAllSecrets) &&
+    canSaveBasePrompt(baseOverride); // #141: base 上限超過時は保存不可
 
   function copyToClipboard(text: string): void {
     navigator.clipboard.writeText(text).catch(() => {
@@ -150,6 +162,12 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
       };
       // 旧バージョンが書き込んだ scope 値が残っていれば掃除する
       delete config[CONFIG_KEY_OAUTH_SCOPE];
+      // #141: base override は非空なら保存、空なら key 削除 (= 既定を使用)
+      if (baseOverride.trim().length > 0) {
+        config[CONFIG_KEY_BASE_SYSTEM_PROMPT] = baseOverride;
+      } else {
+        delete config[CONFIG_KEY_BASE_SYSTEM_PROMPT];
+      }
 
       kintone.plugin.app.setConfig(config, () => {
         alert('Cowork Agent: 設定を保存しました。');
@@ -390,6 +408,17 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
         pluginId={pluginId}
         workerUrl={workerUrlValid ? workerUrlTrimmed : null}
         initialServers={parseMcpServers(existing[CONFIG_KEY_MCP_SERVERS])}
+      />
+
+      {/* #141: 高度な設定 — 共通 base システムプロンプトの編集 */}
+      <div className="mb-[6px] mt-[4px] px-[2px] text-[11px] font-bold uppercase tracking-[0.6px] text-subtle">
+        高度な設定
+      </div>
+      <BasePromptSection
+        value={baseOverride}
+        onChange={setBaseOverride}
+        defaultBase={DEFAULT_BASE_SYSTEM_PROMPT}
+        onResetToDefault={() => setBaseOverride('')}
       />
 
       {errorMessage && (
