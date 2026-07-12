@@ -17,6 +17,7 @@ import { DEFAULT_AGENT_PERSONA } from '../../core/bootstrap/resolveAgent';
 import { resolveCustomPersona } from '../../core/bootstrap/resolveCustomPersona';
 import { resolveMemoryResources } from '../../core/bootstrap/resolveMemoryStore';
 import { createUserSession } from '../../core/bootstrap/resolveSession';
+import { debug } from '../../core/debug';
 import { getPluginConfig } from '../../core/kintone/pluginConfig';
 import { getCurrentSessionContext } from '../../core/kintone/user';
 import { toErrorMessage } from '../../core/utils';
@@ -70,7 +71,16 @@ async function buildSystemOverride(
     }
     if (!persona) return undefined;
     const override = pluginId ? getPluginConfig(pluginId).baseSystemPromptOverride : null;
-    return composeSystemPrompt(effectiveBase(override), persona);
+    const base = effectiveBase(override);
+    const systemOverride = composeSystemPrompt(base, persona);
+    // 反映確認用 (window.__coworkDebug=true で出力)。custom=Config の base override を使用中か。
+    debug('Session', 'system override applied', {
+      usingCustomBase: Boolean(override && override.trim().length > 0),
+      baseLen: base.length,
+      personaLen: persona.length,
+      totalLen: systemOverride.length,
+    });
+    return systemOverride;
   } catch {
     return undefined;
   }
