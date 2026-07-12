@@ -25,6 +25,7 @@ import { PresetAgentLanding } from './components/PresetAgentLanding';
 import { WelcomeMessage } from './components/WelcomeMessage';
 import { Header } from './Header';
 import { HistoryView } from './HistoryView';
+import { writeMemoryEnabled } from './hooks/memoryEnabledStorage';
 import { useAgentPhase } from './hooks/useAgentPhase';
 import { useCustomToolResponder } from './hooks/useCustomToolResponder';
 import { useEventPoller } from './hooks/useEventPoller';
@@ -52,6 +53,7 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   const builtInAgents = useChatStore((s) => s.builtInAgents);
   const currentAgentId = useChatStore((s) => s.currentAgentId);
   const memoryEnabled = useChatStore((s) => s.memoryEnabled);
+  const setMemoryEnabled = useChatStore((s) => s.setMemoryEnabled);
   const isAdmin = useIsAdmin();
   const activeArtifactId = useChatStore((s) => s.activeArtifactId);
   const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
@@ -169,6 +171,17 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
   const handleSettingsClose = useCallback(() => {
     setView('chat');
   }, [setView]);
+
+  /**
+   * #15: Memory トグル ON/OFF。per-user localStorage に永続化し、次の新規会話から
+   * attach 有無に反映される (attach は session 作成時のみ可能な API 制約に一致)。
+   */
+  const handleMemoryToggle = useCallback(() => {
+    const next = !useChatStore.getState().memoryEnabled;
+    setMemoryEnabled(next);
+    const kctx = getCurrentSessionContext();
+    writeMemoryEnabled(kctx.kintoneDomain, kctx.kintoneUserCode, next);
+  }, [setMemoryEnabled]);
 
   /**
    * Header の Agent プルダウン選択で呼ばれる。
@@ -306,8 +319,9 @@ export function ChatPanel({ onSettingsClick, onClose }: ChatPanelProps): JSX.Ele
         currentAgentId={currentAgentId}
         onSelectAgent={handleSelectAgent}
         isAdmin={isAdmin}
-        memoryEnabled={false}
+        memoryEnabled={true}
         memoryOn={memoryEnabled}
+        onMemoryToggle={handleMemoryToggle}
         onSettingsClick={handleSettingsClick}
         {...(onClose ? { onClose } : {})}
       />

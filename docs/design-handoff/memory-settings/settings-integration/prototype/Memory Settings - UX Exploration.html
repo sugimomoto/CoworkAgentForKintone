@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cowork Agent — メモリ（設定画面 統合）UI 検討</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; background: #f0eee9; }
+    body { font-family: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', sans-serif; }
+    * { box-sizing: border-box; }
+    a { color: #0d9488; }
+    a:hover { color: #0a7a70; }
+    @keyframes memspin { to { transform: rotate(360deg); } }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: rgba(35,18,0,0.16); border-radius: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    /* Mock kintone host */
+    .kt { width: 100%; height: 100%; display: flex; flex-direction: column; background: #fafbfc; color: #374151; font-family: 'Noto Sans JP', 'Hiragino Sans', sans-serif; }
+    .kt-top { height: 34px; background: #231200; color: #f5e6b8; display: flex; align-items: center; padding: 0 14px; font-size: 11.5px; gap: 14px; flex: 0 0 auto; }
+    .kt-logo { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #ffbf00; letter-spacing: .3px; }
+    .kt-logo-mark { width: 18px; height: 18px; border-radius: 5px; background: #ffbf00; color: #231200; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; }
+    .kt-crumb { flex: 1; color: #9a8f7a; }
+    .kt-appbar { height: 48px; background: #fff; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; padding: 0 18px; gap: 12px; flex: 0 0 auto; }
+    .kt-app-icon { width: 28px; height: 28px; border-radius: 6px; background: #ffbf00; color: #231200; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
+    .kt-app-title { font-size: 14px; font-weight: 600; color: #111827; }
+    .kt-app-crumb { font-size: 11px; color: #6b7280; }
+    .kt-body { flex: 1; display: flex; min-height: 0; }
+    .kt-list { flex: 1; padding: 16px 22px; overflow: hidden; background: #fafbfc; }
+    .kt-tabs { display: flex; gap: 2px; margin-bottom: 12px; border-bottom: 1px solid #e5e7eb; }
+    .kt-tab { padding: 7px 13px; font-size: 11.5px; color: #6b7280; border-bottom: 2px solid transparent; }
+    .kt-tab.active { color: #231200; border-bottom-color: #ffbf00; font-weight: 600; }
+    .kt-table { width: 100%; border-collapse: collapse; font-size: 11.5px; background: #fff; border: 1px solid #e5e7eb; border-radius: 4px; }
+    .kt-table th { background: #f9fafb; color: #6b7280; font-weight: 500; text-align: left; padding: 9px 11px; border-bottom: 1px solid #e5e7eb; font-size: 10.5px; }
+    .kt-table td { padding: 10px 11px; border-bottom: 1px solid #f3f4f6; color: #374151; }
+    .kt-chip { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 500; }
+    .kt-chip.new { background: #fff4c9; color: #8a6400; }
+    .kt-chip.pending { background: #f3ead6; color: #231200; }
+    .kt-chip.done { background: #231200; color: #ffbf00; }
+    .kt-side { height: 100%; border-left: 1px solid #e5e7eb; background: #fff; flex: 0 0 auto; display: flex; }
+
+    /* solo settings frame */
+    .solo-wrap { width: 100%; height: 100%; background: #f0eee9; display: flex; align-items: center; justify-content: center; }
+    .solo-set { width: 560px; height: 720px; overflow: hidden; border-radius: 12px; box-shadow: 0 8px 40px rgba(0,0,0,0.08); border: 1px solid rgba(0,0,0,0.06); display: flex; background: #fff; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="memory-data.jsx"></script>
+  <script type="text/babel" src="memory-section.jsx"></script>
+
+  <script type="text/babel">
+    const ACCENT = '#0d9488';
+
+    function MockKintoneHost({ children }) {
+      const rows = [
+        { id: 'REC-00421', name: '三井商事 受注案件', owner: '田中 美咲', amount: '¥12,400,000', status: 'pending', label: '提案中' },
+        { id: 'REC-00420', name: 'パナソニック 保守更新', owner: '佐藤 健一', amount: '¥8,900,000', status: 'done', label: '受注' },
+        { id: 'REC-00419', name: 'ソフトバンク SaaS導入', owner: '鈴木 葵', amount: '¥6,200,000', status: 'new', label: '新規' },
+        { id: 'REC-00418', name: '楽天 追加開発案件', owner: '山田 拓也', amount: '¥15,800,000', status: 'pending', label: '提案中' },
+        { id: 'REC-00417', name: '日立 コンサル契約', owner: '田中 美咲', amount: '¥22,400,000', status: 'done', label: '受注' },
+        { id: 'REC-00416', name: 'NTT 保守対応', owner: '中村 玲奈', amount: '¥4,100,000', status: 'new', label: '新規' },
+      ];
+      return (
+        <div className="kt">
+          <div className="kt-top">
+            <div className="kt-logo"><span className="kt-logo-mark">W</span>Workspace</div>
+            <div className="kt-crumb">営業部 › CRM スペース › 案件管理</div>
+            <div style={{ fontSize: 11, opacity: 0.7 }}>田中 美咲</div>
+          </div>
+          <div className="kt-appbar">
+            <div className="kt-app-icon">案</div>
+            <div>
+              <div className="kt-app-title">案件管理</div>
+              <div className="kt-app-crumb">レコード一覧 · 342件</div>
+            </div>
+          </div>
+          <div className="kt-body">
+            <div className="kt-list">
+              <div className="kt-tabs">
+                <div className="kt-tab active">すべて</div>
+                <div className="kt-tab">自分の担当</div>
+                <div className="kt-tab">今月</div>
+              </div>
+              <table className="kt-table">
+                <thead><tr><th>レコードNo.</th><th>案件名</th><th>担当者</th><th>受注金額</th><th>ステータス</th></tr></thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.id}>
+                      <td style={{ color: '#6b7280', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5 }}>{r.id}</td>
+                      <td style={{ fontWeight: 500 }}>{r.name}</td>
+                      <td>{r.owner}</td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums' }}>{r.amount}</td>
+                      <td><span className={'kt-chip ' + r.status}>{r.label}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    // 560×720 の設定画面フレーム
+    function SoloSettings({ children }) {
+      return <div className="solo-wrap"><div className="solo-set">{children}</div></div>;
+    }
+
+    function StateTag({ children }) {
+      return (
+        <div style={{
+          position: 'absolute', top: 12, left: 12, zIndex: 5,
+          fontSize: 10.5, fontFamily: '"JetBrains Mono", monospace',
+          background: '#231200', color: '#ffbf00', padding: '3px 8px', borderRadius: 5,
+        }}>{children}</div>
+      );
+    }
+
+    // ── 仕様まとめカード ──
+    function SpecCard() {
+      const wrap = { width: '100%', height: '100%', background: '#faf8f3', padding: '30px 34px', overflow: 'auto', boxSizing: 'border-box', color: '#231200', fontSize: 12.5, lineHeight: 1.7 };
+      const sec = { marginBottom: 20 };
+      const h = { fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: '#6b5f4a', marginBottom: 8 };
+      const row = { display: 'flex', gap: 10, padding: '5px 0', borderBottom: '1px dashed rgba(35,18,0,0.10)' };
+      const k = { flex: '0 0 128px', color: '#6b5f4a', fontFamily: '"JetBrains Mono", monospace', fontSize: 11 };
+      const v = { flex: 1, color: '#231200' };
+      return (
+        <div style={wrap}>
+          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, letterSpacing: -0.3 }}>MemorySection · 仕様</div>
+          <div style={{ fontSize: 12, color: '#6b5f4a', marginBottom: 22 }}>SettingsView の 1 セクションとして差し込む（左 nav + 右 detail）</div>
+
+          <div style={sec}>
+            <div style={h}>nav 統合</div>
+            <div style={row}><span style={k}>項目</span><span style={v}>per-user の「🧠 メモリ」を追加（定期実行と同じ非 admin 可）</span></div>
+            <div style={row}><span style={k}>バッジ</span><span style={v}>「自分」で per-user を示す（count の代わり）</span></div>
+            <div style={row}><span style={k}>入口</span><span style={v}>非 admin も設定を開ける前提（実装側で配線）</span></div>
+          </div>
+
+          <div style={sec}>
+            <div style={h}>detail 構成</div>
+            <div style={row}><span style={k}>見出し</span><span style={v}>PaneHeading「メモリ」+ サブ一行</span></div>
+            <div style={row}><span style={k}>上</span><span style={v}>2 store のツリー（SectionLabel + カード内ファイル行）</span></div>
+            <div style={row}><span style={k}>下</span><span style={v}>区切り線 → 選択ファイルの閲覧/編集カード</span></div>
+            <div style={row}><span style={k}>スクロール</span><span style={v}>detail 全体（他セクションと同じ overflow:auto）</span></div>
+          </div>
+
+          <div style={sec}>
+            <div style={h}>ツリー</div>
+            <div style={row}><span style={k}>store 見出し</span><span style={v}>SectionLabel + アイコン + ラベル + 右に件数</span></div>
+            <div style={row}><span style={k}>ファイル行</span><span style={v}>file + basename(mono) + サイズ + hover 削除・選択で inset accent バー</span></div>
+            <div style={row}><span style={k}>空</span><span style={v}>「まだ記憶がありません」の dashed カード</span></div>
+          </div>
+
+          <div style={sec}>
+            <div style={h}>ビュー / エディタ</div>
+            <div style={row}><span style={k}>閲覧</span><span style={v}>ミニ Markdown（artifact と同トーン）· カードヘッダに [編集]</span></div>
+            <div style={row}><span style={k}>編集</span><span style={v}>textarea → [保存]/[取消]（保存中 spinner）</span></div>
+            <div style={row}><span style={k}>競合</span><span style={v}>warnSoft バナー +「再読込」（保存時 409）</span></div>
+            <div style={row}><span style={k}>読込</span><span style={v}>shimmer スケルトンカード</span></div>
+          </div>
+
+          <div style={sec}>
+            <div style={h}>削除</div>
+            <div style={row}><span style={k}>フロー</span><span style={v}>行の 🗑 → ConfirmDialog → 消える</span></div>
+          </div>
+
+          <div style={sec}>
+            <div style={h}>トークン / 採寸</div>
+            <div style={row}><span style={k}>panePadding</span><span style={v}>22px 26px 32px（他セクション detail と同）</span></div>
+            <div style={row}><span style={k}>nav</span><span style={v}>幅 192px · 項目 padding 7/10 · radius 8</span></div>
+            <div style={row}><span style={k}>ファイル行</span><span style={v}>padding 10/14 · gap 11 · 名前 12(mono)</span></div>
+            <div style={row}><span style={k}>accent</span><span style={v}><code>--cw-accent #0d9488</code>（teal）</span></div>
+          </div>
+
+          <div style={sec}>
+            <div style={h}>スコープ外</div>
+            <div style={row}><span style={k}>#149</span><span style={v}>versions 履歴 / 復元 / redact（将来「履歴」導線）</span></div>
+            <div style={row}><span style={k}>Step 3</span><span style={v}>admin 共有メモリ / ファイル新規作成 / モバイル幅</span></div>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      return (
+        <DesignCanvas>
+          {/* ─── overview ─── */}
+          <DCSection id="overview" title="メモリ（設定画面 統合）"
+            subtitle="SettingsView に per-user「メモリ」セクションを追加し、2 store を確認・編集する · #15 Step 2">
+
+            <DCArtboard id="inhost" label="ホスト統合 · 設定「メモリ」閲覧（主状態）" width={1280} height={800}>
+              <MockKintoneHost>
+                <div className="kt-side" style={{ width: 560 }}>
+                  <SettingsShell accent={ACCENT} section="memory" detail={{ selection: { storeKind: 'preferences', fileId: 'mem_gen' } }} />
+                </div>
+              </MockKintoneHost>
+            </DCArtboard>
+
+            <DCArtboard id="solo-view" label="設定画面 単体 · メモリ閲覧" width={620} height={780}>
+              <SoloSettings><SettingsShell accent={ACCENT} section="memory" detail={{ selection: { storeKind: 'agent-context', fileId: 'mem_notes' } }} /></SoloSettings>
+            </DCArtboard>
+
+            <DCPostIt top={30} left={-190} rotate={-3} width={172}>
+              左 nav に「🧠 メモリ（自分）」を追加。定期実行と同じ per-user 項目なので非 admin にも出る。
+            </DCPostIt>
+          </DCSection>
+
+          {/* ─── 状態バリエーション ─── */}
+          <DCSection id="states" title="状態バリエーション"
+            subtitle="1 未選択 / 2 閲覧 / 3 編集中 / 4 空メモリ / 5 競合エラー / 6 ローディング（すべて memory detail 内の差分）">
+
+            <DCArtboard id="s1-empty-sel" label="1 · 初期・ファイル未選択" width={620} height={780}>
+              <SoloSettings>
+                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex' }}>
+                  <StateTag>selection = null</StateTag>
+                  <SettingsShell accent={ACCENT} section="memory" detail={{ selection: null }} />
+                </div>
+              </SoloSettings>
+            </DCArtboard>
+
+            <DCArtboard id="s2-view" label="2 · ファイル選択・閲覧（Markdown）" width={620} height={780}>
+              <SoloSettings>
+                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex' }}>
+                  <StateTag>general.md · view</StateTag>
+                  <SettingsShell accent={ACCENT} section="memory" detail={{ selection: { storeKind: 'preferences', fileId: 'mem_gen' } }} />
+                </div>
+              </SoloSettings>
+            </DCArtboard>
+
+            <DCArtboard id="s3-edit" label="3 · 編集中（textarea + 保存/取消）" width={620} height={780}>
+              <SoloSettings>
+                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex' }}>
+                  <StateTag>notes.md · edit</StateTag>
+                  <SettingsShell accent={ACCENT} section="memory" detail={{ selection: { storeKind: 'agent-context', fileId: 'mem_notes' }, mode: 'edit' }} />
+                </div>
+              </SoloSettings>
+            </DCArtboard>
+
+            <DCArtboard id="s4-empty" label="4 · 空メモリ（seed 直後）" width={620} height={780}>
+              <SoloSettings>
+                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex' }}>
+                  <StateTag>empty stores</StateTag>
+                  <SettingsShellEmpty accent={ACCENT} />
+                </div>
+              </SoloSettings>
+            </DCArtboard>
+
+            <DCArtboard id="s5-conflict" label="5 · 競合エラー（保存時 409 → 再読込バナー）" width={620} height={780}>
+              <SoloSettings>
+                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex' }}>
+                  <StateTag>409 · conflict</StateTag>
+                  <SettingsShell accent={ACCENT} section="memory" detail={{ selection: { storeKind: 'preferences', fileId: 'mem_gen' }, mode: 'edit', asyncState: 'conflict' }} />
+                </div>
+              </SoloSettings>
+            </DCArtboard>
+
+            <DCArtboard id="s6-loading" label="6 · ローディング（store 解決 + 一覧取得中）" width={620} height={780}>
+              <SoloSettings>
+                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex' }}>
+                  <StateTag>loading</StateTag>
+                  <SettingsShell accent={ACCENT} section="memory" detail={{ selection: { storeKind: 'agent-context', fileId: 'mem_notes' }, asyncState: 'loading' }} />
+                </div>
+              </SoloSettings>
+            </DCArtboard>
+
+            <DCPostIt top={30} left={-206} rotate={-2} width={188}>
+              nav とツリーは常に見える。変わるのは下段の「選択ファイル」ブロックだけ（未選択 / 閲覧 / 編集 / 空 / 競合 / スケルトン）。
+            </DCPostIt>
+          </DCSection>
+
+          {/* ─── 削除 + 仕様 ─── */}
+          <DCSection id="delete-spec" title="削除フロー / 仕様まとめ"
+            subtitle="ファイル行の 🗑 → ConfirmDialog → 消える">
+
+            <DCArtboard id="confirm" label="削除確認ダイアログ" width={620} height={780}>
+              <SoloSettings>
+                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex' }}>
+                  <StateTag>ConfirmDialog</StateTag>
+                  <SettingsShell accent={ACCENT} section="memory" detail={{ selection: { storeKind: 'preferences', fileId: 'mem_gen' }, confirmDelete: { storeKind: 'preferences', fileId: 'mem_alias' } }} />
+                </div>
+              </SoloSettings>
+            </DCArtboard>
+
+            <DCArtboard id="spec" label="仕様まとめ" width={580} height={780}>
+              <SpecCard />
+            </DCArtboard>
+
+            <DCPostIt top={30} left={-206} rotate={2} width={188}>
+              削除は既存 ConfirmDialog 相当。破壊的だがエージェントが再学習しうるので、警告は控えめ（危険色ボタン + 一文）。
+            </DCPostIt>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    // 空メモリ用に stores を差し替えた SettingsShell ラッパ
+    function SettingsShellEmpty({ accent }) {
+      const c = richColors(false, accent);
+      // MemorySection を空 stores で直接描画（nav も見せるため簡易に shell を組む）
+      return (
+        <div style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', background: c.bg }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', borderBottom: `1px solid ${c.border}`, background: c.panel, flex: '0 0 auto' }}>
+            <div style={{ width: 26, height: 26, borderRadius: 6, background: c.accentSoft, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="2.2" /><path d="M8 1.5v2M8 12.5v2M14.5 8h-2M3.5 8h-2M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4M12.6 12.6l-1.4-1.4M4.8 4.8L3.4 3.4" /></svg>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: c.text }}>設定</div>
+              <div style={{ fontSize: 10.5, color: c.muted }}>メモリと定期実行は自分専用 · その他は管理者のみ</div>
+            </div>
+          </div>
+          <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+            <div style={{ width: 192, flex: '0 0 192px', borderRight: `1px solid ${c.border}`, padding: '12px 8px', background: c.cardHi, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {['エージェント', 'スキル', '定期実行', 'メモリ', 'MCP サーバー'].map((l, i) => (
+                <div key={l} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8,
+                  background: i === 3 ? c.card : 'transparent', border: i === 3 ? `1px solid ${c.border}` : '1px solid transparent',
+                  color: i === 3 ? c.text : c.muted, fontSize: 12.5, fontWeight: i === 3 ? 600 : 500,
+                }}>
+                  <span style={{ flex: 1 }}>{l}</span>
+                  {i === 3 && <span style={{ fontSize: 8.5, fontWeight: 600, color: accent, background: c.accentSoft, border: `1px solid ${accent}44`, padding: '0 4px', borderRadius: 3 }}>自分</span>}
+                </div>
+              ))}
+            </div>
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <MemorySectionEmpty accent={accent} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function MemorySectionEmpty({ accent }) {
+      return <MemorySection stores={makeEmptyStores()} accent={accent} selection={{ storeKind: 'agent-context', fileId: 'mem_notes' }} />;
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

@@ -1,12 +1,12 @@
 // Memory トグル
 //
-// V1 では **常に disabled** (UI placeholder)。V2 で機能化される (Conversation View
-// の ON/OFF トグル + (user × agent) Memory Store auto-ensure)。
+// #15 で機能化: ON のとき次の新規会話から Memory Store (preferences / agent-context) を
+// Session に attach する。既定 ON / opt-out で per-user localStorage に永続 (ChatPanel 配線)。
 //
-// 仕様: requirements.md §6.7
+// 仕様: .steering/20260711-issue-15-memory-stores/design.md §7
 
 export interface MemoryToggleProps {
-  /** V1 = false で disabled, V2 で true */
+  /** false で disabled (プレースホルダ)。#15 以降は true。 */
   enabled?: boolean;
   /** トグル ON/OFF (enabled=true 時のみ有効) */
   on?: boolean;

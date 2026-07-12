@@ -25,6 +25,7 @@
 > - §0.10 **定期実行 (Deployments / cron)** (Scheduled Deployments で Agent を cron 自律起動)
 > - §0.11 **アプリデザイナー** (built-in 4th variant — 資料/PDF からアプリ設計・構築、管理系ツール直実行)
 > - §0.13 **タスク機構** (`update_plan` Custom Tool + PlanPanel 進捗帯 — 1 セッションのゴール到達を計画/進捗で外部化)
+> - §0.14 **Memory Stores** (会話を跨ぐ記憶 — 2 レイヤー store attach + トグル + 設定「メモリ」閲覧/編集)
 >
 > §0.1〜§0.4 (OAuth + MCP) は変更なし。これら V1 機能はすべて §0.1〜§0.4 の通信経路の上に乗っています。
 
@@ -520,6 +521,23 @@ kintone 以外の**リモート MCP サーバー**をテナントに登録し、
 - **PlanPanel (進捗帯)**: メッセージスクロールの**外側** (flex-none) に兄弟配置し、Composer の上にピン留め。stick-to-bottom (#133) と干渉しない。計画無し (`plan === null` / 空) で帯ごと非表示。全完了で teal 終端 (emerald「応答完了」divider とは色・レイヤで棲み分け)。長い plan は完了行を「N 件完了」に畳む。表示専用 — 更新は必ず `update_plan` 経由。
 - **session スコープ**: `plan` は `chatStore` に持ち、履歴選択 (`resetConversation`) / 新規会話 (`startNewConversation`) / reset でクリア。localStorage・Memory Store・kintone アプリには保存しない (ステートレス原則 §3.2)。
 - **後方互換**: 追加のみ + graceful degradation。既存 Custom Agent は次回保存時に `buildAgentTools` 再構築で `update_plan` を取得 (遅延反映)。Default Agent は `DEFAULT_AGENT_PROMPT_VERSION` bump (v19→v20)、built-in は `computeToolsVersion` ドリフトで reconcile。update_plan を持たないエージェントは PlanPanel が出ないだけで無害。
+
+---
+
+### 0.14 Memory Stores 統合 (会話を跨ぐ記憶) — #15
+
+**Anthropic Managed Agents の Memory Store** を統合し、Session を跨いでユーザーの好み・業務文脈を継承する。Memory トグル ON のとき、host が 2 レイヤーの store を find-or-create して Session に attach し、agent が `/mnt/memory` を **標準ツール (bash/read/write/glob/grep)** で自律的に読み書きする。CRUD は host からも既存 `kintone.plugin.app.proxy → api.anthropic.com` 経路で完結 (Worker 不要 / secret-zero 維持)。Step 1 (基盤) + Step 2 (閲覧/編集 UI) を実装。versions 履歴/rollback/redact は #149 に分離。
+
+**設計上の要点:**
+
+- **2 レイヤー store** (§6-A): `preferences` (per-user 共有 — 口調/日付表記/業務用語) と `agent-context` (per-user × agent — そのエージェント固有の学習/修正)。identity は `store.name` (find のキー兼 mount slug 元)。1 Session に 2 store attach (8 store 上限に余裕)。mount path は resource 応答の `mount_path` を正とする。
+- **beta ヘッダ分離**: memory store 系エンドポイント (`/v1/memory_stores/**`) だけ `agent-memory-2026-07-22`、session attach は従来の `managed-agents-2026-04-01`。混在は 400。`apiRequest` の extraHeaders で memory 呼出のみ置換 (`core/managed-agents/memory.ts`)。
+- **解決 + seed** (`core/bootstrap/resolveMemoryStore.ts`): `resolveVault` と同じ in-flight 保護 + pickOldest。新規作成時のみ基本ファイルを空 seed (409 は冪等無視)。`resolveMemoryResources` が 2 store を並列解決して `resources[]` を組む。**解決失敗は握りつぶし会話を止めない** (graceful degradation)。
+- **attach 経路**: `SessionContext.memoryResources` → `createSession.resources`。`useSession.ensureSession` が `memoryEnabled` 時のみ解決 (初送信のクリティカルパスで Promise.all 並列)。attach は Session 作成時のみ可能なので、トグル変更は**次の会話から**反映。
+- **トグル**: `MemoryToggle` を有効化 (既定 **ON / opt-out**)。per-user localStorage 永続 (`cowork-agent:memory-enabled:<domain>:<user>`)。
+- **システムプロンプト**: COMMON_GUARDRAILS + Default に「/mnt/memory を確認し反映・追記、機微情報は書かない」ブロック。per-resource `instructions` が主 behavior を担うため防御的な補助 (メモリ無しセッションでは無害)。promptVersion bump で反映。
+- **Step 2 — 設定「メモリ」セクション**: SettingsNav に per-user の「メモリ」項目を追加 (「定期実行」と同じ非 admin 可)。そのため **⚙️ gear を全ユーザーに開放** (#81 の非 admin 定期実行導線も同時開通。agents/skills/mcp は従来どおり admin 限定)。detail の `MemorySection` (純表示) + `MemorySectionBound` (CRUD 配線) で、2 store のツリー → 選択で `retrieve(view=full)` → Markdown 表示 → インライン編集/保存 (`content_sha256` 楽観ロック、409 は競合バナー→再読込) → 削除 (ConfirmDialog)。
+- **セキュリティ**: store は name に `<domain>:<user>` を含め per-user 完全分離 (他ユーザー store は列挙もしない)。read_write なので system prompt で機微情報の書込を禁止。共有系 (Step 3 domain context) は将来 read_only。
 
 ---
 

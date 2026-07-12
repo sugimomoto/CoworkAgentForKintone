@@ -18,8 +18,11 @@ export interface HeaderProps {
   currentAgentId: string | null;
   /** Agent 切替ハンドラ (呼出側で新規会話開始する) */
   onSelectAgent: (agentId: string) => void;
-  /** admin (Gear / Settings 表示制御) */
-  isAdmin: boolean;
+  /**
+   * admin か。#15/#81 で Gear は全ユーザーに開放したため現在は未使用だが、
+   * 将来の出し分け用に受け取りは残す (呼出側は従来どおり渡す)。
+   */
+  isAdmin?: boolean;
   /** Memory トグル状態 (V1 は常に disabled) */
   memoryEnabled?: boolean;
   /** Memory トグル ON/OFF */
@@ -36,7 +39,6 @@ export function Header({
   agents,
   currentAgentId,
   onSelectAgent,
-  isAdmin,
   memoryEnabled = false,
   memoryOn = false,
   onMemoryToggle,
@@ -54,7 +56,8 @@ export function Header({
         <BrandTitle />
         <div className="flex-1" />
         <MemoryToggle enabled={memoryEnabled} on={memoryOn} onToggle={onMemoryToggle} />
-        {isAdmin && onSettingsClick && (
+        {/* #15/#81: 設定は全ユーザーが開ける (非 admin は「メモリ」「定期実行」のみ表示)。 */}
+        {onSettingsClick && (
           <IconButton ariaLabel="設定" onClick={onSettingsClick} highlight testId="header-gear">
             <GearIcon />
           </IconButton>

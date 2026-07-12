@@ -61,7 +61,7 @@ describe('Header (Customizer wedge V1)', () => {
     expect(screen.getByTestId('header-gear')).toBeInTheDocument();
   });
 
-  it('admin=false なら Gear ボタンは表示されない', () => {
+  it('admin=false でも Gear は表示される (#15/#81: 設定は全ユーザー開放、非 admin はメモリ/定期実行のみ)', () => {
     render(
       <Header
         agents={AGENTS}
@@ -71,7 +71,7 @@ describe('Header (Customizer wedge V1)', () => {
         onSettingsClick={vi.fn()}
       />,
     );
-    expect(screen.queryByTestId('header-gear')).toBeNull();
+    expect(screen.getByTestId('header-gear')).toBeInTheDocument();
   });
 
   it('onSettingsClick が未指定なら admin=true でも Gear は表示されない', () => {

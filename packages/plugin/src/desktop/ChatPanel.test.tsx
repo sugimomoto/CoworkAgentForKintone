@@ -33,6 +33,11 @@ vi.mock('../core/bootstrap/resolveSession', async (importOriginal) => ({
   createUserSession: vi.fn(),
   listUserSessions: vi.fn(),
 }));
+// #15: ensureSession が memoryEnabled=true (既定) のとき呼ぶ memory store 解決を
+// 決定的に空 resolve する。実 fetch を打たせないことでテスト間の async リークを防ぐ。
+vi.mock('../core/bootstrap/resolveMemoryStore', () => ({
+  resolveMemoryResources: vi.fn().mockResolvedValue([]),
+}));
 vi.mock('../core/kintone/user', () => ({
   getCurrentSessionContext: vi.fn(() => ({
     kintoneUserCode: 'sato',
@@ -467,7 +472,7 @@ describe('ChatPanel', () => {
     expect(onSettingsClick).not.toHaveBeenCalled();
   });
 
-  it('非 admin では Header の Gear ボタンが表示されない', async () => {
+  it('非 admin でも Header の Gear ボタンが表示される (#15/#81: 設定は全ユーザー開放)', async () => {
     setBootstrapOk();
     setBindingStatus('bound');
     setAdmin(false);
@@ -475,9 +480,7 @@ describe('ChatPanel', () => {
     render(<ChatPanel onSettingsClick={vi.fn()} />);
     await waitFor(() => expect(useChatStore.getState().status).toBe('ready'));
 
-    // admin 判定は async。少し待ってから DOM に Gear が無いことを確認
-    await new Promise((r) => setTimeout(r, 20));
-    expect(screen.queryByTestId('header-gear')).toBeNull();
+    expect(await screen.findByTestId('header-gear')).toBeInTheDocument();
   });
 
   it('ConversationUtilityBar の新規会話ボタンで sessionId と messages がクリアされる', async () => {

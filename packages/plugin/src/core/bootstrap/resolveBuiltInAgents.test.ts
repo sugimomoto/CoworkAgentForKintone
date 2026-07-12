@@ -115,7 +115,7 @@ describe('resolveBuiltInAgents', () => {
     expect(sonnetBody.metadata.isDefault).toBe('0');
   });
 
-  it('promptVersion v20-business / v22-customizer / v23-agent-designer が metadata.promptVersion に入る', async () => {
+  it('promptVersion v21-business-memory / v23-customizer-memory / v24-agent-designer-memory が metadata.promptVersion に入る', async () => {
     mockAllVariantsCreate({
       business: 'a1',
       'customizer-opus': 'a2',
@@ -128,10 +128,10 @@ describe('resolveBuiltInAgents', () => {
     const opusBody = bodies.find((b) => b.metadata.purpose === 'customizer-opus');
     const sonnetBody = bodies.find((b) => b.metadata.purpose === 'customizer-sonnet');
     const appDesignerBody = bodies.find((b) => b.metadata.purpose === 'app-designer');
-    expect(businessBody.metadata.promptVersion).toBe('v20-business');
-    expect(opusBody.metadata.promptVersion).toBe('v23-agent-designer');
-    expect(sonnetBody.metadata.promptVersion).toBe('v22-customizer');
-    expect(appDesignerBody.metadata.promptVersion).toBe('v2-app-designer');
+    expect(businessBody.metadata.promptVersion).toBe('v21-business-memory');
+    expect(opusBody.metadata.promptVersion).toBe('v24-agent-designer-memory');
+    expect(sonnetBody.metadata.promptVersion).toBe('v23-customizer-memory');
+    expect(appDesignerBody.metadata.promptVersion).toBe('v3-app-designer-memory');
   });
 
   it('customSkills は customSkillFilter(name) で variant 別に attach される (#117)', async () => {
@@ -175,7 +175,7 @@ describe('resolveBuiltInAgents', () => {
                 source: 'cowork-agent-for-kintone',
                 type: 'default',
                 purpose: 'business',
-                promptVersion: 'v20-business',
+                promptVersion: 'v21-business-memory',
                 workerUrl: OPTIONS.workerUrl,
                 kintoneDomain: OPTIONS.kintoneDomain,
                 toolsVersion: builtInToolsVersion('business'),
@@ -187,7 +187,7 @@ describe('resolveBuiltInAgents', () => {
                 source: 'cowork-agent-for-kintone',
                 type: 'default',
                 purpose: 'customizer-opus',
-                promptVersion: 'v23-agent-designer',
+                promptVersion: 'v24-agent-designer-memory',
                 workerUrl: OPTIONS.workerUrl,
                 kintoneDomain: OPTIONS.kintoneDomain,
                 toolsVersion: builtInToolsVersion('customizer-opus'),
@@ -199,7 +199,7 @@ describe('resolveBuiltInAgents', () => {
                 source: 'cowork-agent-for-kintone',
                 type: 'default',
                 purpose: 'customizer-sonnet',
-                promptVersion: 'v22-customizer',
+                promptVersion: 'v23-customizer-memory',
                 workerUrl: OPTIONS.workerUrl,
                 kintoneDomain: OPTIONS.kintoneDomain,
                 toolsVersion: builtInToolsVersion('customizer-sonnet'),
@@ -211,7 +211,7 @@ describe('resolveBuiltInAgents', () => {
                 source: 'cowork-agent-for-kintone',
                 type: 'default',
                 purpose: 'app-designer',
-                promptVersion: 'v2-app-designer',
+                promptVersion: 'v3-app-designer-memory',
                 workerUrl: OPTIONS.workerUrl,
                 kintoneDomain: OPTIONS.kintoneDomain,
                 toolsVersion: builtInToolsVersion('app-designer'),
@@ -269,7 +269,7 @@ describe('resolveBuiltInAgents', () => {
                   source: 'cowork-agent-for-kintone',
                   type: 'default',
                   purpose: 'business',
-                  promptVersion: 'v20-business',
+                  promptVersion: 'v21-business-memory',
                   workerUrl: OPTIONS.workerUrl,
                   kintoneDomain: OPTIONS.kintoneDomain,
                 },
@@ -281,7 +281,7 @@ describe('resolveBuiltInAgents', () => {
                   source: 'cowork-agent-for-kintone',
                   type: 'default',
                   purpose: 'business',
-                  promptVersion: 'v20-business',
+                  promptVersion: 'v21-business-memory',
                   workerUrl: OPTIONS.workerUrl,
                   kintoneDomain: OPTIONS.kintoneDomain,
                 },
@@ -345,7 +345,7 @@ describe('resolveBuiltInAgents', () => {
             source: 'cowork-agent-for-kintone',
             type: 'default',
             purpose: 'business',
-            promptVersion: 'v20-business',
+            promptVersion: 'v21-business-memory',
             workerUrl: OPTIONS.workerUrl,
             kintoneDomain: OPTIONS.kintoneDomain,
             toolsVersion: builtInToolsVersion('business'),
@@ -358,7 +358,7 @@ describe('resolveBuiltInAgents', () => {
             source: 'cowork-agent-for-kintone',
             type: 'default',
             purpose: 'customizer-opus',
-            promptVersion: 'v23-agent-designer',
+            promptVersion: 'v24-agent-designer-memory',
             workerUrl: OPTIONS.workerUrl,
             kintoneDomain: OPTIONS.kintoneDomain,
             // propose_agent 未配線の中間ビルドで作られた = toolsVersion なし (空文字で表現)
@@ -371,7 +371,7 @@ describe('resolveBuiltInAgents', () => {
             source: 'cowork-agent-for-kintone',
             type: 'default',
             purpose: 'customizer-sonnet',
-            promptVersion: 'v22-customizer',
+            promptVersion: 'v23-customizer-memory',
             workerUrl: OPTIONS.workerUrl,
             kintoneDomain: OPTIONS.kintoneDomain,
             toolsVersion: builtInToolsVersion('customizer-sonnet'),
@@ -383,7 +383,7 @@ describe('resolveBuiltInAgents', () => {
             source: 'cowork-agent-for-kintone',
             type: 'default',
             purpose: 'app-designer',
-            promptVersion: 'v2-app-designer',
+            promptVersion: 'v3-app-designer-memory',
             workerUrl: OPTIONS.workerUrl,
             kintoneDomain: OPTIONS.kintoneDomain,
             toolsVersion: builtInToolsVersion('app-designer'),
@@ -451,7 +451,7 @@ describe('resolveBuiltInAgents', () => {
                 source: 'cowork-agent-for-kintone',
                 type: 'default',
                 purpose: 'customizer-opus',
-                promptVersion: 'v23-agent-designer',
+                promptVersion: 'v24-agent-designer-memory',
                 workerUrl: OPTIONS.workerUrl,
                 kintoneDomain: OPTIONS.kintoneDomain,
                 toolsVersion: builtInToolsVersion('customizer-opus'),

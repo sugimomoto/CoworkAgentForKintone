@@ -41,7 +41,7 @@ const EXISTING_BUSINESS: Agent = {
     source: 'cowork-agent-for-kintone',
     type: 'default',
     purpose: 'business',
-    promptVersion: 'v20-business',
+    promptVersion: 'v21-business-memory',
     workerUrl: 'https://w.example.com',
     kintoneDomain: 'tenant.cybozu.com',
     iconKind: 'biz',

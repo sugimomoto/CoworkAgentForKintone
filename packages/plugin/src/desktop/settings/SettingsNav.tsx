@@ -5,7 +5,7 @@
 //
 // 仕様: requirements.md §15.4 / design.md §4.3
 
-export type SettingsSection = 'agents' | 'skills' | 'mcp' | 'deployments';
+export type SettingsSection = 'agents' | 'skills' | 'mcp' | 'deployments' | 'memory';
 
 export interface SettingsNavProps {
   /** 現在選択中のセクション */
@@ -23,17 +23,21 @@ export interface SettingsNavProps {
 interface NavItemDef {
   id: SettingsSection;
   label: string;
-  iconName: 'bot' | 'brain' | 'plug' | 'clock';
+  iconName: 'bot' | 'brain' | 'plug' | 'clock' | 'memory';
   /** V1 で disabled 表示するか */
   disabled?: boolean;
   /** admin 専用セクション (非 admin には出さない) */
   adminOnly?: boolean;
+  /** count の代わりに出す固定バッジ (#15 メモリ: per-user を示す「自分」) */
+  badge?: string;
 }
 
 const NAV_ITEMS: readonly NavItemDef[] = [
   { id: 'agents', label: 'エージェント', iconName: 'bot', adminOnly: true },
   { id: 'skills', label: 'スキル', iconName: 'brain', adminOnly: true },
   { id: 'deployments', label: '定期実行', iconName: 'clock' },
+  // #15: メモリは per-user (定期実行と同じ非 admin 可)。count でなく「自分」バッジを出す。
+  { id: 'memory', label: 'メモリ', iconName: 'memory', badge: '自分' },
   { id: 'mcp', label: 'MCP サーバー', iconName: 'plug', adminOnly: true },
 ];
 
@@ -76,6 +80,10 @@ export function SettingsNav({
             <span className="flex-1">{item.label}</span>
             {item.disabled ? (
               <span className="text-[9px] font-semibold tracking-[0.5px] text-subtle">V2</span>
+            ) : item.badge ? (
+              <span className="rounded-full bg-accent-soft px-[6px] py-[1px] text-[8.5px] font-semibold text-accent">
+                {item.badge}
+              </span>
             ) : count !== undefined ? (
               <span className="font-mono text-[10px] tabular-nums text-subtle">{count}</span>
             ) : null}
@@ -110,10 +118,20 @@ function NavIcon({
   name,
   active,
 }: {
-  name: 'bot' | 'brain' | 'plug' | 'clock';
+  name: 'bot' | 'brain' | 'plug' | 'clock' | 'memory';
   active: boolean;
 }): JSX.Element {
   const stroke = active ? 'var(--cw-accent)' : 'currentColor';
+  if (name === 'memory') {
+    // 記憶/保存を表す積層アイコン (skills の brain と区別する)
+    return (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={stroke} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <ellipse cx="8" cy="4" rx="5" ry="2" />
+        <path d="M3 4v8c0 1.1 2.24 2 5 2s5-.9 5-2V4" />
+        <path d="M3 8c0 1.1 2.24 2 5 2s5-.9 5-2" />
+      </svg>
+    );
+  }
   if (name === 'clock') {
     return (
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

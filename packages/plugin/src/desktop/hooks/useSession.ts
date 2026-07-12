@@ -11,10 +11,13 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import { initializeSession } from '../../core/bootstrap/initializeSession';
+import { resolveMemoryResources } from '../../core/bootstrap/resolveMemoryStore';
 import { createUserSession } from '../../core/bootstrap/resolveSession';
 import { getCurrentSessionContext } from '../../core/kintone/user';
 import { toErrorMessage } from '../../core/utils';
 import { useChatStore } from '../../store/chatStore';
+
+import { readMemoryEnabled } from './memoryEnabledStorage';
 
 export interface UseSessionResult {
   /** 既存 sessionId があれば返す。無ければ新規作成して store に保存し、その id を返す。 */
@@ -50,6 +53,7 @@ export function useSession(): UseSessionResult {
   const startNewConversationStore = useChatStore((s) => s.startNewConversation);
   const setBuiltInAgents = useChatStore((s) => s.setBuiltInAgents);
   const setCurrentAgentId = useChatStore((s) => s.setCurrentAgentId);
+  const setMemoryEnabled = useChatStore((s) => s.setMemoryEnabled);
 
   const ctxRef = useRef<ResolvedContext | null>(null);
   const inFlightRef = useRef<Promise<string> | null>(null);
@@ -63,6 +67,8 @@ export function useSession(): UseSessionResult {
         // localStorage 由来の前回選択 Agent (Web Storage は core に持ち込まない)
         const kctx = getCurrentSessionContext();
         const preferredAgentId = readStoredAgentId(kctx);
+        // #15: Memory トグルの per-user 永続値を反映 (既定 ON / opt-out)
+        setMemoryEnabled(readMemoryEnabled(kctx.kintoneDomain, kctx.kintoneUserCode));
 
         const result = await initializeSession(
           { pluginId, preferredAgentId },
@@ -102,7 +108,7 @@ export function useSession(): UseSessionResult {
     return () => {
       controller.abort();
     };
-  }, [setStatus, setAgentId, setBuiltInAgents, setCurrentAgentId, setCurrentUserAccess, setIsAdminResolved]);
+  }, [setStatus, setAgentId, setBuiltInAgents, setCurrentAgentId, setCurrentUserAccess, setIsAdminResolved, setMemoryEnabled]);
 
   const ensureSession = useCallback(async (firstMessage?: string): Promise<string> => {
     const state = useChatStore.getState();
@@ -131,6 +137,16 @@ export function useSession(): UseSessionResult {
 
     const p = (async (): Promise<string> => {
       try {
+        // #15: Memory トグル ON のとき、preferences + agent-context を find-or-create して attach。
+        // 解決失敗は会話を止めない (catch→null)。attach は session 作成時のみ可能。
+        const memoryResources = state.memoryEnabled
+          ? await resolveMemoryResources({
+              kintoneDomain: ctx.kintoneDomain,
+              kintoneUserCode: ctx.kintoneUserCode,
+              agentId: activeAgentId,
+            })
+          : undefined;
+
         const session = await createUserSession({
           agentId: activeAgentId,
           environmentId,
@@ -139,6 +155,7 @@ export function useSession(): UseSessionResult {
           ...(vaultId ? { vaultId } : {}),
           ...(notifyVaultId ? { notifyVaultId } : {}),
           ...(firstMessage ? { firstMessage } : {}),
+          ...(memoryResources && memoryResources.length > 0 ? { memoryResources } : {}),
         });
         setSessionId(session.id);
         return session.id;

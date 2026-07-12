@@ -108,6 +108,31 @@ describe('createUserSession (vault_ids)', () => {
   });
 });
 
+describe('createUserSession (memoryResources, #15)', () => {
+  it('memoryResources を指定すると resources[] が POST body に含まれる', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(makeSession({ id: 'sess_m' }), 201));
+    await createUserSession({
+      ...CTX,
+      memoryResources: [
+        { type: 'memory_store', memory_store_id: 'memstore_1', access: 'read_write', instructions: 'x' },
+      ],
+    });
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.resources).toEqual([
+      { type: 'memory_store', memory_store_id: 'memstore_1', access: 'read_write', instructions: 'x' },
+    ]);
+  });
+
+  it('memoryResources 未指定なら resources は body に含まれない', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(makeSession(), 201));
+    await createUserSession(CTX);
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.resources).toBeUndefined();
+  });
+});
+
 describe('listUserSessions', () => {
   it('agent_id + order=desc + limit=100 で listSessions を呼ぶ', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ data: [], next_page: null }));

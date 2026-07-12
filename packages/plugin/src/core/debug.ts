@@ -10,7 +10,8 @@ type Scope =
   | 'Session'
   | 'Banner'
   | 'SessionFiles'
-  | 'BinaryArtifact';
+  | 'BinaryArtifact'
+  | 'Memory';
 
 function isDebugEnabled(): boolean {
   if (typeof window === 'undefined') return false;
