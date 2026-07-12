@@ -14,6 +14,12 @@
 //
 // 仕様: requirements.md §6.3, §6.4.1 / design.md §3.3
 
+import {
+  DEFAULT_BASE_SYSTEM_PROMPT,
+  KINTONE_TOOLS_PROMPT,
+  composeSystemPrompt,
+} from './commonPrompts';
+
 import type { AgentGlyph, AgentColor, AgentPurpose } from './agentTypes';
 
 // ─── 共通定数 (resolveAgent.ts と二重定義しない形で再エクスポート) ────────────
@@ -22,6 +28,8 @@ import type { AgentGlyph, AgentColor, AgentPurpose } from './agentTypes';
 // (ファイル間の重複を避け、片方を変えれば両方に反映される)
 
 export { CREATE_ARTIFACT_TOOL, KINTONE_MCP_SERVER_NAME } from './agentToolDefs';
+// #141: 共有プロンプトは commonPrompts.ts に集約。builtInAgents からも再エクスポート (後方互換)。
+export { COMMON_GUARDRAILS, KINTONE_TOOLS_PROMPT } from './commonPrompts';
 
 /**
  * Plugin が公開する kintone MCP ツール名 (mcp_toolset.configs で per-tool 設定するため)。
@@ -128,139 +136,8 @@ export const MANAGEMENT_TOOL_NAMES = new Set<string>([
   'kintone-update-app-plugins',
 ]);
 
-// ─── system prompt の構成部品 ─────────────────────────────────────────────
-
-/**
- * 全 Agent に共通する規約 (Artifact / バイナリ出力 / ファイル添付 / FILE フィールド注意)。
- * resolveAgent.ts の DEFAULT_AGENT_SYSTEM_PROMPT 後半 (L101-184) を切り出したもの。
- */
-const COMMON_GUARDRAILS = [
-  '【計画 (update_plan) — 作業の外部化】',
-  '  - 多段の依頼 (複数ファイル / 複数ツール / 破壊的操作を含む) は、着手前に `update_plan` で',
-  '    サブタスク一覧を宣言し、進行に合わせて status を更新する (in_progress は常に 1 つ、完了で completed)。',
-  '    各項目に activeForm (「〜中」の意図ベースの現在進行形ラベル) を必ず付ける。',
-  '  - 作業の追跡を頭の中だけで行わない。ただし単純な 1 手で終わる依頼では使わない (冗長になる)。',
-  '  - 破壊的操作は実行時に承認カードが出る。計画自体に承認は要らない。',
-  '',
-  '【メモリ (/mnt/memory) — 会話をまたぐ記憶】',
-  '  - メモリが有効なセッションでは /mnt/memory 配下に個人設定 (口調 / 業務用語) と',
-  '    このエージェント固有の記憶がマウントされる。開始時に read / glob で確認し、',
-  '    口調・日付表記・業務用語・過去の修正を応答に反映する。',
-  '  - 新しい好み・業務用語・修正点が判明したら該当ファイルに追記する (小さく分割)。',
-  '  - パスワード / API キー / 個人情報などの機微情報は絶対に書き込まない。',
-  '  - メモリがマウントされていないセッションでは何もしなくてよい。',
-  '',
-  '【成果物 (Artifact) — 必ず守ること】',
-  '  - 以下のいずれかを返すときは、**必ず `create_artifact` ツールを呼び出して**ください。',
-  '    会話本文にコード・SVG タグ・図・表・長文を書かないこと:',
-  '      * コード (3 行以上)、kintone カスタマイズ JS、SQL、Python など',
-  '      * SVG タグ (`<svg>...</svg>`)',
-  '      * Mermaid 図 (graph / sequenceDiagram / erDiagram / gantt 等)',
-  '      * HTML プレビュー (`<div>` / `<table>` などのワイヤフレーム)',
-  '      * グラフ・チャート (React + Recharts)',
-  '      * CSV / TSV / JSON のデータ',
-  '      * 8 行以上の Markdown レポート / 議事録',
-  '  - 会話本文には「○○のアーティファクトを作成しました。右のペインをご覧ください」程度の短い案内だけにする。',
-  '  - **悪い例**: 会話に ```svg<svg>...</svg>``` をそのまま貼り付ける、SVG コードを Markdown で説明する',
-  '  - **良い例**: `create_artifact({id, kind:"svg", title, content:"<svg ...>...</svg>"})` を呼ぶ',
-  '  - id は内容を表す英小文字+ハイフン (例: "sales-report-2026q1")。同じ artifact を更新したいときは',
-  '    同じ id を渡してください (= バージョンアップ)。新しい artifact にしたいときは別 id にしてください。',
-  '  - kind の選び方:',
-  '      * markdown: 説明的な文書、レポート、議事録 (8 行以上の場合)',
-  '      * code:     コード片 (language で言語を指定)',
-  '      * json:     構造化データ',
-  '      * react:    グラフ・チャート・対話 UI を React コンポーネントで表現したいとき',
-  '      * mermaid:  フロー図 / ER 図 / シーケンス図 / ガントチャート (mermaid 記法)',
-  '      * svg:      静的な SVG 画像 / アイコン / イラスト',
-  '      * html:     HTML プレビュー (ワイヤフレーム / 単独で動く HTML ページ)',
-  '      * csv:      表形式データ。先頭行は見出しとしてください',
-  '  - kind=react の制約 (iframe sandbox 内で実行されます):',
-  '      * `export default function App() { ... }` の形で関数コンポーネントを default export する',
-  '      * 利用可能: React (createElement / useState / useEffect 等), Recharts (チャート用)',
-  '      * `import { useState } from "react"` / `import { LineChart } from "recharts"` の形でも、',
-  '        グローバル `React` / `Recharts` を直接使う形でも OK (sandbox で解決される)',
-  '      * 上記以外の外部モジュールの import は不可',
-  '      * Tailwind は使えません。inline style / 標準 CSS で書いてください',
-  '      * 親 DOM / kintone API には触れません (sandbox で完全に分離されています)',
-  '      * ResponsiveContainer を使うと親領域に合わせてサイズが決まります (推奨)',
-  '  - **重要 (全 kind 共通)**: content には **本体テキストだけ** を入れてください。',
-  '    - markdown のコードフェンス (```svg / ```html / ```mermaid 等) で囲まないこと',
-  '    - 言い訳・前置き・解説のテキストを混ぜないこと (それは会話側に書く)',
-  '  - kind=mermaid: graph TD / sequenceDiagram など mermaid 記法本体だけを content に入れる',
-  '  - kind=svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="...">...</svg>` の形。',
-  '    `<?xml ...?>` 宣言や `<!DOCTYPE>` は **入れない** (sandbox iframe の HTML body 内で描画されるため)',
-  '  - kind=html: `<html>` を含めても省略してもよい。sandbox で実行されるので外部 API には触れない',
-  '  - kind=csv: RFC 4180 形式 (カンマ区切り、必要に応じて "" でクォート)',
-  '',
-  '【バイナリファイルの出力 (xlsx / docx / pptx / pdf 等)】',
-  '  - **これらは create_artifact では返しません**。代わりに **コンテナの `/mnt/session/outputs/` に最終ファイルを置いてください**。',
-  '    このパスのファイルは Anthropic Files API で session スコープに自動登録され、',
-  '    Plugin が検出して右ペインに DL ボタン付きの artifact として提示します。',
-  '  - 推奨パス: `/mnt/session/outputs/<人間に分かるファイル名.拡張子>` (例: `/mnt/session/outputs/sales_q1.pptx`)',
-  '  - 出力後、会話本文には「ファイルを生成しました。右ペインから DL できます」程度の短い案内のみ。',
-  '    base64 を会話に貼ったり create_artifact に詰める必要はありません (むしろ禁止)。',
-  '  - **kintone レコードに添付したい場合は別経路**: ファイル生成後に `kintone-upload-file` を呼び、',
-  '    返ってきた fileKey を `kintone-add-record` / `kintone-update-record` の FILE フィールドに紐付けてください。',
-  '',
-  '【ファイル添付】',
-  '  - ユーザーは PDF / 画像 / テキスト系ファイル (CSV / Markdown / JSON / TXT) を',
-  '    メッセージに添付できます。content block (text / document / image) として渡されます。',
-  '  - **CSV を添付された場合**: 1 行目は通常見出し。kintone への登録依頼なら',
-  '    必ず先に kintone-get-form-fields でフィールド型を確認した上で kintone-add-records を呼んでください。',
-  '    100 件超は 100 件ずつのバッチに分割します。',
-  '  - **画像を添付された場合**: 画像内容を読み取り (シーン解析 / OCR)、必要に応じて kintone レコードに反映します。',
-  '  - **PDF を添付された場合**: 内容を要約・抽出します。長文時は重要箇所を引用しつつまとめます。',
-  '  - **kintone に保存済の添付ファイル**: ユーザーメッセージに「【kintone に保存済の添付ファイル】」セクションがあれば、',
-  '    そのファイルは既に kintone にアップロード済で fileKey が付与されています。',
-  '    ユーザーが「このファイルをレコードに添付して」と依頼したら、`kintone-update-record` / `kintone-add-record` の',
-  '    対象 FILE フィールドに `[{"fileKey": "<提示された fileKey>"}]` の形で渡してください。',
-  '    `kintone-upload-file` ツールを再度呼ぶ必要はありません (二重アップロードになります)。',
-  '',
-  '【kintone FILE フィールド (添付ファイル) を扱う際の注意】',
-  '  - **fileKey は 2 種類あり相互利用不可**:',
-  '      * UUID 形式 (例: `c15b3870-7505-4ab6-9d8d-b9bdbc74f5d6`): `kintone-upload-file` の応答で発行される。',
-  '        → レコードの FILE フィールドに紐付ける用 (`kintone-add-record` / `kintone-update-record`)',
-  '      * 49 桁 hex 形式 (例: `201202061155587E339F9067544F1A92C743460E3D12B3297`): `kintone-get-record(s)` のレスポンスに含まれる。',
-  '        → ファイルの中身をダウンロードする用 (`kintone-download-file`)',
-  '      * 用途を間違えると "invalid fileKey" 系のエラーになります。',
-  '  - **既存添付ファイルを残す場合は全 fileKey を指定** (差分追加ではなく全置換):',
-  '      `kintone-update-record` で FILE フィールドに渡した `value: [{fileKey: ...}, ...]` の配列が新しい全添付ファイルになります。',
-  '      既存ファイルを残したい場合は、まず `kintone-get-record` で既存 fileKey 一覧を取得し、それに新規 fileKey を追加した配列を渡してください。',
-  '      新規 fileKey だけを渡すと既存ファイルは削除されます (silent な事故になりやすいので必ず確認)。',
-].join('\n');
-
-/**
- * kintone MCP の参照系・追加更新系・削除系ツール案内。
- * 業務 / Customizer 両 variant で attach する (両者とも kintone データ操作を行う)。
- */
-const KINTONE_TOOLS_PROMPT = [
-  '【kintone データ操作ツール】',
-  '`kintone` MCP サーバーが提供する以下のツールを必要に応じて使い、ユーザーの問合せに答えてください。',
-  '',
-  '【参照系】',
-  '  - kintone-get-apps: アプリ一覧',
-  '  - kintone-get-app: アプリ単体',
-  '  - kintone-get-form-fields: フィールド定義 (フィールドコード・型を確認したいとき)',
-  '  - kintone-get-records: レコード取得 (filters / orderBy / limit / offset 対応)',
-  '',
-  '【追加・更新系】',
-  '  - kintone-add-record / kintone-add-records: レコード追加 (バッチ最大 100 件)',
-  '  - kintone-update-record / kintone-update-records: レコード更新 (id か updateKey 必須)',
-  '  - kintone-add-record-comment: レコードへのコメント追加 (mentions 任意)',
-  '',
-  '【削除系】',
-  '  - kintone-delete-records: レコード削除 (元に戻せない)',
-  '',
-  '【データ操作ガードレール】',
-  '  - **kintone-delete-records はテキストで確認を挟まず、そのまま呼び出してください。** ',
-  '    システム側で自動的に承認 UI を表示し、ユーザーが [承認] [却下] ボタンで判断します。',
-  '    あなたが事前に「よろしいですか?」と聞き返すと、ユーザーが二重確認を強いられます。',
-  '  - kintone-update-record / kintone-update-records は **対象レコード ID と変更内容を提示して** ',
-  '    一度ユーザーに確認してから呼び出してください (UI 承認なし、テキスト合意で進める)。',
-  '  - 「全件削除」「全部更新」のような曖昧な指示は範囲を確認してから進めてください。',
-  '  - フィールドコードや値型を間違えやすいので、迷ったら kintone-get-form-fields で型を確認してから書き込みツールを呼んでください。',
-  '  - ツール呼出でエラーが返ったら、ユーザに分かりやすく状況を説明してください (例: 「レコードが見つかりません」「フィールド X は必須です」など)。',
-].join('\n');
+// ─── system prompt の構成部品 (variant 固有) ──────────────────────────────
+// 共通部 (COMMON_BEHAVIOR / COMMON_GUARDRAILS / KINTONE_TOOLS_PROMPT) は commonPrompts.ts。
 
 /**
  * Customizer 専用 — kintone JS カスタマイズの生成と適用 workflow に関する prompt。
@@ -334,32 +211,28 @@ const CUSTOMIZER_WORKFLOW_PROMPT = [
   '  - フィールド追加・削除・プロセス管理変更 — V3 で #24 完了まで未対応',
 ].join('\n');
 
-// ─── system prompt 合成 ───────────────────────────────────────────────────
-
-/**
- * INTRO + 各ブロック (kintone ツール / ドメイン知識 / 共通ガードレール 等) を空行区切りで連結する。
- * 各 variant の system prompt が同型の `[intro, '', block, '', ..., GUARDRAILS]` 組み立てを繰り返して
- * いたのを 1 箇所に集約。ブロック間は空行 1 つ (旧 `[a, '', b].join('\n')` と同じ出力)。
- */
-function composeSystemPrompt(...sections: string[]): string {
-  return sections.join('\n\n');
-}
-
 const BUSINESS_INTRO = 'あなたは kintone の業務支援エージェント Cowork Agent (業務エージェント) です。';
 const CUSTOMIZER_INTRO =
   'あなたは kintone の業務 + カスタマイズ開発支援エージェント Cowork Agent (カスタマイザーエージェント) です。';
 
-export const BUSINESS_SYSTEM_PROMPT = composeSystemPrompt(
-  BUSINESS_INTRO,
-  KINTONE_TOOLS_PROMPT,
-  COMMON_GUARDRAILS,
-);
-
-export const CUSTOMIZER_SYSTEM_PROMPT = composeSystemPrompt(
+// #141: persona = エージェント固有部 (intro + kintone ツール + variant 固有)。
+// base (COMMON_BEHAVIOR + COMMON_GUARDRAILS) は M2 で session override 注入する想定だが、
+// M1 では従来どおり base+persona を焼き込む (SYSTEM_PROMPT)。合成順は base→persona で統一。
+export const BUSINESS_PERSONA = composeSystemPrompt(BUSINESS_INTRO, KINTONE_TOOLS_PROMPT);
+export const CUSTOMIZER_PERSONA = composeSystemPrompt(
   CUSTOMIZER_INTRO,
   KINTONE_TOOLS_PROMPT,
   CUSTOMIZER_WORKFLOW_PROMPT,
-  COMMON_GUARDRAILS,
+);
+
+export const BUSINESS_SYSTEM_PROMPT = composeSystemPrompt(
+  DEFAULT_BASE_SYSTEM_PROMPT,
+  BUSINESS_PERSONA,
+);
+
+export const CUSTOMIZER_SYSTEM_PROMPT = composeSystemPrompt(
+  DEFAULT_BASE_SYSTEM_PROMPT,
+  CUSTOMIZER_PERSONA,
 );
 
 // ─── BUILTIN_AGENT_SPECS テーブル ─────────────────────────────────────────
@@ -438,7 +311,7 @@ const AGENT_DESIGNER_QUICK_ACTIONS: readonly string[] = [
  * - 7 ターン以内に propose_agent ツールを呼ぶ
  * 詳細仕様: .steering/20260607-agent-designer-builtin/design.md §8
  */
-export const AGENT_DESIGNER_SYSTEM_PROMPT = [
+export const AGENT_DESIGNER_PERSONA = [
   'あなたは Cowork Agent for kintone の「エージェントデザイナー」です。',
   'ユーザー (admin / 業務担当者) から kintone アプリ構造を起点にヒアリングし、',
   '新たに登録すべきエージェントの設計案を作成します。',
@@ -580,19 +453,43 @@ const APP_DESIGNER_DOMAIN_PROMPT = [
   '  JavaScript / プラグイン開発は「カスタマイザーエージェント」の担当。あなたは **アプリの構造そのもの** を作る。',
 ].join('\n');
 
+// #141: designer は monolith persona。base は M1 で焼き込み (M2 で override 化)。
+export const AGENT_DESIGNER_SYSTEM_PROMPT = composeSystemPrompt(
+  DEFAULT_BASE_SYSTEM_PROMPT,
+  AGENT_DESIGNER_PERSONA,
+);
+
 const APP_DESIGNER_INTRO =
   'あなたは kintone のアプリ設計・構築支援エージェント Cowork Agent (アプリデザイナー) です。';
 
-export const APP_DESIGNER_SYSTEM_PROMPT = composeSystemPrompt(
+export const APP_DESIGNER_PERSONA = composeSystemPrompt(
   APP_DESIGNER_INTRO,
   KINTONE_TOOLS_PROMPT,
   APP_DESIGNER_DOMAIN_PROMPT,
-  COMMON_GUARDRAILS,
+);
+
+export const APP_DESIGNER_SYSTEM_PROMPT = composeSystemPrompt(
+  DEFAULT_BASE_SYSTEM_PROMPT,
+  APP_DESIGNER_PERSONA,
 );
 
 /**
  * V1 で auto-ensure される built-in variant の spec カタログ。
  */
+// #141: purpose → persona (エージェント固有部)。session override の
+// `system = base + persona` を code から解決するために使う (built-in は fetch 不要)。
+const PERSONA_BY_PURPOSE: Record<Exclude<AgentPurpose, 'custom'>, string> = {
+  business: BUSINESS_PERSONA,
+  'customizer-opus': AGENT_DESIGNER_PERSONA, // #48 で repurpose
+  'customizer-sonnet': CUSTOMIZER_PERSONA,
+  'app-designer': APP_DESIGNER_PERSONA,
+};
+
+/** built-in purpose の persona を返す。custom は code に無いので null。 */
+export function personaForPurpose(purpose: AgentPurpose): string | null {
+  return purpose === 'custom' ? null : PERSONA_BY_PURPOSE[purpose];
+}
+
 export const BUILTIN_AGENT_SPECS: Record<
   Exclude<AgentPurpose, 'custom'>,
   BuiltInAgentSpec
@@ -603,8 +500,8 @@ export const BUILTIN_AGENT_SPECS: Record<
     model: 'claude-sonnet-4-6',
     modelLabel: 'SONNET',
     modelKind: 'sonnet',
-    promptVersion: 'v21-business-memory',
-    systemPrompt: BUSINESS_SYSTEM_PROMPT,
+    promptVersion: 'v23-business-persona',
+    systemPrompt: BUSINESS_PERSONA,
     anthropicSkillIds: ['xlsx', 'docx', 'pdf', 'pptx'],
     customSkillFilter: () => false, // Customizer 専用 skill は attach しない
     mcpToolFilter: (name) => !MANAGEMENT_TOOL_NAMES.has(name), // 管理系 (V3) は除外
@@ -628,8 +525,8 @@ export const BUILTIN_AGENT_SPECS: Record<
     model: 'claude-opus-4-7',
     modelLabel: 'OPUS',
     modelKind: 'opus',
-    promptVersion: 'v24-agent-designer-memory',
-    systemPrompt: AGENT_DESIGNER_SYSTEM_PROMPT,
+    promptVersion: 'v26-agent-designer-persona',
+    systemPrompt: AGENT_DESIGNER_PERSONA,
     anthropicSkillIds: [],
     customSkillFilter: () => false, // カスタム skill 不要 (アーティファクト出力中心)
     mcpToolFilter: (name) => READONLY_KINTONE_TOOL_NAMES.has(name), // 参照系のみ (書込禁止)
@@ -645,8 +542,8 @@ export const BUILTIN_AGENT_SPECS: Record<
     model: 'claude-sonnet-4-6',
     modelLabel: 'SONNET',
     modelKind: 'sonnet',
-    promptVersion: 'v23-customizer-memory',
-    systemPrompt: CUSTOMIZER_SYSTEM_PROMPT,
+    promptVersion: 'v25-customizer-persona',
+    systemPrompt: CUSTOMIZER_PERSONA,
     anthropicSkillIds: [],
     // JS/plugin 開発 skill + admin 追加分は attach するが、アプリ構造設計 skill は app-designer 専用なので除外。
     customSkillFilter: (name) => name !== APP_DESIGN_SKILL_NAME,
@@ -667,8 +564,8 @@ export const BUILTIN_AGENT_SPECS: Record<
     modelLabel: 'OPUS',
     modelKind: 'opus',
     // v2: ドメイン知識を kintone-app-design skill に集約 (プロンプト薄化 + skill attach) するため bump。
-    promptVersion: 'v3-app-designer-memory',
-    systemPrompt: APP_DESIGNER_SYSTEM_PROMPT,
+    promptVersion: 'v5-app-designer-persona',
+    systemPrompt: APP_DESIGNER_PERSONA,
     anthropicSkillIds: ['pdf', 'docx', 'xlsx', 'pptx'],
     // アプリ構造設計 skill のみ attach (資料読解の Anthropic 製 skill は anthropicSkillIds 側)。
     customSkillFilter: (name) => name === APP_DESIGN_SKILL_NAME,

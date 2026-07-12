@@ -8,7 +8,9 @@ import { describe, expect, it } from 'vitest';
 import {
   BUILTIN_AGENT_PURPOSES,
   BUILTIN_AGENT_SPECS,
+  BUSINESS_PERSONA,
   BUSINESS_SYSTEM_PROMPT,
+  CUSTOMIZER_PERSONA,
   CUSTOMIZER_SYSTEM_PROMPT,
   DESTRUCTIVE_TOOL_NAMES,
   KINTONE_TOOL_NAMES,
@@ -39,9 +41,17 @@ describe('BUILTIN_AGENT_SPECS — 4 variant', () => {
       expect(spec.modelLabel).toBe('SONNET');
     });
 
-    it('promptVersion v21-business-memory / systemPrompt は BUSINESS_SYSTEM_PROMPT', () => {
-      expect(spec.promptVersion).toBe('v21-business-memory');
-      expect(spec.systemPrompt).toBe(BUSINESS_SYSTEM_PROMPT);
+    it('promptVersion v23-business-persona / systemPrompt は BUSINESS_PERSONA', () => {
+      expect(spec.promptVersion).toBe('v23-business-persona');
+      expect(spec.systemPrompt).toBe(BUSINESS_PERSONA);
+    });
+
+    it('#141: 全 spec の systemPrompt は persona-only (base を焼き込まない = 二重 base 回避)', () => {
+      for (const s of Object.values(BUILTIN_AGENT_SPECS)) {
+        // COMMON_BEHAVIOR / COMMON_GUARDRAILS の見出しを含まない (base は session override 注入)
+        expect(s.systemPrompt).not.toContain('【基本姿勢】');
+        expect(s.systemPrompt).not.toContain('【成果物 (Artifact)');
+      }
     });
 
     it('Anthropic 製 skill (xlsx / docx / pdf / pptx) を attach', () => {
@@ -83,9 +93,9 @@ describe('BUILTIN_AGENT_SPECS — 4 variant', () => {
       expect(spec.modelKind).toBe('opus');
     });
 
-    it('name は エージェントデザイナー / promptVersion は v24-agent-designer-memory', () => {
+    it('name は エージェントデザイナー / promptVersion は v26-agent-designer-persona', () => {
       expect(spec.name).toBe('エージェントデザイナー');
-      expect(spec.promptVersion).toBe('v24-agent-designer-memory');
+      expect(spec.promptVersion).toBe('v26-agent-designer-persona');
     });
 
     it('Anthropic 製 skill は付けない (アーティファクト出力中心)', () => {
@@ -127,8 +137,8 @@ describe('BUILTIN_AGENT_SPECS — 4 variant', () => {
     });
 
     it('systemPrompt は CUSTOMIZER_SYSTEM_PROMPT (JS カスタマイズ専用ペルソナを維持)', () => {
-      expect(spec.systemPrompt).toBe(CUSTOMIZER_SYSTEM_PROMPT);
-      expect(spec.promptVersion).toBe('v23-customizer-memory');
+      expect(spec.systemPrompt).toBe(CUSTOMIZER_PERSONA);
+      expect(spec.promptVersion).toBe('v25-customizer-persona');
     });
 
     it('variantGroup=customizer / isDefault=false', () => {
@@ -155,9 +165,9 @@ describe('BUILTIN_AGENT_SPECS — 4 variant', () => {
       expect(spec.modelKind).toBe('opus');
     });
 
-    it('name は アプリデザイナー / promptVersion は v3-app-designer-memory', () => {
+    it('name は アプリデザイナー / promptVersion は v5-app-designer-persona', () => {
       expect(spec.name).toBe('アプリデザイナー');
-      expect(spec.promptVersion).toBe('v3-app-designer-memory');
+      expect(spec.promptVersion).toBe('v5-app-designer-persona');
     });
 
     it('資料読解スキル (pdf / docx / xlsx / pptx) を attach', () => {

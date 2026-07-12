@@ -60,7 +60,7 @@ describe('resolveDefaultAgent', () => {
     expect(body.metadata).toEqual({
       source: 'cowork-agent-for-kintone',
       type: 'default',
-      promptVersion: 'v21',
+      promptVersion: 'v23',
     });
     // Anthropic 製 skills (xlsx / docx / pdf / pptx) が attach されること (Issue #18 Step 1)
     expect(body.skills).toEqual([
@@ -81,6 +81,9 @@ describe('resolveDefaultAgent', () => {
     expect(customTool.input_schema.required).toEqual(['id', 'kind', 'title', 'content']);
     // binary kind は Files API で自動検出する経路にしたので create_artifact の enum には含めない
     expect(customTool.input_schema.properties.kind.enum).not.toContain('binary');
+    // #141: DEFAULT も persona-only 焼き込み (base は session override 注入 → 二重 base 回避)
+    expect(body.system).toContain('業務支援エージェント');
+    expect(body.system).not.toContain('【基本姿勢】');
   });
 
   it('プラグイン外の Agent (source 違い) は無視する', async () => {
@@ -276,11 +279,11 @@ describe('resolveDefaultAgent', () => {
     it('workerUrl 指定が異なれば別の Agent として解決される (in-flight キャッシュも分離)', async () => {
       const a = makeAgent({
         id: 'agent_a',
-        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v21', workerUrl: 'https://a.example', kintoneDomain: 'a.cybozu.com' },
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v23', workerUrl: 'https://a.example', kintoneDomain: 'a.cybozu.com' },
       });
       const b = makeAgent({
         id: 'agent_b',
-        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v21', workerUrl: 'https://b.example', kintoneDomain: 'b.cybozu.com' },
+        metadata: { source: 'cowork-agent-for-kintone', type: 'default', promptVersion: 'v23', workerUrl: 'https://b.example', kintoneDomain: 'b.cybozu.com' },
       });
 
       // a の解決: list で a が返る

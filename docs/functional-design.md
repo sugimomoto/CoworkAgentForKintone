@@ -26,6 +26,7 @@
 > - §0.11 **アプリデザイナー** (built-in 4th variant — 資料/PDF からアプリ設計・構築、管理系ツール直実行)
 > - §0.13 **タスク機構** (`update_plan` Custom Tool + PlanPanel 進捗帯 — 1 セッションのゴール到達を計画/進捗で外部化)
 > - §0.14 **Memory Stores** (会話を跨ぐ記憶 — 2 レイヤー store attach + トグル + 設定「メモリ」閲覧/編集)
+> - §0.15 **システムプロンプト base/persona 分離** (共有 base を Config で編集 + session override で即時反映, #141/#138)
 >
 > §0.1〜§0.4 (OAuth + MCP) は変更なし。これら V1 機能はすべて §0.1〜§0.4 の通信経路の上に乗っています。
 
@@ -538,6 +539,21 @@ kintone 以外の**リモート MCP サーバー**をテナントに登録し、
 - **システムプロンプト**: COMMON_GUARDRAILS + Default に「/mnt/memory を確認し反映・追記、機微情報は書かない」ブロック。per-resource `instructions` が主 behavior を担うため防御的な補助 (メモリ無しセッションでは無害)。promptVersion bump で反映。
 - **Step 2 — 設定「メモリ」セクション**: SettingsNav に per-user の「メモリ」項目を追加 (「定期実行」と同じ非 admin 可)。そのため **⚙️ gear を全ユーザーに開放** (#81 の非 admin 定期実行導線も同時開通。agents/skills/mcp は従来どおり admin 限定)。detail の `MemorySection` (純表示) + `MemorySectionBound` (CRUD 配線) で、2 store のツリー → 選択で `retrieve(view=full)` → Markdown 表示 → インライン編集/保存 (`content_sha256` 楽観ロック、409 は競合バナー→再読込) → 削除 (ConfirmDialog)。
 - **セキュリティ**: store は name に `<domain>:<user>` を含め per-user 完全分離 (他ユーザー store は列挙もしない)。read_write なので system prompt で機微情報の書込を禁止。共有系 (Step 3 domain context) は将来 read_only。
+
+---
+
+### 0.15 システムプロンプト base/persona 分離 + session override — #141 / #138
+
+各エージェントのシステムプロンプトを **base (全エージェント共通の作法) + persona (エージェント固有)** の 2 層に分離。Claude 公式の「作法」を取り込みつつ、消費者向け安全ブロック本体は除外 (プラットフォーム側で基礎安全が効く)。
+
+**設計上の要点:**
+
+- **共有モジュール `commonPrompts.ts`**: `COMMON_BEHAVIOR` (トーン/書式・誠実さ・ツール作法・メモリ作法・メタ) + `COMMON_GUARDRAILS` (Artifact/バイナリ/ファイル/FILE) + `KINTONE_TOOLS_PROMPT` + `composeSystemPrompt` を集約。`builtInAgents` / `resolveAgent` 双方が参照し、従来の**二重管理 (DEFAULT のインライン複製) を解消**。メモリ作法は `COMMON_GUARDRAILS` から `COMMON_BEHAVIOR` へ移設し単一ソース化。
+- **base は Plugin Config で編集可**: `baseSystemPromptOverride` (空 = コード既定 `DEFAULT_BASE_SYSTEM_PROMPT`)。ConfigScreen「高度な設定」の `BasePromptSection` (アコーディオン + textarea + デフォルトに戻す)。persona はこの画面では扱わない (エージェント編集側)。
+- **反映は session override (#138 `agent_with_overrides`)**: エージェントには persona を焼き込み、session 作成時に `system = effectiveBase(config) + persona` を**完全置換注入** (tools/mcp/skills は省略で継承)。→ base 編集が**次の会話から即時反映・エージェント再生成不要**。
+- **persona の解決**: built-in/DEFAULT は `purpose → persona` を code から解決 (fetch 不要)。Custom は `retrieveAgent().system` (= 焼き込み persona) をメモ化 (`resolveCustomPersona`、`applyAgentEdit` で invalidate)。これで **Custom Agent にも base が効く** (Artifact 規律・作法の一貫適用)。
+- **フォールバック**: override 構築に失敗しても会話継続 (焼き込み prompt で動く)。built-in/DEFAULT の焼き込みは base+persona なので override 無しでも機能する。
+- promptVersion は persona-only 化に伴い一斉 bump (built-in `*-behavior`, DEFAULT v21→v22)。以後は persona 変更時のみ bump (base 変更は override 経路なので bump 不要)。
 
 ---
 

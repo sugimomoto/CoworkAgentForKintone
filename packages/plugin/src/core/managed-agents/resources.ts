@@ -266,8 +266,24 @@ export interface SessionsListParams {
   'created_at[lte]'?: string | undefined;
 }
 
+/**
+ * セッション単位のエージェント設定オーバーライド (#138)。`type:'agent_with_overrides'` で
+ * 指定フィールドを当該セッションのみ上書きする。省略 = 継承、値設定 = 完全置換 (マージ不可)。
+ * Cowork では `system` (= base + persona) のみ上書きし、他は継承する (#141)。
+ */
+export interface AgentWithOverrides {
+  type: 'agent_with_overrides';
+  id: string;
+  version?: number;
+  model?: { id: string };
+  system?: string;
+  tools?: unknown[];
+  mcp_servers?: unknown[];
+  skills?: unknown[];
+}
+
 export interface CreateSessionParams {
-  agent: string | { id: string; type: 'agent'; version?: number };
+  agent: string | { id: string; type: 'agent'; version?: number } | AgentWithOverrides;
   environment_id: string;
   vault_ids?: string[];
   title?: string;
