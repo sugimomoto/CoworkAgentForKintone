@@ -33,6 +33,11 @@ vi.mock('../core/bootstrap/resolveSession', async (importOriginal) => ({
   createUserSession: vi.fn(),
   listUserSessions: vi.fn(),
 }));
+// #15: ensureSession が memoryEnabled=true (既定) のとき呼ぶ memory store 解決を
+// 決定的に空 resolve する。実 fetch を打たせないことでテスト間の async リークを防ぐ。
+vi.mock('../core/bootstrap/resolveMemoryStore', () => ({
+  resolveMemoryResources: vi.fn().mockResolvedValue([]),
+}));
 vi.mock('../core/kintone/user', () => ({
   getCurrentSessionContext: vi.fn(() => ({
     kintoneUserCode: 'sato',

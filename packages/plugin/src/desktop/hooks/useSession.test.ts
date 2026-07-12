@@ -22,6 +22,10 @@ vi.mock('../../core/bootstrap/resolveSession', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../core/bootstrap/resolveSession')>();
   return { ...actual, createUserSession: vi.fn() };
 });
+// #15: ensureSession の memory store 解決を決定的に空 resolve (実 fetch を打たせない)。
+vi.mock('../../core/bootstrap/resolveMemoryStore', () => ({
+  resolveMemoryResources: vi.fn().mockResolvedValue([]),
+}));
 vi.mock('../../core/kintone/user', () => ({
   getCurrentSessionContext: vi.fn(() => ({
     kintoneUserCode: 'sato',
