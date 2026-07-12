@@ -14,6 +14,7 @@ import { personaForPurpose } from '../../core/bootstrap/builtInAgents';
 import { composeSystemPrompt, effectiveBase } from '../../core/bootstrap/commonPrompts';
 import { initializeSession } from '../../core/bootstrap/initializeSession';
 import { DEFAULT_AGENT_PERSONA } from '../../core/bootstrap/resolveAgent';
+import { resolveCustomPersona } from '../../core/bootstrap/resolveCustomPersona';
 import { resolveMemoryResources } from '../../core/bootstrap/resolveMemoryStore';
 import { createUserSession } from '../../core/bootstrap/resolveSession';
 import { getPluginConfig } from '../../core/kintone/pluginConfig';
@@ -63,7 +64,7 @@ async function buildSystemOverride(
     if (!activeAgent) {
       persona = DEFAULT_AGENT_PERSONA; // 素の Default Agent (built-in 解決なし経路)
     } else if (activeAgent.purpose === 'custom') {
-      persona = null; // M3: retrieveAgent().system をキャッシュして解決
+      persona = await resolveCustomPersona(activeAgent.id); // 焼き込み system をキャッシュ取得
     } else {
       persona = personaForPurpose(activeAgent.purpose);
     }
