@@ -113,11 +113,14 @@ export function ConfigScreen({ pluginId }: ConfigScreenProps): JSX.Element {
     apiKeyTrimmed.length > 0 &&
     clientIdTrimmed.length > 0 &&
     clientSecretTrimmed.length > 0;
+  // #141: base override を編集しただけでも保存可能にする (再保存時は secret 未入力でも可)。
+  const savedBaseOverride = existing[CONFIG_KEY_BASE_SYSTEM_PROMPT] ?? '';
+  const baseDirty = baseOverride !== savedBaseOverride;
   const canSave =
     !saving &&
     workerUrlValid &&
-    (isSaved ? hasAnyNewSecret : hasAllSecrets) &&
-    canSaveBasePrompt(baseOverride); // #141: base 上限超過時は保存不可
+    (isSaved ? hasAnyNewSecret || baseDirty : hasAllSecrets) &&
+    canSaveBasePrompt(baseOverride); // base 上限超過時は保存不可
 
   function copyToClipboard(text: string): void {
     navigator.clipboard.writeText(text).catch(() => {
