@@ -73,13 +73,19 @@ async function buildSystemOverride(
     const override = pluginId ? getPluginConfig(pluginId).baseSystemPromptOverride : null;
     const base = effectiveBase(override);
     const systemOverride = composeSystemPrompt(base, persona);
-    // 反映確認用 (window.__coworkDebug=true で出力)。custom=Config の base override を使用中か。
-    debug('Session', 'system override applied', {
+    // 反映確認用: debug ログ + window への常時記録 (フラグ不要)。
+    // 新規会話の初回送信時に更新される。usingCustomBase=true なら Config の base override を使用中。
+    const info = {
       usingCustomBase: Boolean(override && override.trim().length > 0),
       baseLen: base.length,
       personaLen: persona.length,
       totalLen: systemOverride.length,
-    });
+      systemOverride, // 実際に注入する system 全文 (base + persona)
+    };
+    debug('Session', 'system override applied', info);
+    if (typeof window !== 'undefined') {
+      (window as unknown as { __coworkLastSystemOverride?: unknown }).__coworkLastSystemOverride = info;
+    }
     return systemOverride;
   } catch {
     return undefined;
